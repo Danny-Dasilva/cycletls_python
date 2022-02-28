@@ -1,0 +1,17 @@
+write remaining functions inside class
+google style docs
+organize
+swap golang 
+
+
+
+
+docs
+tests
+
+
+test scenarios
+(url is not https or http)
+
+url and method validator
+body validator
