@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	http "github.com/Danny-Dasilva/fhttp"
-	"github.com/gorilla/websocket"
 	"io/ioutil"
 	"log"
 	"net/url"
@@ -12,6 +10,11 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	rhttp "net/http"
+
+	http "github.com/Danny-Dasilva/fhttp"
+	"github.com/gorilla/websocket"
 )
 
 // Options sets CycleTLS client options
@@ -289,8 +292,12 @@ func readSocket(reqChan chan fullRequest, c *websocket.Conn) {
 	for {
 		_, message, err := c.ReadMessage()
 		if err != nil {
-			log.Print("Socket Error", err)
-			return
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+               return 
+			} else {
+				log.Print("Socket Error", err)
+                return
+			}
 		}
 		request := new(cycleTLSRequest)
 
@@ -300,7 +307,6 @@ func readSocket(reqChan chan fullRequest, c *websocket.Conn) {
 			return
 		}
 		log.Println(request)
-
 
 		reply := processRequest(*request)
 
@@ -328,6 +334,38 @@ func writeSocket(respChan chan Response, c *websocket.Conn) {
 	}
 }
 
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
+func wsEndpoint(w rhttp.ResponseWriter, r *rhttp.Request) {
+	upgrader.CheckOrigin = func(r *rhttp.Request) bool { return true }
+
+	// upgrade this connection to a WebSocket
+	// connection
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println("Client Connected")
+	reqChan := make(chan fullRequest)
+	respChan := make(chan Response)
+	go workerPool(reqChan, respChan)
+
+	go readSocket(reqChan, ws)
+	//run as main thread
+	writeSocket(respChan, ws)
+
+}
+func homePage(w rhttp.ResponseWriter, r *rhttp.Request) {
+	log.Println(w, "Home Page")
+}
+func setupRoutes() {
+	rhttp.HandleFunc("/", homePage)
+	rhttp.HandleFunc("/ws", wsEndpoint)
+}
+
 func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -337,19 +375,6 @@ func main() {
 		log.Println("Execution Time: ", time.Since(start))
 	}()
 
-	websocketAddress := getWebsocketAddr()
-	c, _, err := websocket.DefaultDialer.Dial(websocketAddress, nil)
-	if err != nil {
-		log.Print(err)
-		return
-	}
-
-	reqChan := make(chan fullRequest)
-	respChan := make(chan Response)
-	go workerPool(reqChan, respChan)
-
-	go readSocket(reqChan, c)
-	//run as main thread
-	writeSocket(respChan, c)
-
+	setupRoutes()
+	log.Fatal(rhttp.ListenAndServe(":8080", nil))
 }
