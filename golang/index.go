@@ -362,8 +362,7 @@ func homePage(w rhttp.ResponseWriter, r *rhttp.Request) {
 	log.Println(w, "Home Page")
 }
 func setupRoutes() {
-	rhttp.HandleFunc("/", homePage)
-	rhttp.HandleFunc("/ws", wsEndpoint)
+	rhttp.HandleFunc("/", wsEndpoint)
 }
 
 func main() {
