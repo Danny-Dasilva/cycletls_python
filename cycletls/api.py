@@ -4,14 +4,41 @@ from typing import Optional
 from pprint import pprint
 from pydantic import BaseModel, Field
 from .schema import Response, Request
+import subprocess
+from time import sleep
+import psutil
+
+
+def kill(proc_pid):
+    if proc_pid:
+        process = psutil.Process(proc_pid.pid)
+        for proc in process.children(recursive=True):
+            proc.kill()
+        process.kill()
+    else:
+        for proc in psutil.process_iter():
+            # check whether the process name matches
+            if proc.name() == "cycletls":
+                proc.kill()
+
+
 
 class CycleTLS:
     def __init__(self):
-        self.ws = create_connection("ws://localhost:8080")
+        try:
+            self.ws = create_connection("ws://localhost:8080")
+            self.proc = None
+        except:
+
+            self.proc = subprocess.Popen(["./dist/cycletls"], shell=True)
+            #TODO remove this
+            sleep(.1)
+
+            self.ws = create_connection("ws://localhost:8080")
 
     def request(self, method, url, **kwargs):
         request = Request(method=method, url=url, **kwargs)
-        request = {"requestId": "requestId", "options": request.dict(by_alias=True)}
+        request = {"requestId": "requestId", "options": request.dict(by_alias=True, exclude_none=True)}
         self.ws.send(json.dumps(request))
         response = json.loads(self.ws.recv())
 
@@ -43,5 +70,6 @@ class CycleTLS:
     def close(self):
         self.ws.close()
 
+        kill(self.proc)
 
 

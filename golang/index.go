@@ -306,7 +306,6 @@ func readSocket(reqChan chan fullRequest, c *websocket.Conn) {
 			log.Print("Unmarshal Error", err)
 			return
 		}
-		log.Println(request)
 
 		reply := processRequest(*request)
 
