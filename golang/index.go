@@ -368,11 +368,6 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	start := time.Now()
-	defer func() {
-		log.Println("Execution Time: ", time.Since(start))
-	}()
-
 	setupRoutes()
 	log.Fatal(rhttp.ListenAndServe(":8080", nil))
 }
