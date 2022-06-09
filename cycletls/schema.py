@@ -1,8 +1,9 @@
 from pydantic import BaseModel
 import json
-from typing import Optional
+from typing import Optional, List
 
 class Cookie(BaseModel):
+    #TODO
     test: int
 
 
@@ -16,10 +17,10 @@ class Request(BaseModel):
         "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:87.0) Gecko/20100101 Firefox/87.0"
     )
     proxy: str = ""
-    cookies: Optional[list[Cookie]] = None
+    cookies: Optional[List] = None
     timeout: int = 6
     disable_redirect: bool = False
-    header_order: Optional[list] = None
+    header_order: Optional[List] = None
     order_headers_as_provided: Optional[bool] = None
 
     class Config:
