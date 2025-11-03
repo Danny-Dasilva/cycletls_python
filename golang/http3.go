@@ -531,16 +531,63 @@ func (rt *roundTripper) uhttp3Dial(ctx context.Context, spec *uquic.QUICSpec, re
 		tlsConfig.ServerName = remoteAddr
 	}
 
-	// TODO: UQuic HTTP/3 support is disabled due to incompatibility between
-	// gitlab.com/yawning/utls.git (used for TLS fingerprinting) and
-	// github.com/refraction-networking/utls (expected by uquic.UTransport.DialEarly).
-	// The two utls libraries have incompatible *Config types.
-	// To enable this, we need to either:
-	// 1. Convert between the two utls.Config types (complex, may lose fingerprinting data)
-	// 2. Wait for uquic to support gitlab.com/yawning/utls.git
-	// 3. Use a different approach for HTTP/3 fingerprinting
-	// For now, falling back to standard HTTP/3 without fingerprinting.
+	// Resolve remote address
+	remoteHost := remoteAddr
+	if net.ParseIP(remoteAddr) == nil {
+		// If remoteAddr is not an IP, resolve it
+		ips, err := net.LookupIP(remoteAddr)
+		if err != nil {
+			udpConn.Close()
+			return nil, fmt.Errorf("failed to resolve host %s: %w", remoteAddr, err)
+		}
+		if len(ips) == 0 {
+			udpConn.Close()
+			return nil, fmt.Errorf("no IP addresses found for host %s", remoteAddr)
+		}
+		// Use the first IP address
+		remoteHost = ips[0].String()
+	}
 
-	udpConn.Close()
-	return nil, fmt.Errorf("UQuic HTTP/3 is currently disabled due to utls library incompatibility - see TODO in http3.go:581")
+	// Convert port to integer
+	portInt := 443
+	if port != "" {
+		if p, err := net.LookupPort("tcp", port); err == nil {
+			portInt = p
+		}
+	}
+
+	// Configure UQuic - conditional setup like reference implementation
+	var uquicConfig *uquic.Config
+	// TODO: Add support for rt.UquicConfig when it's available
+	// For now, use default UQuic config similar to reference behavior
+	if uquicConfig == nil {
+		uquicConfig = &uquic.Config{}
+	}
+
+	// Create UQuic transport
+	uTransport := &uquic.UTransport{
+		Transport: &uquic.Transport{
+			Conn: udpConn,
+		},
+		QUICSpec: spec,
+	}
+
+	// Establish QUIC connection with UQuic
+	remoteUDPAddr := &net.UDPAddr{
+		IP:   net.ParseIP(remoteHost),
+		Port: portInt,
+	}
+
+	quicConn, err := uTransport.DialEarly(ctx, remoteUDPAddr, tlsConfig, uquicConfig)
+	if err != nil {
+		udpConn.Close()
+		return nil, fmt.Errorf("failed to establish UQuic connection: %w", err)
+	}
+
+	return &HTTP3Connection{
+		QuicConn: quicConn,
+		RawConn:  udpConn,
+		Proxys:   proxys,
+		IsUQuic:  true,
+	}, nil
 }

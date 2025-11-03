@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	utls "gitlab.com/yawning/utls.git"
+	utls "github.com/refraction-networking/utls"
 )
 
 var supportedSignatureAlgorithmsExtensions = map[string]utls.SignatureScheme{
@@ -16,7 +16,7 @@ var supportedSignatureAlgorithmsExtensions = map[string]utls.SignatureScheme{
 	"ECDSAWithP256AndSHA256":              utls.ECDSAWithP256AndSHA256,
 	"ECDSAWithP384AndSHA384":              utls.ECDSAWithP384AndSHA384,
 	"ECDSAWithP521AndSHA512":              utls.ECDSAWithP521AndSHA512,
-	"Ed25519":                             utls.SignatureScheme(0x0807),
+	"Ed25519":                             utls.Ed25519,
 	"PKCS1WithSHA1":                       utls.PKCS1WithSHA1,
 	"ECDSAWithSHA1":                       utls.ECDSAWithSHA1,
 	"rsa_pkcs1_sha1":                      utls.SignatureScheme(0x0201),
@@ -361,7 +361,7 @@ func CreateExtensionFromID(extID uint16, tlsVersion uint16, components *JA4RComp
 	case 0x0012: // Signed Certificate Timestamp
 		return &utls.SCTExtension{}
 	case 0x0017: // Extended Master Secret
-		return &utls.UtlsExtendedMasterSecretExtension{}
+		return &utls.ExtendedMasterSecretExtension{}
 	case 0x001b: // Compress Certificate
 		return NewCustomCompressCertificateExtension(extID, []utls.CertCompressionAlgo{
 			utls.CertCompressionBrotli,

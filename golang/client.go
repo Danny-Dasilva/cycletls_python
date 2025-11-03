@@ -10,7 +10,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	uquic "github.com/refraction-networking/uquic"
-	utls "gitlab.com/yawning/utls.git"
+	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/proxy"
 )
 
@@ -33,7 +33,7 @@ var (
 	advancedClientPoolMutex = sync.RWMutex{}
 )
 
-type browser struct {
+type Browser struct {
 	// TLS fingerprinting options
 	JA3              string
 	JA4r             string // JA4 raw format with explicit cipher/extension values
@@ -89,7 +89,7 @@ var disabledRedirect = func(req *fhttp.Request, via []*fhttp.Request) error {
 	return fhttp.ErrUseLastResponse
 }
 
-func clientBuilder(browser browser, dialer proxy.ContextDialer, timeout int, disableRedirect bool) fhttp.Client {
+func clientBuilder(browser Browser, dialer proxy.ContextDialer, timeout int, disableRedirect bool) fhttp.Client {
 	//if timeout is not set in call default to 15
 	if timeout == 0 {
 		timeout = 15
@@ -124,7 +124,7 @@ func clientBuilder(browser browser, dialer proxy.ContextDialer, timeout int, dis
 //
 // cycleClient.Get("https://tls.peet.ws/")
 func NewTransport(ja3 string, useragent string) fhttp.RoundTripper {
-	return newRoundTripper(browser{
+	return newRoundTripper(Browser{
 		JA3:       ja3,
 		UserAgent: useragent,
 	})
@@ -133,7 +133,7 @@ func NewTransport(ja3 string, useragent string) fhttp.RoundTripper {
 // NewTransportWithJA4 creates a new HTTP client transport that modifies HTTPS requests
 // using JA4 fingerprinting.
 func NewTransportWithJA4(ja4 string, useragent string) fhttp.RoundTripper {
-	return newRoundTripper(browser{
+	return newRoundTripper(Browser{
 		JA4r:      ja4,
 		UserAgent: useragent,
 	})
@@ -141,7 +141,7 @@ func NewTransportWithJA4(ja4 string, useragent string) fhttp.RoundTripper {
 
 // NewTransportWithHTTP2Fingerprint creates a new HTTP client transport with HTTP/2 fingerprinting
 func NewTransportWithHTTP2Fingerprint(http2fp string, useragent string) fhttp.RoundTripper {
-	return newRoundTripper(browser{
+	return newRoundTripper(Browser{
 		HTTP2Fingerprint: http2fp,
 		UserAgent:        useragent,
 	})
@@ -150,14 +150,14 @@ func NewTransportWithHTTP2Fingerprint(http2fp string, useragent string) fhttp.Ro
 // NewTransportWithProxy creates a new HTTP client transport that modifies HTTPS requests
 // to imitiate a specific JA3 hash and User-Agent, optionally specifying a proxy via proxy.ContextDialer.
 func NewTransportWithProxy(ja3 string, useragent string, proxy proxy.ContextDialer) fhttp.RoundTripper {
-	return newRoundTripper(browser{
+	return newRoundTripper(Browser{
 		JA3:       ja3,
 		UserAgent: useragent,
 	}, proxy)
 }
 
 // generateClientKey creates a unique key for client pooling based on browser configuration
-func generateClientKey(browser browser, timeout int, disableRedirect bool, proxyURL string) string {
+func generateClientKey(browser Browser, timeout int, disableRedirect bool, proxyURL string) string {
 	// Create cookie signature for the key
 	cookieStr := ""
 	for _, cookie := range browser.Cookies {
@@ -187,7 +187,7 @@ func generateClientKey(browser browser, timeout int, disableRedirect bool, proxy
 }
 
 // getOrCreateClient retrieves a client from the pool or creates a new one
-func getOrCreateClient(browser browser, timeout int, disableRedirect bool, userAgent string, enableConnectionReuse bool, proxyURL ...string) (fhttp.Client, error) {
+func getOrCreateClient(browser Browser, timeout int, disableRedirect bool, userAgent string, enableConnectionReuse bool, proxyURL ...string) (fhttp.Client, error) {
 	// If connection reuse is disabled, always create a new client
 	if !enableConnectionReuse {
 		return createNewClient(browser, timeout, disableRedirect, userAgent, proxyURL...)
@@ -239,7 +239,7 @@ func getOrCreateClient(browser browser, timeout int, disableRedirect bool, userA
 }
 
 // createNewClient creates a new HTTP client (internal function)
-func createNewClient(browser browser, timeout int, disableRedirect bool, userAgent string, proxyURL ...string) (fhttp.Client, error) {
+func createNewClient(browser Browser, timeout int, disableRedirect bool, userAgent string, proxyURL ...string) (fhttp.Client, error) {
 	var dialer proxy.ContextDialer
 	if len(proxyURL) > 0 && len(proxyURL[0]) > 0 {
 		var err error
@@ -287,18 +287,18 @@ func clearAllConnections() {
 }
 
 // newClient creates a new http client (backward compatibility - defaults to no connection reuse)
-func newClient(browser browser, timeout int, disableRedirect bool, UserAgent string, proxyURL ...string) (fhttp.Client, error) {
+func newClient(browser Browser, timeout int, disableRedirect bool, UserAgent string, proxyURL ...string) (fhttp.Client, error) {
 	// Backward compatibility: default to no connection reuse for existing code
 	return getOrCreateClient(browser, timeout, disableRedirect, UserAgent, false, proxyURL...)
 }
 
 // newClientWithReuse creates a new http client with configurable connection reuse
-func newClientWithReuse(browser browser, timeout int, disableRedirect bool, UserAgent string, enableConnectionReuse bool, proxyURL ...string) (fhttp.Client, error) {
+func newClientWithReuse(browser Browser, timeout int, disableRedirect bool, UserAgent string, enableConnectionReuse bool, proxyURL ...string) (fhttp.Client, error) {
 	return getOrCreateClient(browser, timeout, disableRedirect, UserAgent, enableConnectionReuse, proxyURL...)
 }
 
 // WebSocketConnect establishes a WebSocket connection
-func (browser browser) WebSocketConnect(ctx context.Context, urlStr string) (*websocket.Conn, *fhttp.Response, error) {
+func (browser Browser) WebSocketConnect(ctx context.Context, urlStr string) (*websocket.Conn, *fhttp.Response, error) {
 	// Create TLS config from browser settings
 	tlsConfig := &utls.Config{
 		InsecureSkipVerify: browser.InsecureSkipVerify,
@@ -353,7 +353,7 @@ func (browser browser) WebSocketConnect(ctx context.Context, urlStr string) (*we
 }
 
 // SSEConnect establishes an SSE connection
-func (browser browser) SSEConnect(ctx context.Context, urlStr string) (*SSEResponse, error) {
+func (browser Browser) SSEConnect(ctx context.Context, urlStr string) (*SSEResponse, error) {
 	// Create HTTP client with connection reuse enabled
 	httpClient, err := newClientWithReuse(browser, 30, false, browser.UserAgent, true)
 	if err != nil {

@@ -13,10 +13,11 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	http "github.com/Danny-Dasilva/fhttp"
 	"github.com/gorilla/websocket"
-	utls "gitlab.com/yawning/utls.git"
+	utls "github.com/refraction-networking/utls"
 )
 
 // safeChannelWriter wraps a channel to provide thread-safe writes with closed state tracking
@@ -59,6 +60,37 @@ func (scw *safeChannelWriter) setClosed() {
 	scw.mu.Lock()
 	defer scw.mu.Unlock()
 	scw.closed = true
+}
+
+// Time wraps time.Time overriddin the json marshal/unmarshal to pass
+// timestamp as integer
+type Time struct {
+	time.Time
+}
+
+// A Cookie represents an HTTP cookie as sent in the Set-Cookie header of an
+// HTTP response or the Cookie header of an HTTP request.
+//
+// See https://tools.ietf.org/html/rfc6265 for details.
+type Cookie struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+
+	Path        string `json:"path"`   // optional
+	Domain      string `json:"domain"` // optional
+	Expires     time.Time
+	JSONExpires Time   `json:"expires"`    // optional
+	RawExpires  string `json:"rawExpires"` // for reading cookies only
+
+	// MaxAge=0 means no 'Max-Age' attribute specified.
+	// MaxAge<0 means delete cookie now, equivalently 'Max-Age: 0'
+	// MaxAge>0 means Max-Age attribute present and given in seconds
+	MaxAge   int            `json:"maxAge"`
+	Secure   bool           `json:"secure"`
+	HTTPOnly bool           `json:"httpOnly"`
+	SameSite nhttp.SameSite `json:"sameSite"`
+	Raw      string
+	Unparsed []string `json:"unparsed"` // Raw text of unparsed attribute-value pairs
 }
 
 // Options sets CycleTLS client options
@@ -106,7 +138,7 @@ type cycleTLSRequest struct {
 	Options   Options `json:"options"`
 }
 
-//rename to request+client+options
+// rename to request+client+options
 type fullRequest struct {
 	req       *http.Request
 	client    http.Client
@@ -139,11 +171,36 @@ var activeRequests = make(map[string]context.CancelFunc)
 var activeRequestsMutex sync.Mutex
 var debugLogger = log.New(os.Stdout, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
 
+// WebSocket connection management
+type WebSocketConnection struct {
+	Conn         *websocket.Conn
+	RequestID    string
+	URL          string
+	ReadyState   int // 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+	mu           sync.RWMutex
+	commandChan  chan WebSocketCommand
+	closeChan    chan struct{}
+	chanWrite    *safeChannelWriter
+	protocol     string // Negotiated subprotocol
+	extensions   string // Negotiated extensions
+}
+
+type WebSocketCommand struct {
+	Type       string // "send", "close", "ping", "pong"
+	Data       []byte
+	IsBinary   bool
+	CloseCode  int
+	CloseReason string
+}
+
+var activeWebSockets = make(map[string]*WebSocketConnection)
+var activeWebSocketsMutex sync.RWMutex
+
 // ready Request
 func processRequest(request cycleTLSRequest) (result fullRequest) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	var browser = browser{
+	var browser = Browser{
 		// TLS fingerprinting options
 		JA3:              request.Options.Ja3,
 		JA4r:             request.Options.Ja4r,
@@ -308,7 +365,7 @@ func dispatchHTTP3Request(request cycleTLSRequest) (result fullRequest) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create browser configuration for HTTP/3
-	var browser = browser{
+	var browser = Browser{
 		// TLS fingerprinting options
 		JA3:              request.Options.Ja3,
 		JA4r:             request.Options.Ja4r,
@@ -396,7 +453,7 @@ func dispatchSSERequest(request cycleTLSRequest) (result fullRequest) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create browser configuration for SSE
-	var browser = browser{
+	var browser = Browser{
 		// TLS fingerprinting options
 		JA3:              request.Options.Ja3,
 		JA4r:             request.Options.Ja4r,
@@ -472,7 +529,7 @@ func dispatchWebSocketRequest(request cycleTLSRequest) (result fullRequest) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create browser configuration for WebSocket
-	var browser = browser{
+	var browser = Browser{
 		// TLS fingerprinting options
 		JA3:              request.Options.Ja3,
 		JA4r:             request.Options.Ja4r,
@@ -529,6 +586,82 @@ func dispatchWebSocketRequest(request cycleTLSRequest) (result fullRequest) {
 		wsClient: wsClient,
 	}
 }
+
+// // Queue queues request in worker pool
+// func (client CycleTLS) Queue(URL string, options Options, Method string) {
+
+// 	options.URL = URL
+// 	options.Method = Method
+// 	//TODO add timestamp to request
+// 	opt := cycleTLSRequest{"Queued Request", options}
+// 	response := processRequest(opt)
+// 	client.ReqChan <- response
+// }
+
+// // Do creates a single request
+// func (client CycleTLS) Do(URL string, options Options, Method string) (response Response, err error) {
+
+// 	options.URL = URL
+// 	options.Method = Method
+// 	// Set default values if not provided
+// 	if options.Ja3 == "" {
+// 		options.Ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,18-35-65281-45-17513-27-65037-16-10-11-5-13-0-43-23-51,29-23-24,0"
+// 	}
+// 	if options.UserAgent == "" {
+// 		// Mac OS Chrome 121
+// 		options.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+// 	}
+// 	opt := cycleTLSRequest{"cycleTLSRequest", options}
+
+// 	res := processRequest(opt)
+// 	response, err = dispatcher(res)
+// 	if err != nil {
+// 		log.Print("Request Failed: " + err.Error())
+// 		return response, err
+// 	}
+
+// 	return response, nil
+// }
+
+// Init starts the worker pool or returns a empty cycletls struct
+// func Init(workers ...bool) CycleTLS {
+// 	if len(workers) > 0 && workers[0] {
+// 		reqChan := make(chan fullRequest)
+// 		respChan := make(chan Response)
+// 		go workerPool(reqChan, respChan)
+// 		log.Println("Worker Pool Started")
+
+// 		return CycleTLS{ReqChan: reqChan, RespChan: respChan}
+// 	}
+// 	return CycleTLS{}
+
+// }
+
+// // Close closes channels
+// func (client CycleTLS) Close() {
+// 	close(client.ReqChan)
+// 	close(client.RespChan)
+
+// }
+
+// // Worker Pool
+// func workerPool(reqChan chan fullRequest, respChan chan Response) {
+// 	//MAX
+// 	for i := 0; i < 100; i++ {
+// 		go worker(reqChan, respChan)
+// 	}
+// }
+
+// // Worker
+// func worker(reqChan chan fullRequest, respChan chan Response) {
+// 	for res := range reqChan {
+// 		response, err := dispatcher(res)
+// 		if err != nil {
+// 			log.Print("Request Failed: " + err.Error())
+// 		}
+// 		respChan <- response
+// 	}
+// }
 
 func dispatcherAsync(res fullRequest, chanWrite *safeChannelWriter) {
 	// Add panic recovery to prevent crashes from channel issues
@@ -712,9 +845,9 @@ func dispatcherAsync(res fullRequest, chanWrite *safeChannelWriter) {
 					b.WriteString(message)
 
 					if !chanWrite.write(b.Bytes()) {
-						log.Printf("Failed to write to channel: channel closed")
-						return
-					}
+			log.Printf("Failed to write to channel: channel closed")
+			return
+		}
 					break loop
 				}
 
@@ -738,9 +871,9 @@ func dispatcherAsync(res fullRequest, chanWrite *safeChannelWriter) {
 						b.Write(chunkBuffer[:n])
 
 						if !chanWrite.write(b.Bytes()) {
-							log.Printf("Failed to write to channel: channel closed")
-							return
-						}
+			log.Printf("Failed to write to channel: channel closed")
+			return
+		}
 					}
 					// EOF reached, exit the loop
 					break loop
@@ -768,9 +901,9 @@ func dispatcherAsync(res fullRequest, chanWrite *safeChannelWriter) {
 				b.Write(chunkBuffer[:n])
 
 				if !chanWrite.write(b.Bytes()) {
-					log.Printf("Failed to write to channel: channel closed")
-					return
-				}
+			log.Printf("Failed to write to channel: channel closed")
+			return
+		}
 			}
 		}
 	}
@@ -939,9 +1072,9 @@ func dispatchSSEAsync(res fullRequest, chanWrite *safeChannelWriter) {
 			b.Write(eventBytes)
 
 			if !chanWrite.write(b.Bytes()) {
-				log.Printf("Failed to write to channel: channel closed")
-				return
-			}
+			log.Printf("Failed to write to channel: channel closed")
+			return
+		}
 		}
 	}
 
@@ -964,7 +1097,7 @@ func dispatchSSEAsync(res fullRequest, chanWrite *safeChannelWriter) {
 	}
 }
 
-// dispatchWebSocketAsync handles WebSocket connections asynchronously
+// dispatchWebSocketAsync handles WebSocket connections asynchronously with full bidirectional support
 func dispatchWebSocketAsync(res fullRequest, chanWrite *safeChannelWriter) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -973,131 +1106,48 @@ func dispatchWebSocketAsync(res fullRequest, chanWrite *safeChannelWriter) {
 		activeRequestsMutex.Lock()
 		delete(activeRequests, res.options.RequestID)
 		activeRequestsMutex.Unlock()
+
+		// Remove from active WebSockets
+		activeWebSocketsMutex.Lock()
+		delete(activeWebSockets, res.options.RequestID)
+		activeWebSocketsMutex.Unlock()
 	}()
 
 	// Connect to WebSocket endpoint
 	conn, resp, err := res.wsClient.Connect(res.options.Options.URL)
 	if err != nil {
-		// Send error response
-		var b bytes.Buffer
-		var requestIDLength = len(res.options.RequestID)
-
-		b.WriteByte(byte(requestIDLength >> 8))
-		b.WriteByte(byte(requestIDLength))
-		b.WriteString(res.options.RequestID)
-		b.WriteByte(0)
-		b.WriteByte(5)
-		b.WriteString("error")
-
-		statusCode := 0
-		if resp != nil {
-			statusCode = resp.StatusCode
-		}
-
-		b.WriteByte(byte(statusCode >> 8))
-		b.WriteByte(byte(statusCode))
-
-		var message = "WebSocket connection failed: " + err.Error()
-		var messageLength = len(message)
-
-		b.WriteByte(byte(messageLength >> 8))
-		b.WriteByte(byte(messageLength))
-		b.WriteString(message)
-
-		if !chanWrite.write(b.Bytes()) {
-			log.Printf("Failed to write to channel: channel closed")
-			return
-		}
+		sendWebSocketError(chanWrite, res.options.RequestID, res.options.Options.URL, resp, err)
 		return
 	}
+	defer conn.Close()
 
-	wsResp := &WebSocketResponse{
-		Conn:     conn,
-		Response: resp,
+	// Extract negotiated protocol and extensions
+	negotiatedProtocol := resp.Header.Get("Sec-WebSocket-Protocol")
+	negotiatedExtensions := resp.Header.Get("Sec-WebSocket-Extensions")
+
+	// Create WebSocket connection object
+	wsConn := &WebSocketConnection{
+		Conn:       conn,
+		RequestID:  res.options.RequestID,
+		URL:        res.options.Options.URL,
+		ReadyState: 1, // OPEN
+		commandChan: make(chan WebSocketCommand, 100),
+		closeChan:  make(chan struct{}),
+		chanWrite:  chanWrite,
+		protocol:   negotiatedProtocol,
+		extensions: negotiatedExtensions,
 	}
-	defer wsResp.Close()
+
+	// Register the WebSocket connection
+	activeWebSocketsMutex.Lock()
+	activeWebSockets[res.options.RequestID] = wsConn
+	activeWebSocketsMutex.Unlock()
 
 	// Send initial response with headers
-	{
-		var b bytes.Buffer
-		var headerLength = len(resp.Header)
-		var requestIDLength = len(res.options.RequestID)
-		var finalUrlLength = len(res.options.Options.URL)
+	sendWebSocketResponse(chanWrite, res.options.RequestID, res.options.Options.URL, resp)
 
-		b.WriteByte(byte(requestIDLength >> 8))
-		b.WriteByte(byte(requestIDLength))
-		b.WriteString(res.options.RequestID)
-		b.WriteByte(0)
-		b.WriteByte(8)
-		b.WriteString("response")
-		b.WriteByte(byte(resp.StatusCode >> 8))
-		b.WriteByte(byte(resp.StatusCode))
-
-		// Write finalUrl length and value
-		b.WriteByte(byte(finalUrlLength >> 8))
-		b.WriteByte(byte(finalUrlLength))
-		b.WriteString(res.options.Options.URL)
-
-		// Write headers
-		b.WriteByte(byte(headerLength >> 8))
-		b.WriteByte(byte(headerLength))
-
-		for name, values := range resp.Header {
-			var nameLength = len(name)
-			var valuesLength = len(values)
-
-			b.WriteByte(byte(nameLength >> 8))
-			b.WriteByte(byte(nameLength))
-			b.WriteString(name)
-			b.WriteByte(byte(valuesLength >> 8))
-			b.WriteByte(byte(valuesLength))
-
-			for _, value := range values {
-				var valueLength = len(value)
-
-				b.WriteByte(byte(valueLength >> 8))
-				b.WriteByte(byte(valueLength))
-				b.WriteString(value)
-			}
-		}
-
-		if !chanWrite.write(b.Bytes()) {
-			log.Printf("Failed to write to channel: channel closed")
-			return
-		}
-	}
-
-	// Send initial connection success message
-	{
-		successMsg := map[string]interface{}{
-			"type":    "websocket",
-			"status":  "connected",
-			"message": "WebSocket connection established",
-		}
-
-		msgBytes, _ := json.Marshal(successMsg)
-
-		var b bytes.Buffer
-		requestIDLength := len(res.options.RequestID)
-		bodyChunkLength := len(msgBytes)
-
-		b.WriteByte(byte(requestIDLength >> 8))
-		b.WriteByte(byte(requestIDLength))
-		b.WriteString(res.options.RequestID)
-		b.WriteByte(0)
-		b.WriteByte(4)
-		b.WriteString("data")
-		b.WriteByte(byte(bodyChunkLength >> 24))
-		b.WriteByte(byte(bodyChunkLength >> 16))
-		b.WriteByte(byte(bodyChunkLength >> 8))
-		b.WriteByte(byte(bodyChunkLength))
-		b.Write(msgBytes)
-
-		if !chanWrite.write(b.Bytes()) {
-			log.Printf("Failed to write to channel: channel closed")
-			return
-		}
-	}
+	// Send ws_open event
+	sendWebSocketOpen(chanWrite, res.options.RequestID, negotiatedProtocol, negotiatedExtensions)
 
 	// If there's body data, send it as the first WebSocket message
 	if res.options.Options.Body != "" {
@@ -1107,80 +1157,286 @@ func dispatchWebSocketAsync(res fullRequest, chanWrite *safeChannelWriter) {
 		}
 	}
 
-	// Read WebSocket messages
-	for {
-		select {
-		case <-res.req.Context().Done():
-			debugLogger.Printf("WebSocket request %s was canceled", res.options.RequestID)
-			return
+	// Create channels for goroutine coordination
+	readDone := make(chan struct{})
+	writeDone := make(chan struct{})
 
-		default:
-			messageType, message, err := wsResp.Receive()
+	// Goroutine to handle incoming WebSocket messages
+	go func() {
+		defer close(readDone)
+		for {
+			messageType, message, err := conn.ReadMessage()
 			if err != nil {
-				if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+				if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 					// Normal close
-					break
+					sendWebSocketClose(chanWrite, res.options.RequestID, websocket.CloseNormalClosure, "Connection closed normally")
+				} else {
+					debugLogger.Printf("WebSocket read error: %s", err.Error())
+					sendWebSocketError(chanWrite, res.options.RequestID, res.options.Options.URL, nil, err)
 				}
-				debugLogger.Printf("WebSocket read error: %s", err.Error())
 				return
 			}
 
-			// Format WebSocket message for transmission
-			msgData := map[string]interface{}{
-				"type":        "websocket",
-				"messageType": messageType,
-				"data":        string(message),
-			}
+			// Send ws_message event
+			sendWebSocketMessage(chanWrite, res.options.RequestID, messageType, message)
+		}
+	}()
 
-			msgBytes, err := json.Marshal(msgData)
-			if err != nil {
-				debugLogger.Printf("WebSocket message marshal error: %s", err.Error())
-				continue
-			}
+	// Goroutine to handle outgoing commands
+	go func() {
+		defer close(writeDone)
+		for {
+			select {
+			case cmd := <-wsConn.commandChan:
+				switch cmd.Type {
+				case "send":
+					msgType := websocket.TextMessage
+					if cmd.IsBinary {
+						msgType = websocket.BinaryMessage
+					}
+					err := conn.WriteMessage(msgType, cmd.Data)
+					if err != nil {
+						debugLogger.Printf("WebSocket send error: %s", err.Error())
+						sendWebSocketError(chanWrite, res.options.RequestID, res.options.Options.URL, nil, err)
+					}
 
-			// Send message data
-			var b bytes.Buffer
-			requestIDLength := len(res.options.RequestID)
-			bodyChunkLength := len(msgBytes)
+				case "close":
+					wsConn.mu.Lock()
+					wsConn.ReadyState = 2 // CLOSING
+					wsConn.mu.Unlock()
 
-			b.WriteByte(byte(requestIDLength >> 8))
-			b.WriteByte(byte(requestIDLength))
-			b.WriteString(res.options.RequestID)
-			b.WriteByte(0)
-			b.WriteByte(4)
-			b.WriteString("data")
-			b.WriteByte(byte(bodyChunkLength >> 24))
-			b.WriteByte(byte(bodyChunkLength >> 16))
-			b.WriteByte(byte(bodyChunkLength >> 8))
-			b.WriteByte(byte(bodyChunkLength))
-			b.Write(msgBytes)
+					closeCode := cmd.CloseCode
+					if closeCode == 0 {
+						closeCode = websocket.CloseNormalClosure
+					}
 
-			if !chanWrite.write(b.Bytes()) {
-				log.Printf("Failed to write to channel: channel closed")
+					err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(closeCode, cmd.CloseReason))
+					if err != nil {
+						debugLogger.Printf("WebSocket close error: %s", err.Error())
+					}
+
+					sendWebSocketClose(chanWrite, res.options.RequestID, closeCode, cmd.CloseReason)
+					return
+
+				case "ping":
+					err := conn.WriteMessage(websocket.PingMessage, cmd.Data)
+					if err != nil {
+						debugLogger.Printf("WebSocket ping error: %s", err.Error())
+					}
+
+				case "pong":
+					err := conn.WriteMessage(websocket.PongMessage, cmd.Data)
+					if err != nil {
+						debugLogger.Printf("WebSocket pong error: %s", err.Error())
+					}
+				}
+
+			case <-wsConn.closeChan:
+				return
+
+			case <-res.req.Context().Done():
+				debugLogger.Printf("WebSocket request %s was canceled", res.options.RequestID)
 				return
 			}
 		}
+	}()
+
+	// Wait for either read or write to complete
+	select {
+	case <-readDone:
+		close(wsConn.closeChan)
+		<-writeDone
+	case <-writeDone:
+		close(wsConn.closeChan)
+		<-readDone
+	case <-res.req.Context().Done():
+		debugLogger.Printf("WebSocket request %s was canceled", res.options.RequestID)
+		close(wsConn.closeChan)
+		<-readDone
+		<-writeDone
 	}
+
+	// Update connection state to CLOSED
+	wsConn.mu.Lock()
+	wsConn.ReadyState = 3
+	wsConn.mu.Unlock()
 
 	// Send end message
-	{
-		var b bytes.Buffer
-		requestIDLength := len(res.options.RequestID)
-
-		b.WriteByte(byte(requestIDLength >> 8))
-		b.WriteByte(byte(requestIDLength))
-		b.WriteString(res.options.RequestID)
-		b.WriteByte(0)
-		b.WriteByte(3)
-		b.WriteString("end")
-
-		if !chanWrite.write(b.Bytes()) {
-			log.Printf("Failed to write to channel: channel closed")
-			return
-		}
-	}
+	sendWebSocketEnd(chanWrite, res.options.RequestID)
 }
 
+// Helper functions for sending WebSocket messages
+func sendWebSocketError(chanWrite *safeChannelWriter, requestID, url string, resp *nhttp.Response, err error) {
+	var b bytes.Buffer
+	var requestIDLength = len(requestID)
+
+	b.WriteByte(byte(requestIDLength >> 8))
+	b.WriteByte(byte(requestIDLength))
+	b.WriteString(requestID)
+	b.WriteByte(0)
+	b.WriteByte(8)
+	b.WriteString("ws_error")
+
+	statusCode := 0
+	if resp != nil {
+		statusCode = resp.StatusCode
+	}
+
+	b.WriteByte(byte(statusCode >> 8))
+	b.WriteByte(byte(statusCode))
+
+	var message = err.Error()
+	var messageLength = len(message)
+
+	b.WriteByte(byte(messageLength >> 8))
+	b.WriteByte(byte(messageLength))
+	b.WriteString(message)
+
+	chanWrite.write(b.Bytes())
+}
+
+func sendWebSocketResponse(chanWrite *safeChannelWriter, requestID, url string, resp *nhttp.Response) {
+	var b bytes.Buffer
+	var headerLength = len(resp.Header)
+	var requestIDLength = len(requestID)
+	var finalUrlLength = len(url)
+
+	b.WriteByte(byte(requestIDLength >> 8))
+	b.WriteByte(byte(requestIDLength))
+	b.WriteString(requestID)
+	b.WriteByte(0)
+	b.WriteByte(8)
+	b.WriteString("response")
+	b.WriteByte(byte(resp.StatusCode >> 8))
+	b.WriteByte(byte(resp.StatusCode))
+
+	// Write finalUrl length and value
+	b.WriteByte(byte(finalUrlLength >> 8))
+	b.WriteByte(byte(finalUrlLength))
+	b.WriteString(url)
+
+	// Write headers
+	b.WriteByte(byte(headerLength >> 8))
+	b.WriteByte(byte(headerLength))
+
+	for name, values := range resp.Header {
+		var nameLength = len(name)
+		var valuesLength = len(values)
+
+		b.WriteByte(byte(nameLength >> 8))
+		b.WriteByte(byte(nameLength))
+		b.WriteString(name)
+		b.WriteByte(byte(valuesLength >> 8))
+		b.WriteByte(byte(valuesLength))
+
+		for _, value := range values {
+			var valueLength = len(value)
+
+			b.WriteByte(byte(valueLength >> 8))
+			b.WriteByte(byte(valueLength))
+			b.WriteString(value)
+		}
+	}
+
+	chanWrite.write(b.Bytes())
+}
+
+func sendWebSocketOpen(chanWrite *safeChannelWriter, requestID, protocol, extensions string) {
+	openMsg := map[string]interface{}{
+		"type":       "open",
+		"protocol":   protocol,
+		"extensions": extensions,
+	}
+
+	msgBytes, _ := json.Marshal(openMsg)
+
+	var b bytes.Buffer
+	requestIDLength := len(requestID)
+	bodyChunkLength := len(msgBytes)
+
+	b.WriteByte(byte(requestIDLength >> 8))
+	b.WriteByte(byte(requestIDLength))
+	b.WriteString(requestID)
+	b.WriteByte(0)
+	b.WriteByte(7)
+	b.WriteString("ws_open")
+	b.WriteByte(byte(bodyChunkLength >> 24))
+	b.WriteByte(byte(bodyChunkLength >> 16))
+	b.WriteByte(byte(bodyChunkLength >> 8))
+	b.WriteByte(byte(bodyChunkLength))
+	b.Write(msgBytes)
+
+	chanWrite.write(b.Bytes())
+}
+
+func sendWebSocketMessage(chanWrite *safeChannelWriter, requestID string, messageType int, message []byte) {
+	var b bytes.Buffer
+	requestIDLength := len(requestID)
+
+	b.WriteByte(byte(requestIDLength >> 8))
+	b.WriteByte(byte(requestIDLength))
+	b.WriteString(requestID)
+	b.WriteByte(0)
+	b.WriteByte(10)
+	b.WriteString("ws_message")
+
+	// Message type (1 byte)
+	b.WriteByte(byte(messageType))
+
+	// Message data length (4 bytes)
+	messageLength := len(message)
+	b.WriteByte(byte(messageLength >> 24))
+	b.WriteByte(byte(messageLength >> 16))
+	b.WriteByte(byte(messageLength >> 8))
+	b.WriteByte(byte(messageLength))
+
+	// Message data
+	b.Write(message)
+
+	chanWrite.write(b.Bytes())
+}
+
+func sendWebSocketClose(chanWrite *safeChannelWriter, requestID string, code int, reason string) {
+	closeMsg := map[string]interface{}{
+		"type":   "close",
+		"code":   code,
+		"reason": reason,
+	}
+
+	msgBytes, _ := json.Marshal(closeMsg)
+
+	var b bytes.Buffer
+	requestIDLength := len(requestID)
+	bodyChunkLength := len(msgBytes)
+
+	b.WriteByte(byte(requestIDLength >> 8))
+	b.WriteByte(byte(requestIDLength))
+	b.WriteString(requestID)
+	b.WriteByte(0)
+	b.WriteByte(8)
+	b.WriteString("ws_close")
+	b.WriteByte(byte(bodyChunkLength >> 24))
+	b.WriteByte(byte(bodyChunkLength >> 16))
+	b.WriteByte(byte(bodyChunkLength >> 8))
+	b.WriteByte(byte(bodyChunkLength))
+	b.Write(msgBytes)
+
+	chanWrite.write(b.Bytes())
+}
+
+func sendWebSocketEnd(chanWrite *safeChannelWriter, requestID string) {
+	var b bytes.Buffer
+	requestIDLength := len(requestID)
+
+	b.WriteByte(byte(requestIDLength >> 8))
+	b.WriteByte(byte(requestIDLength))
+	b.WriteString(requestID)
+	b.WriteByte(0)
+	b.WriteByte(3)
+	b.WriteString("end")
+
+	chanWrite.write(b.Bytes())
+}
 
 func writeSocket(chanWrite chan []byte, wsSocket *websocket.Conn) {
 	for buf := range chanWrite {
@@ -1223,6 +1479,63 @@ func readSocket(chanRead chan fullRequest, wsSocket *websocket.Conn) {
 					delete(activeRequests, requestId)
 				}
 				activeRequestsMutex.Unlock()
+				continue
+			}
+			// Handle WebSocket commands
+			if action == "ws_send" || action == "ws_close" || action == "ws_ping" || action == "ws_pong" {
+				requestId, _ := baseMessage["requestId"].(string)
+
+				activeWebSocketsMutex.RLock()
+				wsConn, exists := activeWebSockets[requestId]
+				activeWebSocketsMutex.RUnlock()
+
+				if !exists {
+					log.Printf("WebSocket connection not found for request ID: %s", requestId)
+					continue
+				}
+
+				cmd := WebSocketCommand{}
+
+				switch action {
+				case "ws_send":
+					cmd.Type = "send"
+					if dataStr, ok := baseMessage["data"].(string); ok {
+						cmd.Data = []byte(dataStr)
+					}
+					if isBinary, ok := baseMessage["isBinary"].(bool); ok {
+						cmd.IsBinary = isBinary
+					}
+
+				case "ws_close":
+					cmd.Type = "close"
+					if code, ok := baseMessage["code"].(float64); ok {
+						cmd.CloseCode = int(code)
+					}
+					if reason, ok := baseMessage["reason"].(string); ok {
+						cmd.CloseReason = reason
+					}
+
+				case "ws_ping":
+					cmd.Type = "ping"
+					if dataStr, ok := baseMessage["data"].(string); ok {
+						cmd.Data = []byte(dataStr)
+					}
+
+				case "ws_pong":
+					cmd.Type = "pong"
+					if dataStr, ok := baseMessage["data"].(string); ok {
+						cmd.Data = []byte(dataStr)
+					}
+				}
+
+				// Send command to WebSocket connection
+				select {
+				case wsConn.commandChan <- cmd:
+					// Command sent successfully
+				default:
+					log.Printf("WebSocket command channel full for request ID: %s", requestId)
+				}
+
 				continue
 			}
 		}
@@ -1295,6 +1608,21 @@ func setupRoutes() {
 	nhttp.HandleFunc("/", WSEndpoint)
 }
 
+func main() {
+	port, exists := os.LookupEnv("WS_PORT")
+	var addr *string
+	if exists {
+		addr = flag.String("addr", ":"+port, "http service address")
+	} else {
+		addr = flag.String("addr", ":9112", "http service address")
+	}
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	setupRoutes()
+	log.Fatal(nhttp.ListenAndServe(*addr, nil))
+}
+
 // Backward compatibility types and functions for integration tests
 type Response struct {
 	RequestID string            `json:"requestId"`
@@ -1356,7 +1684,7 @@ func (client CycleTLS) Close() {
 // Do creates a single HTTP request for integration tests
 func (client CycleTLS) Do(URL string, options Options, Method string) (Response, error) {
 	// Create browser from options
-	browser := browser{
+	browser := Browser{
 		JA3:                options.Ja3,
 		JA4r:               options.Ja4r,
 		HTTP2Fingerprint:   options.HTTP2Fingerprint,
@@ -1485,19 +1813,4 @@ func (client CycleTLS) Do(URL string, options Options, Method string) (Response,
 		Cookies:   netCookies,
 		FinalUrl:  finalUrl,
 	}, nil
-}
-
-func main() {
-	port, exists := os.LookupEnv("WS_PORT")
-	var addr *string
-	if exists {
-		addr = flag.String("addr", ":"+port, "http service address")
-	} else {
-		addr = flag.String("addr", ":9112", "http service address")
-	}
-
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	setupRoutes()
-	log.Fatal(nhttp.ListenAndServe(*addr, nil))
 }

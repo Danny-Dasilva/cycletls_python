@@ -17,7 +17,7 @@ import (
 	fhttp "github.com/Danny-Dasilva/fhttp"
 	"github.com/andybalholm/brotli"
 	uquic "github.com/refraction-networking/uquic"
-	utls "gitlab.com/yawning/utls.git"
+	utls "github.com/refraction-networking/utls"
 )
 
 const (
@@ -937,17 +937,24 @@ func genMap(disableGrease bool) (extMap map[string]utls.TLSExtension) {
 		"18": &utls.SCTExtension{},
 		"21": &utls.UtlsPaddingExtension{GetPaddingLen: utls.BoringPaddingStyle},
 		"22": &utls.GenericExtension{Id: 22}, // encrypt_then_mac
-		"23": &utls.UtlsExtendedMasterSecretExtension{},
-		"24": &utls.GenericExtension{Id: 24}, // token_binding (FakeTokenBindingExtension not available in this utls version)
-		"27": &utls.CompressCertificateExtension{
+		"23": &utls.ExtendedMasterSecretExtension{},
+		"24": &utls.FakeTokenBindingExtension{},
+		"27": &utls.UtlsCompressCertExtension{
 			Algorithms: []utls.CertCompressionAlgo{utls.CertCompressionBrotli},
 		},
 		"28": &utls.FakeRecordSizeLimitExtension{
 			Limit: 0x4001,
 		}, //Limit: 0x4001
-		"34": &utls.GenericExtension{Id: 34}, // delegated_credentials (DelegatedCredentialsExtension not available in this utls version)
+		"34": &utls.DelegatedCredentialsExtension{
+			SupportedSignatureAlgorithms: []utls.SignatureScheme{
+				utls.ECDSAWithP256AndSHA256,
+				utls.ECDSAWithP384AndSHA384,
+				utls.ECDSAWithP521AndSHA512,
+				utls.ECDSAWithSHA1,
+			},
+		},
 		"35": &utls.SessionTicketExtension{},
-		"41": &utls.GenericExtension{Id: 41}, // pre_shared_key (UtlsPreSharedKeyExtension not available in this utls version)
+		"41": &utls.UtlsPreSharedKeyExtension{}, // PSK extension
 		// "43": &utls.SupportedVersionsExtension{Versions: []uint16{ this gets set above
 		// 	utls.VersionTLS13,
 		// 	utls.VersionTLS12,
@@ -957,7 +964,7 @@ func genMap(disableGrease bool) (extMap map[string]utls.TLSExtension) {
 			utls.PskModeDHE,
 		}},
 		"49": &utls.GenericExtension{Id: 49}, // post_handshake_auth
-		"50": &utls.SignatureAlgorithmsExtension{ // Use SignatureAlgorithmsExtension instead of SignatureAlgorithmsCertExtension
+		"50": &utls.SignatureAlgorithmsCertExtension{
 			SupportedSignatureAlgorithms: []utls.SignatureScheme{
 				utls.ECDSAWithP256AndSHA256,
 				utls.ECDSAWithP384AndSHA384,
@@ -985,11 +992,12 @@ func genMap(disableGrease bool) (extMap map[string]utls.TLSExtension) {
 				}}
 			}
 		}(),
-		"57":    &utls.GenericExtension{Id: 57}, // quic_transport_parameters (QUICTransportParametersExtension not available in this utls version)
+		"57":    &utls.QUICTransportParametersExtension{},
 		"13172": &utls.NPNExtension{},
-		"17513": &utls.GenericExtension{ // application_settings (ApplicationSettingsExtension not available in this utls version)
-			Id:   17513,
-			Data: []byte{0x00, 0x03, 0x02, 0x68, 0x32}, // h2
+		"17513": &utls.ApplicationSettingsExtension{
+			SupportedProtocols: []string{
+				"h2",
+			},
 		},
 		"17613": &utls.GenericExtension{
 			Id:   17613,
@@ -999,7 +1007,7 @@ func genMap(disableGrease bool) (extMap map[string]utls.TLSExtension) {
 		"65281": &utls.RenegotiationInfoExtension{
 			Renegotiation: utls.RenegotiateOnceAsClient,
 		},
-		"65037": &utls.GenericExtension{Id: 65037}, // encrypted_client_hello (BoringGREASEECH not available in this utls version)
+		"65037": utls.BoringGREASEECH(),
 	}
 	return
 }
@@ -1122,7 +1130,7 @@ func QUICStringToSpec(quicFingerprint string, userAgent string, forceHTTP1 bool)
 	}
 
 	// Add QUIC transport parameters extension (critical for QUIC)
-	extMap["57"] = &utls.GenericExtension{Id: 57} // QUICTransportParametersExtension not available in this utls version
+	extMap["57"] = &utls.QUICTransportParametersExtension{}
 
 	// Build extensions list with QUIC-appropriate extensions
 	var exts []utls.TLSExtension

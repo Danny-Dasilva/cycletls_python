@@ -1,7 +1,7 @@
 package main
 
 import (
-	utls "gitlab.com/yawning/utls.git"
+	utls "github.com/refraction-networking/utls"
 	"net"
 	"net/http"
 	"net/url"

@@ -10,7 +10,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	uquic "github.com/refraction-networking/uquic"
-	utls "gitlab.com/yawning/utls.git"
+	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/proxy"
 	"net"
 	stdhttp "net/http"
@@ -19,16 +19,14 @@ import (
 	"time"
 )
 
-const DefaultChrome_JA3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
-
 var errProtocolNegotiated = errors.New("protocol negotiated")
 
 type roundTripper struct {
 	sync.Mutex
 
 	// Per-address mutexes for preventing concurrent transport creation
-	addressMutexes   map[string]*sync.Mutex
-	addressMutexLock sync.Mutex
+	addressMutexes    map[string]*sync.Mutex
+	addressMutexLock  sync.Mutex
 
 	// TLS fingerprinting options
 	JA3              string
@@ -277,6 +275,7 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 	// Create TLS client
 	conn := utls.UClient(rawConn, &utls.Config{
 		ServerName:         serverName,
+		OmitEmptyPsk:       true,
 		InsecureSkipVerify: rt.InsecureSkipVerify,
 	}, utls.HelloCustom)
 
@@ -315,7 +314,7 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 	switch conn.ConnectionState().NegotiatedProtocol {
 	case http2.NextProtoTLS:
 		// HTTP/2 transport
-		_ = parseUserAgent(rt.UserAgent) // Parse user agent for potential future use
+		parsedUserAgent := parseUserAgent(rt.UserAgent)
 
 		// Use HTTP/2 fingerprint if specified
 		var http2Transport http2.Transport
@@ -329,6 +328,7 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
 				PushHandler: &http2.DefaultPushHandler{},
+				Navigator:   parsedUserAgent.UserAgent,
 			}
 
 			// Apply HTTP/2 fingerprint settings
@@ -337,6 +337,7 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
 				PushHandler: &http2.DefaultPushHandler{},
+				Navigator:   parsedUserAgent.UserAgent,
 			}
 		}
 
@@ -395,6 +396,7 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 	// Create TLS client for retry
 	conn := utls.UClient(rawConn, &utls.Config{
 		ServerName:         host,
+		OmitEmptyPsk:       true,
 		InsecureSkipVerify: rt.InsecureSkipVerify,
 	}, utls.HelloCustom)
 
@@ -413,7 +415,7 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 	switch conn.ConnectionState().NegotiatedProtocol {
 	case http2.NextProtoTLS:
 		// HTTP/2 transport
-		_ = parseUserAgent(rt.UserAgent) // Parse user agent for potential future use
+		parsedUserAgent := parseUserAgent(rt.UserAgent)
 
 		var http2Transport http2.Transport
 		if rt.HTTP2Fingerprint != "" {
@@ -425,6 +427,7 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
 				PushHandler: &http2.DefaultPushHandler{},
+				Navigator:   parsedUserAgent.UserAgent,
 			}
 
 			h2Fingerprint.Apply(&http2Transport)
@@ -432,6 +435,7 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
 				PushHandler: &http2.DefaultPushHandler{},
+				Navigator:   parsedUserAgent.UserAgent,
 			}
 		}
 
@@ -467,6 +471,7 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 	// Create TLS client for fallback
 	conn := utls.UClient(rawConn, &utls.Config{
 		ServerName:         host,
+		OmitEmptyPsk:       true,
 		InsecureSkipVerify: rt.InsecureSkipVerify,
 	}, utls.HelloCustom)
 
@@ -485,7 +490,7 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 	switch conn.ConnectionState().NegotiatedProtocol {
 	case http2.NextProtoTLS:
 		// HTTP/2 transport
-		_ = parseUserAgent(rt.UserAgent) // Parse user agent for potential future use
+		parsedUserAgent := parseUserAgent(rt.UserAgent)
 
 		var http2Transport http2.Transport
 		if rt.HTTP2Fingerprint != "" {
@@ -497,6 +502,7 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
 				PushHandler: &http2.DefaultPushHandler{},
+				Navigator:   parsedUserAgent.UserAgent,
 			}
 
 			h2Fingerprint.Apply(&http2Transport)
@@ -504,6 +510,7 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
 				PushHandler: &http2.DefaultPushHandler{},
+				Navigator:   parsedUserAgent.UserAgent,
 			}
 		}
 
@@ -522,7 +529,7 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 	return nil, errProtocolNegotiated
 }
 
-func (rt *roundTripper) dialTLSHTTP2(network, addr string, _ *tls.Config) (net.Conn, error) {
+func (rt *roundTripper) dialTLSHTTP2(network, addr string, _ *utls.Config) (net.Conn, error) {
 	return rt.dialTLS(context.Background(), network, addr)
 }
 
@@ -538,15 +545,15 @@ func (rt *roundTripper) getDialTLSAddr(req *http.Request) string {
 func (rt *roundTripper) getAddressMutex(addr string) *sync.Mutex {
 	rt.addressMutexLock.Lock()
 	defer rt.addressMutexLock.Unlock()
-
+	
 	if rt.addressMutexes == nil {
 		rt.addressMutexes = make(map[string]*sync.Mutex)
 	}
-
+	
 	if mu, exists := rt.addressMutexes[addr]; exists {
 		return mu
 	}
-
+	
 	mu := &sync.Mutex{}
 	rt.addressMutexes[addr] = mu
 	return mu
@@ -587,7 +594,7 @@ func (rt *roundTripper) CloseIdleConnections(selectedAddr ...string) {
 	}
 }
 
-func newRoundTripper(browser browser, dialer ...proxy.ContextDialer) http.RoundTripper {
+func newRoundTripper(browser Browser, dialer ...proxy.ContextDialer) http.RoundTripper {
 	var contextDialer proxy.ContextDialer
 	if len(dialer) > 0 {
 		contextDialer = dialer[0]
@@ -700,3 +707,5 @@ func (rt *roundTripper) makeHTTP3Request(req *http.Request, conn *HTTP3Connectio
 	}, nil
 }
 
+// Default JA3 fingerprint for Chrome
+const DefaultChrome_JA3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
