@@ -1,6 +1,8 @@
 import json
 import urllib.parse
 import warnings
+import threading
+import weakref
 from typing import Union
 from websocket import create_connection
 from .schema import Response, Request, Protocol
@@ -64,6 +66,28 @@ def kill(proc_pid):
                 proc.kill()
 
 
+def _cleanup_cycletls_instance(ws, proc):
+    """
+    Cleanup function for weakref.finalize.
+
+    This function has no self reference to avoid circular references.
+
+    Args:
+        ws: WebSocket connection
+        proc: Subprocess instance
+    """
+    try:
+        ws.close()
+    except:
+        pass
+
+    try:
+        if proc:
+            kill(proc)
+    except:
+        pass
+
+
 class CycleTLS:
     """
     CycleTLS client for making HTTP requests with advanced TLS fingerprinting.
@@ -87,6 +111,7 @@ class CycleTLS:
         """
         self.port = port
         self.ws_url = f"ws://localhost:{port}"
+        self._lock = threading.RLock()  # Thread-safe WebSocket access
 
         try:
             self.ws = create_connection(self.ws_url)
@@ -102,6 +127,14 @@ class CycleTLS:
             sleep(0.1)
 
             self.ws = create_connection(self.ws_url)
+
+        # Register weakref finalizer for automatic cleanup
+        self._finalizer = weakref.finalize(
+            self,
+            _cleanup_cycletls_instance,
+            self.ws,
+            self.proc
+        )
 
     def __enter__(self):
         """Context manager entry."""
@@ -227,8 +260,11 @@ class CycleTLS:
             "requestId": "requestId",
             "options": request.dict(by_alias=True, exclude_none=True),
         }
-        self.ws.send(json.dumps(request))
-        response = json.loads(self.ws.recv())
+
+        # Thread-safe WebSocket communication
+        with self._lock:
+            self.ws.send(json.dumps(request))
+            response = json.loads(self.ws.recv())
 
         return Response(**response)
 
@@ -368,6 +404,27 @@ class CycleTLS:
         return self.request("delete", url, params=params, **kwargs)
 
     def close(self):
-        self.ws.close()
+        """Close the client and cleanup resources gracefully."""
+        try:
+            self.ws.close()
+        except:
+            pass
 
-        kill(self.proc)
+        # Graceful termination with escalation
+        if self.proc is not None:
+            try:
+                self.proc.terminate()  # Try graceful shutdown first
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # If graceful shutdown times out, force kill
+                self.proc.kill()
+                try:
+                    self.proc.wait(timeout=1)
+                except:
+                    pass
+            except:
+                # Best effort kill
+                try:
+                    self.proc.kill()
+                except:
+                    pass

@@ -64,51 +64,100 @@ pip install cycletls
 
 ## Quick Start
 
-### Basic GET Request
+### Simple API (Zero Boilerplate) - NEW! 🎉
 
 ```python
-from cycletls import CycleTLS
+import cycletls
 
-# Simple request
-client = CycleTLS()
-response = client.get('https://httpbin.org/get')
+# That's it! Auto-setup, auto-cleanup
+response = cycletls.get('https://httpbin.org/get')
 print(response.status_code)  # 200
-print(response.json())  # Parsed JSON response
-client.close()
+print(response.json())
 ```
 
-### Using Context Manager (Recommended)
+### Configure Once, Use Everywhere
 
 ```python
-from cycletls import CycleTLS
+import cycletls
 
-# Automatic cleanup with context manager
+# Set defaults for all requests
+cycletls.set_default(
+    proxy='socks5://127.0.0.1:9050',
+    timeout=10,
+    ja3='771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0',
+    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+)
+
+# All future requests use these defaults
+response1 = cycletls.get('https://httpbin.org/get')
+response2 = cycletls.post('https://httpbin.org/post', json_data={'key': 'value'})
+
+# Per-request overrides
+response3 = cycletls.get('https://httpbin.org/get', timeout=5)  # Override timeout
+```
+
+### Three Usage Patterns
+
+CycleTLS supports three patterns to fit your needs:
+
+```python
+# Pattern 1: Simple API (NEW) - Zero boilerplate, like requests
+import cycletls
+response = cycletls.get('https://example.com')
+
+# Pattern 2: Manual Client - Full control
+from cycletls import CycleTLS
 with CycleTLS() as client:
-    response = client.get('https://httpbin.org/get')
-    print(response.text)
+    response = client.get('https://example.com')
+
+# Pattern 3: Session - Persistent cookies/headers
+from cycletls import Session
+with Session() as session:
+    session.headers['Authorization'] = 'Bearer token'
+    response1 = session.post('/login', json_data={...})
+    response2 = session.get('/profile')  # Cookies preserved
 ```
 
 ### With TLS Fingerprinting
 
 ```python
-from cycletls import CycleTLS
+import cycletls
 
-with CycleTLS() as client:
-    # Chrome 83 fingerprint
-    response = client.get(
-        'https://ja3er.com/json',
-        ja3='771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0',
-        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.106 Safari/537.36'
-    )
-    data = response.json()
-    print(f"JA3 Hash: {data['ja3_hash']}")
+# Chrome 83 fingerprint - Simple API
+response = cycletls.get(
+    'https://ja3er.com/json',
+    ja3='771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0',
+    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+)
+print(f"JA3 Hash: {response.json()['ja3_hash']}")
 ```
 
 ## Usage
 
 ### Basic Requests
 
-#### All HTTP Methods
+#### Simple API (Module-Level Functions)
+
+```python
+import cycletls
+
+# All HTTP methods available as module-level functions
+response = cycletls.get('https://httpbin.org/get')
+response = cycletls.post('https://httpbin.org/post', json_data={'key': 'value'})
+response = cycletls.put('https://httpbin.org/put', json_data={'status': 'updated'})
+response = cycletls.patch('https://httpbin.org/patch', json_data={'field': 'value'})
+response = cycletls.delete('https://httpbin.org/delete')
+response = cycletls.head('https://httpbin.org/get')
+response = cycletls.options('https://httpbin.org/get')
+
+# POST with form data
+response = cycletls.post(
+    'https://httpbin.org/post',
+    data={'username': 'john', 'password': 'secret'}
+)
+```
+
+#### Manual Client (Context Manager)
 
 ```python
 from cycletls import CycleTLS
@@ -129,25 +178,11 @@ with CycleTLS() as client:
         data={'username': 'john', 'password': 'secret'}
     )
 
-    # PUT request
-    response = client.put(
-        'https://httpbin.org/put',
-        json_data={'status': 'updated'}
-    )
-
-    # PATCH request
-    response = client.patch(
-        'https://httpbin.org/patch',
-        json_data={'field': 'value'}
-    )
-
-    # DELETE request
+    # Other methods
+    response = client.put('https://httpbin.org/put', json_data={'status': 'updated'})
+    response = client.patch('https://httpbin.org/patch', json_data={'field': 'value'})
     response = client.delete('https://httpbin.org/delete')
-
-    # HEAD request
     response = client.head('https://httpbin.org/get')
-
-    # OPTIONS request
     response = client.options('https://httpbin.org/get')
 ```
 
@@ -190,14 +225,112 @@ with CycleTLS() as client:
     response.raise_for_status()  # Raises HTTPError if status >= 400
 ```
 
+## Configuration
+
+### Module-Level Defaults
+
+Set default values once and have them apply to all requests:
+
+```python
+import cycletls
+
+# Configure defaults once
+cycletls.set_default(
+    proxy='socks5://127.0.0.1:9050',
+    timeout=10,
+    ja3='771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0',
+    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    enable_connection_reuse=True,
+    insecure_skip_verify=False
+)
+
+# All subsequent requests use these defaults
+response1 = cycletls.get('https://api.example.com/endpoint1')
+response2 = cycletls.get('https://api.example.com/endpoint2')
+
+# Override defaults per-request
+response3 = cycletls.get('https://api.example.com/endpoint3', timeout=30)
+```
+
+**Available Configuration Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `ja3` | str | JA3 TLS fingerprint string |
+| `ja4r` | str | JA4 raw format fingerprint |
+| `http2_fingerprint` | str | HTTP/2 fingerprint |
+| `quic_fingerprint` | str | QUIC fingerprint |
+| `disable_grease` | bool | Disable GREASE for exact JA4 matching |
+| `user_agent` | str | User-Agent header |
+| `proxy` | str | Proxy URL (http/https/socks4/socks5) |
+| `timeout` | int | Request timeout in seconds |
+| `port` | int | WebSocket port for subprocess (default: 9112) |
+| `enable_connection_reuse` | bool | Enable connection pooling |
+| `insecure_skip_verify` | bool | Skip TLS certificate verification |
+| `server_name` | str | Custom SNI (Server Name Indication) |
+| `force_http1` | bool | Force HTTP/1.1 protocol |
+| `force_http3` | bool | Force HTTP/3 protocol |
+| `protocol` | str | Protocol selection (http1/http2/http3) |
+| `disable_redirect` | bool | Disable automatic redirects |
+| `header_order` | list | Custom header ordering |
+| `order_headers_as_provided` | bool | Use provided header order |
+
+### Read Configuration
+
+```python
+import cycletls
+
+# Set a default
+cycletls.set_default(timeout=10)
+
+# Read configuration value
+timeout = cycletls.get_default('timeout')
+print(f"Default timeout: {timeout}")  # 10
+
+# Read via module attribute
+timeout = cycletls.default_timeout
+print(f"Default timeout: {timeout}")  # 10
+```
+
+### Reset Configuration
+
+```python
+import cycletls
+
+# Configure defaults
+cycletls.set_default(proxy='socks5://127.0.0.1:9050', timeout=10)
+
+# Reset all defaults
+cycletls.reset_defaults()
+
+# All defaults are now cleared
+```
+
+### Manual Session Cleanup
+
+The global session is automatically cleaned up on program exit, but you can manually close it:
+
+```python
+import cycletls
+
+response = cycletls.get('https://example.com')
+
+# Manually close the global session (useful in notebooks)
+cycletls.close_global_session()
+
+# Next call creates a new session
+response = cycletls.get('https://example.com')
+```
+
 ### TLS Fingerprinting
 
 #### JA3 Fingerprinting
 
 JA3 fingerprinting allows you to mimic specific browser TLS implementations:
 
+**Simple API:**
 ```python
-from cycletls import CycleTLS
+import cycletls
 
 # Browser fingerprints
 BROWSER_FINGERPRINTS = {
@@ -215,8 +348,24 @@ BROWSER_FINGERPRINTS = {
     }
 }
 
+# Use Chrome 83 fingerprint
+chrome_fp = BROWSER_FINGERPRINTS['chrome_83']
+response = cycletls.get(
+    'https://ja3er.com/json',
+    ja3=chrome_fp['ja3'],
+    user_agent=chrome_fp['user_agent']
+)
+
+data = response.json()
+print(f"JA3 Hash: {data['ja3_hash']}")
+print(f"User Agent: {data['User-Agent']}")
+```
+
+**Manual Client:**
+```python
+from cycletls import CycleTLS
+
 with CycleTLS() as client:
-    # Use Chrome 83 fingerprint
     chrome_fp = BROWSER_FINGERPRINTS['chrome_83']
     response = client.get(
         'https://ja3er.com/json',
@@ -332,6 +481,45 @@ with CycleTLS() as client:
 
 CycleTLS supports multiple proxy protocols:
 
+**Simple API (with defaults):**
+```python
+import cycletls
+
+# Set proxy as default
+cycletls.set_default(proxy='socks5://127.0.0.1:9050')
+
+# All requests use the proxy
+response = cycletls.get('https://httpbin.org/ip')
+print(response.json())
+```
+
+**Simple API (per-request):**
+```python
+import cycletls
+
+# HTTP Proxy with authentication
+response = cycletls.get(
+    'https://httpbin.org/ip',
+    proxy='http://username:password@proxy.example.com:8080'
+)
+
+# SOCKS5 Proxy (Tor example)
+response = cycletls.get(
+    'https://httpbin.org/ip',
+    proxy='socks5://127.0.0.1:9050'
+)
+
+print(response.json())
+```
+
+**Supported Proxy Protocols:**
+- `http://` - HTTP proxy
+- `https://` - HTTPS proxy
+- `socks4://` - SOCKS4 proxy
+- `socks5://` - SOCKS5 proxy
+- `socks5h://` - SOCKS5 with hostname resolution through proxy
+
+**Manual Client:**
 ```python
 from cycletls import CycleTLS
 
@@ -342,28 +530,10 @@ with CycleTLS() as client:
         proxy='http://username:password@proxy.example.com:8080'
     )
 
-    # HTTPS Proxy
-    response = client.get(
-        'https://httpbin.org/ip',
-        proxy='https://proxy.example.com:8080'
-    )
-
-    # SOCKS4 Proxy
-    response = client.get(
-        'https://httpbin.org/ip',
-        proxy='socks4://127.0.0.1:1080'
-    )
-
     # SOCKS5 Proxy
     response = client.get(
         'https://httpbin.org/ip',
         proxy='socks5://127.0.0.1:9050'
-    )
-
-    # SOCKS5h (hostname resolution through proxy)
-    response = client.get(
-        'https://httpbin.org/ip',
-        proxy='socks5h://127.0.0.1:9050'
     )
 
     print(response.json())
@@ -373,11 +543,24 @@ with CycleTLS() as client:
 
 #### Simple Cookie Dict
 
+**Simple API:**
+```python
+import cycletls
+
+# Send cookies as dict
+response = cycletls.get(
+    'https://httpbin.org/cookies',
+    cookies={'session_id': 'abc123', 'user_token': 'xyz789'}
+)
+
+print(response.json())
+```
+
+**Manual Client:**
 ```python
 from cycletls import CycleTLS
 
 with CycleTLS() as client:
-    # Send cookies as dict
     response = client.get(
         'https://httpbin.org/cookies',
         cookies={'session_id': 'abc123', 'user_token': 'xyz789'}
@@ -435,30 +618,61 @@ with CycleTLS() as client:
 
 #### Download Binary Data
 
+**Simple API:**
+```python
+import cycletls
+
+# Download image
+response = cycletls.get('https://httpbin.org/image/jpeg')
+
+# Access binary content
+image_data = response.content  # bytes
+
+# Save to file
+with open('image.jpg', 'wb') as f:
+    f.write(image_data)
+
+print(f"Downloaded {len(image_data)} bytes")
+```
+
+**Manual Client:**
 ```python
 from cycletls import CycleTLS
 
 with CycleTLS() as client:
-    # Download image
     response = client.get('https://httpbin.org/image/jpeg')
 
-    # Access binary content
-    image_data = response.content  # bytes
-
-    # Save to file
     with open('image.jpg', 'wb') as f:
-        f.write(image_data)
+        f.write(response.content)
 
-    print(f"Downloaded {len(image_data)} bytes")
+    print(f"Downloaded {len(response.content)} bytes")
 ```
 
 #### Upload Binary Data
 
+**Simple API:**
+```python
+import cycletls
+
+# Read binary data
+with open('image.jpg', 'rb') as f:
+    binary_data = f.read()
+
+# Upload binary data
+response = cycletls.post(
+    'https://httpbin.org/post',
+    data=binary_data,
+    headers={'Content-Type': 'image/jpeg'}
+)
+
+print(response.json())
+```
+
+**Manual Client:**
 ```python
 from cycletls import CycleTLS
 
 with CycleTLS() as client:
-    # Read binary data
     with open('image.jpg', 'rb') as f:
         binary_data = f.read()
 
@@ -570,6 +784,21 @@ with Session() as session:
 
 #### Connection Reuse
 
+**Simple API (with defaults):**
+```python
+import cycletls
+
+# Enable connection reuse for all requests
+cycletls.set_default(enable_connection_reuse=True)
+
+# First request establishes connection
+response1 = cycletls.get('https://httpbin.org/get')
+
+# Second request reuses connection (faster)
+response2 = cycletls.get('https://httpbin.org/headers')
+```
+
+**Manual Client:**
 ```python
 from cycletls import CycleTLS
 
@@ -636,6 +865,25 @@ with CycleTLS() as client:
 
 #### Error Handling
 
+**Simple API:**
+```python
+import cycletls
+from cycletls import HTTPError, ConnectionError, Timeout
+
+try:
+    response = cycletls.get('https://httpbin.org/status/404')
+    response.raise_for_status()  # Raises HTTPError
+except HTTPError as e:
+    print(f"HTTP Error: {e}")
+    print(f"Status Code: {e.response.status_code}")
+    print(f"Response Body: {e.response.text}")
+except ConnectionError as e:
+    print(f"Connection Error: {e}")
+except Timeout as e:
+    print(f"Timeout: {e}")
+```
+
+**Manual Client:**
 ```python
 from cycletls import CycleTLS, HTTPError, ConnectionError, Timeout
 
@@ -672,6 +920,56 @@ with CycleTLS() as client:
 ```
 
 ## API Reference
+
+### Module-Level Functions (Simple API)
+
+The Simple API provides convenient module-level functions that use a shared global client.
+
+```python
+import cycletls
+
+# Make requests directly
+response = cycletls.get(url, **kwargs)
+response = cycletls.post(url, data=None, json_data=None, **kwargs)
+response = cycletls.put(url, data=None, json_data=None, **kwargs)
+response = cycletls.patch(url, data=None, json_data=None, **kwargs)
+response = cycletls.delete(url, **kwargs)
+response = cycletls.head(url, **kwargs)
+response = cycletls.options(url, **kwargs)
+response = cycletls.request(method, url, **kwargs)
+```
+
+**Configuration Functions:**
+
+```python
+# Set default values
+cycletls.set_default(
+    proxy='socks5://127.0.0.1:9050',
+    timeout=10,
+    ja3='771,4865-4866...',
+    # ... any other request parameter
+)
+
+# Get a default value
+value = cycletls.get_default('timeout')  # Returns 10 or None
+
+# Read via module attribute
+timeout = cycletls.default_timeout  # Same as get_default('timeout')
+
+# Reset all defaults
+cycletls.reset_defaults()
+
+# Manually close global session (useful in notebooks)
+cycletls.close_global_session()
+```
+
+**Features:**
+- Zero boilerplate - import and use immediately
+- Automatic resource management (no context managers needed)
+- Configurable defaults that persist across requests
+- Thread-safe for concurrent requests
+- Automatic cleanup on program exit
+- Fork-safe (creates new session in child processes)
 
 ### CycleTLS Class
 
@@ -861,6 +1159,7 @@ CycleTLSError                # Base exception
 
 ### Python Advantages
 
+✅ **Simple API** - Zero boilerplate module-level functions (`cycletls.get(url)`)
 ✅ **Pythonic API** - Context managers, properties, snake_case naming
 ✅ **Synchronous by default** - Simpler for most use cases
 ✅ **Type hints** - Full Pydantic model validation
@@ -868,6 +1167,7 @@ CycleTLSError                # Base exception
 ✅ **Session support** - Built-in persistent cookies/headers
 ✅ **Case-insensitive headers** - Automatic via `CaseInsensitiveDict`
 ✅ **Rich exceptions** - Specific exception types for different errors
+✅ **Configurable defaults** - Set once, use everywhere
 
 ### Migration Example
 
@@ -892,7 +1192,22 @@ const initCycleTLS = require('cycletls');
 })();
 ```
 
-**Python:**
+**Python (Simple API - Recommended):**
+```python
+import cycletls
+
+response = cycletls.post(
+    'https://httpbin.org/post',
+    json_data={'key': 'value'},
+    ja3='771,4865-4866...',
+    user_agent='Mozilla/5.0...'
+)
+
+data = response.json()
+print(data)
+```
+
+**Python (Manual Client):**
 ```python
 from cycletls import CycleTLS
 
