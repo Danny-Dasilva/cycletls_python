@@ -30,6 +30,9 @@ doc/_build/
 *.swp
 .DS_Store
 
+# Go backup files
+*.go.bak
+
 
 # python
 

@@ -5,12 +5,19 @@ import (
 	"compress/gzip"
 	"compress/zlib"
 	"crypto/sha256"
-	"github.com/andybalholm/brotli"
-	utls "gitlab.com/yawning/utls.git"
-	"io/ioutil"
-	"log"
+	"crypto/tls"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
+
+	fhttp "github.com/Danny-Dasilva/fhttp"
+	"github.com/andybalholm/brotli"
+	uquic "github.com/refraction-networking/uquic"
+	utls "gitlab.com/yawning/utls.git"
 )
 
 const (
@@ -18,48 +25,87 @@ const (
 	firefox = "firefox" //firefox User agent enum
 )
 
-func parseUserAgent(userAgent string) string {
+// Cipher suite mappings from hex to uTLS constants
+var cipherSuiteMap = map[uint16]uint16{
+	// TLS 1.3 cipher suites
+	0x1301: utls.TLS_AES_128_GCM_SHA256,
+	0x1302: utls.TLS_AES_256_GCM_SHA384,
+	0x1303: utls.TLS_CHACHA20_POLY1305_SHA256,
+
+	// TLS 1.2 and below cipher suites
+	0x002f: utls.TLS_RSA_WITH_AES_128_CBC_SHA,
+	0x0035: utls.TLS_RSA_WITH_AES_256_CBC_SHA,
+	0x009c: utls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+	0x009d: utls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	0xc009: utls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+	0xc00a: utls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+	0xc013: utls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+	0xc014: utls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+	0xc02b: utls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	0xc02c: utls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	0xc02f: utls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	0xc030: utls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	0xcca8: utls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+	0xcca9: utls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+	0x000a: utls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
+	0xc023: utls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+	0xc027: utls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+}
+
+type UserAgent struct {
+	UserAgent   string
+	HeaderOrder []string
+}
+
+// ParseUserAgent returns the pseudo header order and user agent string for chrome/firefox
+func parseUserAgent(userAgent string) UserAgent {
 	switch {
 	case strings.Contains(strings.ToLower(userAgent), "chrome"):
-		return chrome
+		return UserAgent{chrome, []string{":method", ":authority", ":scheme", ":path"}}
 	case strings.Contains(strings.ToLower(userAgent), "firefox"):
-		return firefox
+		return UserAgent{firefox, []string{":method", ":path", ":authority", ":scheme"}}
 	default:
-		return chrome
+		return UserAgent{chrome, []string{":method", ":authority", ":scheme", ":path"}}
 	}
 
 }
 
-// DecompressBody unzips compressed data
-func DecompressBody(Body []byte, encoding []string) (parsedBody string) {
-	if len(encoding) > 0 {
-		if encoding[0] == "gzip" {
-			unz, err := gUnzipData(Body)
-			if err != nil {
-				return string(Body)
-			}
-			parsedBody = string(unz)
-		} else if encoding[0] == "deflate" {
-			unz, err := enflateData(Body)
-			if err != nil {
-				return string(Body)
-			}
-			parsedBody = string(unz)
-		} else if encoding[0] == "br" {
-			unz, err := unBrotliData(Body)
-			if err != nil {
-				return string(Body)
-			}
-			parsedBody = string(unz)
-		} else {
-			log.Println("Unknown Encoding" + encoding[0])
-			parsedBody = string(Body)
-		}
-	} else {
-		parsedBody = string(Body)
+// DecompressBody unzips compressed data following axios-style automatic decompression
+func DecompressBody(Body []byte, encoding []string, content []string) (parsedBody []byte) {
+	// If no encoding specified, return original body
+	if len(encoding) == 0 {
+		return Body
 	}
-	return parsedBody
 
+	// Handle multiple encodings (e.g., "gzip, deflate") - process first encoding
+	encodingType := strings.ToLower(strings.TrimSpace(encoding[0]))
+
+	switch encodingType {
+	case "gzip":
+		unz, err := gUnzipData(Body)
+		if err != nil {
+			// Return original body on decompression failure (axios behavior)
+			return Body
+		}
+		return unz
+	case "deflate":
+		unz, err := enflateData(Body)
+		if err != nil {
+			// Return original body on decompression failure (axios behavior)
+			return Body
+		}
+		return unz
+	case "br", "brotli":
+		unz, err := unBrotliData(Body)
+		if err != nil {
+			// Return original body on decompression failure (axios behavior)
+			return Body
+		}
+		return unz
+	default:
+		// Unknown encoding, return original body
+		return Body
+	}
 }
 
 func gUnzipData(data []byte) (resData []byte, err error) {
@@ -68,7 +114,7 @@ func gUnzipData(data []byte) (resData []byte, err error) {
 		return []byte{}, err
 	}
 	defer gz.Close()
-	respBody, err := ioutil.ReadAll(gz)
+	respBody, err := io.ReadAll(gz)
 	return respBody, err
 }
 func enflateData(data []byte) (resData []byte, err error) {
@@ -77,19 +123,23 @@ func enflateData(data []byte) (resData []byte, err error) {
 		return []byte{}, err
 	}
 	defer zr.Close()
-	enflated, err := ioutil.ReadAll(zr)
+	enflated, err := io.ReadAll(zr)
 	return enflated, err
 }
 func unBrotliData(data []byte) (resData []byte, err error) {
 	br := brotli.NewReader(bytes.NewReader(data))
-	respBody, err := ioutil.ReadAll(br)
+	respBody, err := io.ReadAll(br)
 	return respBody, err
 }
 
 // StringToSpec creates a ClientHelloSpec based on a JA3 string
-func StringToSpec(ja3 string, userAgent string) (*utls.ClientHelloSpec, error) {
-	parsedUserAgent := parseUserAgent("chrome")
-	extMap := genMap()
+func StringToSpec(ja3 string, userAgent string, forceHTTP1 bool) (*utls.ClientHelloSpec, error) {
+	parsedUserAgent := parseUserAgent(userAgent)
+	// if tlsExtensions == nil {
+	// 	tlsExtensions = &TLSExtensions{}
+	// }
+	// ext := tlsExtensions
+	extMap := genMap(false)
 	tokens := strings.Split(ja3, ",")
 
 	version := tokens[0]
@@ -103,17 +153,55 @@ func StringToSpec(ja3 string, userAgent string) (*utls.ClientHelloSpec, error) {
 	if len(pointFormats) == 1 && pointFormats[0] == "" {
 		pointFormats = []string{}
 	}
-
 	// parse curves
 	var targetCurves []utls.CurveID
-	targetCurves = append(targetCurves, utls.CurveID(utls.GREASE_PLACEHOLDER)) //append grease for Chrome browsers
+	// if parsedUserAgent == chrome && !tlsExtensions.UseGREASE {
+	if parsedUserAgent.UserAgent == chrome {
+		targetCurves = append(targetCurves, utls.CurveID(utls.GREASE_PLACEHOLDER)) //append grease for Chrome browsers
+		if supportedVersionsExt, ok := extMap["43"]; ok {
+			if supportedVersions, ok := supportedVersionsExt.(*utls.SupportedVersionsExtension); ok {
+				supportedVersions.Versions = append([]uint16{utls.GREASE_PLACEHOLDER}, supportedVersions.Versions...)
+			}
+		}
+		if keyShareExt, ok := extMap["51"]; ok {
+			if keyShare, ok := keyShareExt.(*utls.KeyShareExtension); ok {
+				keyShare.KeyShares = append([]utls.KeyShare{{Group: utls.CurveID(utls.GREASE_PLACEHOLDER), Data: []byte{0}}}, keyShare.KeyShares...)
+			}
+		}
+	} else {
+		if keyShareExt, ok := extMap["51"]; ok {
+			if keyShare, ok := keyShareExt.(*utls.KeyShareExtension); ok {
+				keyShare.KeyShares = append(keyShare.KeyShares, utls.KeyShare{Group: utls.CurveP256})
+			}
+		}
+	}
 	for _, c := range curves {
 		cid, err := strconv.ParseUint(c, 10, 16)
 		if err != nil {
 			return nil, err
 		}
+
+		// For TLS 1.3 (version 772), validate curve compatibility
+		ver, _ := strconv.ParseUint(version, 10, 16)
+		if uint16(ver) == utls.VersionTLS13 && !isTLS13CompatibleCurve(uint16(cid)) {
+			// Skip incompatible curves for TLS 1.3
+			continue
+		}
+
 		targetCurves = append(targetCurves, utls.CurveID(cid))
 	}
+
+	// Ensure TLS 1.3 has at least basic compatible curves if all were filtered out
+	ver, _ := strconv.ParseUint(version, 10, 16)
+	if uint16(ver) == utls.VersionTLS13 && len(targetCurves) == 0 {
+		// Add default TLS 1.3 compatible curves: X25519 and secp256r1
+		if parsedUserAgent.UserAgent == chrome {
+			targetCurves = append(targetCurves, utls.CurveID(utls.GREASE_PLACEHOLDER))
+		}
+		targetCurves = append(targetCurves, utls.CurveID(29)) // X25519
+		targetCurves = append(targetCurves, utls.CurveID(23)) // secp256r1
+	}
+
 	extMap["10"] = &utls.SupportedCurvesExtension{Curves: targetCurves}
 
 	// parse point formats
@@ -127,22 +215,26 @@ func StringToSpec(ja3 string, userAgent string) (*utls.ClientHelloSpec, error) {
 	}
 	extMap["11"] = &utls.SupportedPointsExtension{SupportedPoints: targetPointFormats}
 
+	// force http1
+	if forceHTTP1 {
+		extMap["16"] = &utls.ALPNExtension{
+			AlpnProtocols: []string{"http/1.1"},
+		}
+	}
+
 	// set extension 43
-	vid64, err := strconv.ParseUint(version, 10, 16)
+	ver, err := strconv.ParseUint(version, 10, 16)
 	if err != nil {
 		return nil, err
 	}
-	vid := uint16(vid64)
-	// extMap["43"] = &utls.SupportedVersionsExtension{
-	// 	Versions: []uint16{
-	// 		utls.VersionTLS12,
-	// 	},
-	// }
+	tlsMaxVersion, tlsMinVersion, tlsExtension, err := createTlsVersion(uint16(ver), false)
+	extMap["43"] = tlsExtension
 
 	// build extenions list
 	var exts []utls.TLSExtension
 	//Optionally Add Chrome Grease Extension
-	if parsedUserAgent == chrome {
+	// if parsedUserAgent == chrome && !tlsExtensions.UseGREASE {
+	if parsedUserAgent.UserAgent == chrome {
 		exts = append(exts, &utls.UtlsGREASEExtension{})
 	}
 	for _, e := range extensions {
@@ -150,22 +242,19 @@ func StringToSpec(ja3 string, userAgent string) (*utls.ClientHelloSpec, error) {
 		if !ok {
 			return nil, raiseExtensionError(e)
 		}
-		//Optionally add Chrome Grease Extension
-		if e == "21" && parsedUserAgent == chrome {
+		// //Optionally add Chrome Grease Extension
+		// if e == "21" && parsedUserAgent == chrome && !tlsExtensions.UseGREASE {
+		if e == "21" && parsedUserAgent.UserAgent == chrome {
 			exts = append(exts, &utls.UtlsGREASEExtension{})
 		}
 		exts = append(exts, te)
 	}
-	// build SSLVersion
-	// vid64, err := strconv.ParseUint(version, 10, 16)
-	// if err != nil {
-	// 	return nil, err
-	// }
 
 	// build CipherSuites
 	var suites []uint16
 	//Optionally Add Chrome Grease Extension
-	if parsedUserAgent == chrome {
+	// if parsedUserAgent == chrome && !tlsExtensions.UseGREASE {
+	if parsedUserAgent.UserAgent == chrome {
 		suites = append(suites, utls.GREASE_PLACEHOLDER)
 	}
 	for _, c := range ciphers {
@@ -175,10 +264,9 @@ func StringToSpec(ja3 string, userAgent string) (*utls.ClientHelloSpec, error) {
 		}
 		suites = append(suites, uint16(cid))
 	}
-	_ = vid
 	return &utls.ClientHelloSpec{
-		// TLSVersMin:         vid,
-		// TLSVersMax:         vid,
+		TLSVersMin:         tlsMinVersion,
+		TLSVersMax:         tlsMaxVersion,
 		CipherSuites:       suites,
 		CompressionMethods: []byte{0},
 		Extensions:         exts,
@@ -186,7 +274,641 @@ func StringToSpec(ja3 string, userAgent string) (*utls.ClientHelloSpec, error) {
 	}, nil
 }
 
-func genMap() (extMap map[string]utls.TLSExtension) {
+// StringToTLS13CompatibleSpec creates a TLS 1.3 compatible ClientHelloSpec by filtering curves
+func StringToTLS13CompatibleSpec(ja3 string, userAgent string, forceHTTP1 bool) (*utls.ClientHelloSpec, error) {
+	// For TLS 1.3 compatibility, we use only widely supported curves: X25519 (29) and secp256r1 (23)
+	tls13CompatibleJA3 := convertJA3ForTLS13(ja3)
+	return StringToSpec(tls13CompatibleJA3, userAgent, forceHTTP1)
+}
+
+// convertJA3ForTLS13 converts a JA3 string to use TLS 1.3 compatible curves
+func convertJA3ForTLS13(ja3 string) string {
+	tokens := strings.Split(ja3, ",")
+	if len(tokens) != 5 {
+		return ja3 // Return original if malformed
+	}
+
+	// Replace TLS version (position 0) with TLS 1.3 (772) if it's TLS 1.2 (771)
+	if tokens[0] == "771" {
+		tokens[0] = "772" // Upgrade TLS 1.2 to TLS 1.3
+	}
+
+	// Replace curves (position 3) with TLS 1.3 compatible ones: X25519 (29) and secp256r1 (23)
+	tokens[3] = "29-23" // X25519 and secp256r1
+
+	return strings.Join(tokens, ",")
+}
+
+// isTLS13CompatibleCurve checks if a curve ID is compatible with TLS 1.3
+func isTLS13CompatibleCurve(curveID uint16) bool {
+	// TLS 1.3 compatible curves based on RFC 8446 and common implementations
+	switch curveID {
+	case 23: // secp256r1 (P-256)
+		return true
+	case 24: // secp384r1 (P-384)
+		return true
+	case 25: // secp521r1 (P-521)
+		return true
+	case 29: // X25519
+		return true
+	case 30: // X448
+		return true
+
+	// Post-quantum hybrid curves (emerging standard)
+	case 4587: // 0x11EB - SecP256r1MLKEM768 (P-256 + MLKEM768)
+		return true
+	case 4588: // 0x11EC - X25519MLKEM768 (X25519 + MLKEM768)
+		return true
+	case 4589: // 0x11ED - SecP384r1MLKEM1024 (P-384 + MLKEM1024)
+		return true
+
+	default:
+		return false
+	}
+}
+
+// filterTLS13CompatibleCurves filters a list of curve IDs to only include TLS 1.3 compatible ones
+func filterTLS13CompatibleCurves(curves []uint16) []uint16 {
+	var compatibleCurves []uint16
+	for _, curve := range curves {
+		if isTLS13CompatibleCurve(curve) {
+			compatibleCurves = append(compatibleCurves, curve)
+		}
+	}
+	return compatibleCurves
+}
+
+// JA4Components represents the parsed components of a JA4 string
+type JA4Components struct {
+	TLSVersion     string
+	SNI            string // "d" for domain, "i" for IP
+	CipherCount    int    // Number of cipher suites
+	ExtensionCount int    // Number of extensions
+	ALPN           string // ALPN value (e.g., "h2", "h1")
+	CipherHash     string
+	ExtensionsHash string
+	HeadersHash    string // Legacy field
+	UserAgentHash  string // Legacy field
+}
+
+// JA4HComponents represents the parsed components of a JA4H (HTTP Client) string
+type JA4HComponents struct {
+	HTTPMethodVersion string
+	HeadersHash       string
+	CookiesHash       string
+}
+
+// ParseJA4String parses a JA4 string into its components
+// JA4 format: <TLS version><cipher hash>_<extensions hash>_<headers hash>_<UA hash>
+// Example: t13d_cd89_1952_bb99
+func ParseJA4String(ja4 string) (*JA4Components, error) {
+	if len(ja4) < 18 { // minimum reasonable length for JA4: t12d1209h2_123456789012_123456789012
+		return nil, errors.New("invalid JA4 string: too short")
+	}
+
+	// Split by underscores
+	parts := strings.Split(ja4, "_")
+	if len(parts) != 3 {
+		return nil, errors.New("invalid JA4 string: incorrect format - expected 3 parts separated by underscores")
+	}
+
+	// Parse first part: [protocol][version][sni][cipher_count][extension_count][alpn]
+	// Example: t12d1209h2 = t + 12 + d + 12 + 09 + h2
+	ja4a := parts[0]
+	if len(ja4a) < 7 {
+		return nil, errors.New("invalid JA4 string: first part too short")
+	}
+
+	// Extract protocol (should be 't' for TLS)
+	if ja4a[0] != 't' {
+		return nil, errors.New("invalid JA4 string: must start with 't' for TLS")
+	}
+
+	// Extract TLS version (2 digits)
+	if len(ja4a) < 3 {
+		return nil, errors.New("invalid JA4 string: missing TLS version")
+	}
+	tlsVersion := ja4a[:3] // t10, t11, t12, t13
+	if !(ja4a[1:3] == "10" || ja4a[1:3] == "11" || ja4a[1:3] == "12" || ja4a[1:3] == "13") {
+		return nil, errors.New("invalid JA4 string: invalid TLS version: " + ja4a[1:3])
+	}
+
+	// Extract SNI indicator (1 character: 'd' for domain, 'i' for IP)
+	if len(ja4a) < 4 {
+		return nil, errors.New("invalid JA4 string: missing SNI indicator")
+	}
+	sni := string(ja4a[3])
+	if sni != "d" && sni != "i" {
+		return nil, errors.New("invalid JA4 string: invalid SNI indicator: " + sni)
+	}
+
+	// Find ALPN at the end (variable length, 2+ characters)
+	// Work backwards to find where ALPN starts
+	if len(ja4a) < 7 {
+		return nil, errors.New("invalid JA4 string: too short for cipher/extension counts and ALPN")
+	}
+
+	// ALPN is at least 2 characters, cipher and extension counts are 2 digits each
+	// So minimum structure: t12d1209h2 (10 chars total)
+	if len(ja4a) < 8 {
+		return nil, errors.New("invalid JA4 string: insufficient length for all components")
+	}
+
+	// ALPN is usually 2 characters for common values (h2, h1, etc.)
+	// Work backwards from the end to find ALPN
+	// For t12d1209h2, we want: t(1) + 12(2) + d(1) + 1209(4) + h2(2) = 10 total
+	// So ALPN starts at position 8 for this case
+	if len(ja4a) < 8 {
+		return nil, errors.New("invalid JA4 string: too short for minimum components")
+	}
+
+	// Most common ALPN values are 2 characters: h2, h1
+	// But could be longer: h11, http1, etc.
+	// For now, assume 2 characters and validate
+	alpn := ja4a[len(ja4a)-2:]
+
+	// Extract cipher count and extension count (4 digits total between SNI and ALPN)
+	countsStr := ja4a[4 : len(ja4a)-2] // From position 4 to 2 chars before end
+	if len(countsStr) != 4 {
+		return nil, fmt.Errorf("invalid JA4 string: expected 4 digits for cipher/extension counts, got %d", len(countsStr))
+	}
+
+	cipherCount, err := strconv.Atoi(countsStr[:2])
+	if err != nil {
+		return nil, fmt.Errorf("invalid JA4 string: invalid cipher count: %s", countsStr[:2])
+	}
+
+	extensionCount, err := strconv.Atoi(countsStr[2:])
+	if err != nil {
+		return nil, fmt.Errorf("invalid JA4 string: invalid extension count: %s", countsStr[2:])
+	}
+
+	// JA4_b is the cipher suites hash (12 characters)
+	cipherHash := parts[1]
+	if len(cipherHash) != 12 {
+		return nil, fmt.Errorf("invalid JA4 string: cipher hash must be 12 characters, got %d", len(cipherHash))
+	}
+
+	// JA4_c is the extensions hash (12 characters)
+	extensionsHash := parts[2]
+	if len(extensionsHash) != 12 {
+		return nil, fmt.Errorf("invalid JA4 string: extension hash must be 12 characters, got %d", len(extensionsHash))
+	}
+
+	return &JA4Components{
+		TLSVersion:     tlsVersion,
+		SNI:            sni,
+		CipherCount:    cipherCount,
+		ExtensionCount: extensionCount,
+		ALPN:           alpn,
+		CipherHash:     cipherHash,
+		ExtensionsHash: extensionsHash,
+		HeadersHash:    "", // Not used in 3-part format
+		UserAgentHash:  "", // Not used in 3-part format
+	}, nil
+}
+
+// JA4RComponents represents the parsed components of a JA4_r (raw) string
+type JA4RComponents struct {
+	TLSVersion        string
+	SNI               string   // "d" for domain, "i" for IP
+	CipherCount       int      // Number of cipher suites
+	ExtensionCount    int      // Number of extensions
+	ExtensionCountStr string   // Original extension count format (e.g., "09")
+	ALPN              string   // ALPN value (e.g., "h2" for HTTP/2)
+	CipherSuites      []uint16 // Raw cipher suite values
+	Extensions        []uint16 // Raw extension values
+	SignatureSchemes  []uint16 // Raw signature scheme values (optional, from 4th part)
+}
+
+// ParseJA4RString parses a JA4_r (raw) string into its components
+// JA4_r format: <prefix>_<ciphers>_<extensions>_<signatures>
+// Example: t13d1717h2_002f,0035,009c,009d,1301,1302,1303_0000,0005,000a,000b,000d_0403,0503,0603,0804,0805,0806
+func ParseJA4RString(ja4r string) (*JA4RComponents, error) {
+	// Split by underscores
+	parts := strings.Split(ja4r, "_")
+	if len(parts) < 3 {
+		return nil, errors.New("invalid JA4_r string: incorrect format - expected at least 3 parts")
+	}
+
+	// Parse first part: [protocol][version][sni][cipher_count][extension_count][alpn]
+	// Example: t13d1717h2 = t + 13 + d + 17 + 17 + h2
+	// Example: t12d128h2 = t + 12 + d + 12 + 8 + h2 (note: extension count can be 1 or 2 digits)
+	ja4a := parts[0]
+	if len(ja4a) < 6 {
+		return nil, errors.New("invalid JA4_r string: first part too short")
+	}
+
+	// Extract protocol (should be 't' for TLS)
+	if ja4a[0] != 't' {
+		return nil, errors.New("invalid JA4_r string: must start with 't' for TLS")
+	}
+
+	// Extract TLS version (2 digits)
+	tlsVersion := "t" + ja4a[1:3]
+
+	// Extract SNI indicator (1 character: 'd' for domain, 'i' for IP)
+	sni := string(ja4a[3])
+	if sni != "d" && sni != "i" {
+		return nil, errors.New("invalid JA4_r string: SNI indicator must be 'd' or 'i'")
+	}
+
+	// Extract cipher count (2 digits)
+	cipherCountStr := ja4a[4:6]
+	cipherCount, err := strconv.Atoi(cipherCountStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JA4_r string: invalid cipher count: %w", err)
+	}
+
+	// Extract extension count and ALPN (variable length parsing)
+	// We need to find where the extension count ends and ALPN begins
+	remainder := ja4a[6:] // Everything after cipher count
+
+	// Parse extension count - can be 1 or 2 digits
+	var extensionCount int
+	var extensionCountStr string
+	var alpn string
+
+	// Try parsing different lengths for extension count
+	if len(remainder) >= 2 {
+		// Try 2-digit extension count first
+		if twoDigitCount, err := strconv.Atoi(remainder[0:2]); err == nil {
+			// Check if the remaining characters after 2-digit number form a valid ALPN
+			remainingAfter2 := remainder[2:]
+			if remainingAfter2 == "" || remainingAfter2 == "h1" || remainingAfter2 == "h2" ||
+				remainingAfter2 == "h3" || strings.HasPrefix(remainingAfter2, "h") {
+				extensionCount = twoDigitCount
+				extensionCountStr = remainder[0:2] // Store original format (e.g., "09")
+				alpn = remainingAfter2
+			} else {
+				// 2-digit doesn't work, try 1-digit
+				if oneDigitCount, err := strconv.Atoi(remainder[0:1]); err == nil {
+					extensionCount = oneDigitCount
+					extensionCountStr = remainder[0:1] // Store original format
+					alpn = remainder[1:]
+				} else {
+					return nil, fmt.Errorf("invalid JA4_r string: cannot parse extension count from '%s'", remainder)
+				}
+			}
+		} else {
+			// 2-digit failed, try 1-digit
+			if oneDigitCount, err := strconv.Atoi(remainder[0:1]); err == nil {
+				extensionCount = oneDigitCount
+				extensionCountStr = remainder[0:1] // Store original format
+				alpn = remainder[1:]
+			} else {
+				return nil, fmt.Errorf("invalid JA4_r string: cannot parse extension count from '%s'", remainder)
+			}
+		}
+	} else if len(remainder) >= 1 {
+		// Only 1 character left, must be extension count with no ALPN
+		if oneDigitCount, err := strconv.Atoi(remainder[0:1]); err == nil {
+			extensionCount = oneDigitCount
+			extensionCountStr = remainder[0:1] // Store original format
+			alpn = ""
+		} else {
+			return nil, fmt.Errorf("invalid JA4_r string: cannot parse extension count from '%s'", remainder)
+		}
+	} else {
+		return nil, errors.New("invalid JA4_r string: missing extension count")
+	}
+
+	// Parse cipher suites from part 2
+	cipherSuites := []uint16{}
+	if parts[1] != "" {
+		cipherStrs := strings.Split(parts[1], ",")
+		for _, cipherStr := range cipherStrs {
+			// Parse hex string (may or may not have 0x prefix)
+			cipherStr = strings.TrimPrefix(cipherStr, "0x")
+			cipher, err := strconv.ParseUint(cipherStr, 16, 16)
+			if err != nil {
+				return nil, fmt.Errorf("invalid cipher suite hex: %s: %w", cipherStr, err)
+			}
+			cipherSuites = append(cipherSuites, uint16(cipher))
+		}
+	}
+
+	// Parse extensions from part 3
+	extensions := []uint16{}
+	if parts[2] != "" {
+		extStrs := strings.Split(parts[2], ",")
+		for _, extStr := range extStrs {
+			// Parse hex string (may or may not have 0x prefix)
+			extStr = strings.TrimPrefix(extStr, "0x")
+			ext, err := strconv.ParseUint(extStr, 16, 16)
+			if err != nil {
+				return nil, fmt.Errorf("invalid extension hex: %s: %w", extStr, err)
+			}
+			extensions = append(extensions, uint16(ext))
+		}
+	}
+
+	// Parse signature schemes from part 4 (optional)
+	signatureSchemes := []uint16{}
+	if len(parts) > 3 && parts[3] != "" {
+		sigStrs := strings.Split(parts[3], ",")
+		for _, sigStr := range sigStrs {
+			// Parse hex string (may or may not have 0x prefix)
+			sigStr = strings.TrimPrefix(sigStr, "0x")
+			sig, err := strconv.ParseUint(sigStr, 16, 16)
+			if err != nil {
+				return nil, fmt.Errorf("invalid signature scheme hex: %s: %w", sigStr, err)
+			}
+			signatureSchemes = append(signatureSchemes, uint16(sig))
+		}
+	}
+
+	return &JA4RComponents{
+		TLSVersion:        tlsVersion,
+		SNI:               sni,
+		CipherCount:       cipherCount,
+		ExtensionCount:    extensionCount,
+		ExtensionCountStr: extensionCountStr,
+		ALPN:              alpn,
+		CipherSuites:      cipherSuites,
+		Extensions:        extensions,
+		SignatureSchemes:  signatureSchemes,
+	}, nil
+}
+
+// ParseJA4HString parses a JA4H (HTTP Client) string into its components
+// JA4H format: <method_version>_<headers_hash>_<cookies_hash>
+// Example: po11_73a4f1e_8b3fce7
+func ParseJA4HString(ja4h string) (*JA4HComponents, error) {
+	if len(ja4h) < 8 { // minimum reasonable length for JA4H
+		return nil, errors.New("invalid JA4H string: too short")
+	}
+
+	// Split by underscores
+	parts := strings.Split(ja4h, "_")
+	if len(parts) != 3 {
+		return nil, errors.New("invalid JA4H string: incorrect format - expected 3 parts separated by underscores")
+	}
+
+	// Validate method version format (e.g., "po11" for POST HTTP/1.1, "ge20" for GET HTTP/2.0)
+	httpMethodVersion := parts[0]
+	if len(httpMethodVersion) < 4 {
+		return nil, errors.New("invalid JA4H string: HTTP method/version too short")
+	}
+
+	headersHash := parts[1]
+	cookiesHash := parts[2]
+
+	return &JA4HComponents{
+		HTTPMethodVersion: httpMethodVersion,
+		HeadersHash:       headersHash,
+		CookiesHash:       cookiesHash,
+	}, nil
+}
+
+// JA4StringToSpec creates a ClientHelloSpec based on a JA4 string
+// Since JA4 uses hashes, we create a spec with common TLS parameters
+// that would produce a similar fingerprint
+
+// JA4RStringToSpec creates a ClientHelloSpec from a JA4_r (raw) string
+func JA4RStringToSpec(ja4r string, userAgent string, forceHTTP1 bool, disableGrease bool, serverName string) (*utls.ClientHelloSpec, error) {
+	components, err := ParseJA4RString(ja4r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JA4_r: %w", err)
+	}
+
+	// Map TLS version string to actual version
+	var tlsVersion uint16
+	var tlsMinVersion uint16
+	var tlsMaxVersion uint16
+
+	switch components.TLSVersion {
+	case "t10":
+		tlsVersion = utls.VersionTLS10
+		tlsMinVersion = utls.VersionTLS10
+		tlsMaxVersion = utls.VersionTLS12
+	case "t11":
+		tlsVersion = utls.VersionTLS11
+		tlsMinVersion = utls.VersionTLS11
+		tlsMaxVersion = utls.VersionTLS12
+	case "t12":
+		tlsVersion = utls.VersionTLS12
+		tlsMinVersion = utls.VersionTLS12
+		tlsMaxVersion = utls.VersionTLS12
+	case "t13":
+		tlsVersion = utls.VersionTLS13
+		tlsMinVersion = utls.VersionTLS12
+		tlsMaxVersion = utls.VersionTLS13
+	default:
+		return nil, errors.New("unsupported TLS version in JA4_r: " + components.TLSVersion)
+	}
+
+	// Map cipher suites from raw values
+	cipherSuites := []uint16{}
+	for _, rawCipher := range components.CipherSuites {
+		// Check if we have a mapping for this cipher
+		if mappedCipher, exists := cipherSuiteMap[rawCipher]; exists {
+			cipherSuites = append(cipherSuites, mappedCipher)
+		} else {
+			// Use raw value if no mapping exists
+			cipherSuites = append(cipherSuites, rawCipher)
+		}
+	}
+
+	// Check if SNI extension (0x0000) is present in the extensions list
+	hasSNIExtension := false
+	for _, extCode := range components.Extensions {
+		if extCode == 0x0000 {
+			hasSNIExtension = true
+			break
+		}
+	}
+
+	// Check if ALPN extension (0x0010) is present in the extensions list
+	hasALPNExtension := false
+	for _, extCode := range components.Extensions {
+		if extCode == 0x0010 {
+			hasALPNExtension = true
+			break
+		}
+	}
+
+	// Handle forceHTTP1 by modifying ALPN to use HTTP/1.1 only
+	if forceHTTP1 && components.ALPN != "" {
+		components.ALPN = "h1"
+	}
+
+	// Build extensions based on raw values using the new extension framework
+	extensions := []utls.TLSExtension{}
+
+	// Calculate how many extensions we'll actually have after processing
+	actualExtensionCount := len(components.Extensions)
+
+	// Check if ALPN will be added automatically
+	if components.ALPN != "" && !hasALPNExtension {
+		actualExtensionCount++
+	}
+
+	// Add SNI extension only if:
+	// 1. SNI indicator is "d" (domain)
+	// 2. SNI (0x0000) is not already in the extensions list
+	// 3. The claimed extension count is higher than our actual count
+	extensionDeficit := components.ExtensionCount - actualExtensionCount
+	shouldAddSNI := components.SNI == "d" && !hasSNIExtension && extensionDeficit > 0
+
+	// Add SNI extension FIRST if needed (0x0000 comes first numerically)
+	if shouldAddSNI {
+		sniExt := &utls.SNIExtension{
+			ServerName: serverName,
+		}
+		extensions = append(extensions, sniExt)
+	}
+
+	// Process extensions from JA4_r AFTER SNI to maintain proper numerical order
+	for _, extCode := range components.Extensions {
+		if ext := CreateExtensionFromID(extCode, tlsVersion, components, disableGrease, serverName); ext != nil {
+			extensions = append(extensions, ext)
+		}
+	}
+
+	// Add ALPN extension manually if:
+	// 1. ALPN is specified in the header (components.ALPN != "")
+	// 2. AND 0x0010 was NOT in the extensions list
+	if components.ALPN != "" && !hasALPNExtension {
+		var alpnProtocols []string
+		switch components.ALPN {
+		case "h2":
+			alpnProtocols = []string{"h2", "http/1.1"}
+		case "h1":
+			alpnProtocols = []string{"http/1.1"}
+		case "h3":
+			alpnProtocols = []string{"h3", "h2", "http/1.1"}
+		default:
+			// For other ALPN values, use them directly
+			alpnProtocols = []string{components.ALPN}
+		}
+
+		alpnExt := &utls.ALPNExtension{
+			AlpnProtocols: alpnProtocols,
+		}
+		extensions = append(extensions, alpnExt)
+	}
+
+	return &utls.ClientHelloSpec{
+		TLSVersMin:         tlsMinVersion,
+		TLSVersMax:         tlsMaxVersion,
+		CipherSuites:       cipherSuites,
+		CompressionMethods: []byte{0}, // no compression
+		Extensions:         extensions,
+		GetSessionID:       sha256.Sum256,
+	}, nil
+}
+
+// ConvertFhttpHeader converts fhttp.Header to http.Header
+func ConvertFhttpHeader(fh fhttp.Header) http.Header {
+	h := make(http.Header)
+	for k, v := range fh {
+		h[k] = v
+	}
+	return h
+}
+
+// ConvertHttpHeader converts http.Header to fhttp.Header
+func ConvertHttpHeader(h http.Header) fhttp.Header {
+	fh := make(fhttp.Header)
+	for k, v := range h {
+		fh[k] = v
+	}
+	return fh
+}
+
+// ConvertUtlsConfig converts utls.Config to tls.Config
+func ConvertUtlsConfig(utlsConfig *utls.Config) *tls.Config {
+	if utlsConfig == nil {
+		return nil
+	}
+
+	return &tls.Config{
+		Rand:               utlsConfig.Rand,
+		Time:               utlsConfig.Time,
+		RootCAs:            utlsConfig.RootCAs,
+		NextProtos:         utlsConfig.NextProtos,
+		ServerName:         utlsConfig.ServerName,
+		InsecureSkipVerify: utlsConfig.InsecureSkipVerify,
+		CipherSuites:       utlsConfig.CipherSuites,
+		MinVersion:         utlsConfig.MinVersion,
+		MaxVersion:         utlsConfig.MaxVersion,
+	}
+}
+
+// MarshalHeader preserves header order while converting to http.Header
+func MarshalHeader(h fhttp.Header, order []string) http.Header {
+	result := make(http.Header)
+
+	// Add ordered headers first
+	for _, key := range order {
+		if values, ok := h[key]; ok {
+			result[key] = values
+		}
+	}
+
+	// Add remaining headers
+	for key, values := range h {
+		if _, exists := result[key]; !exists {
+			result[key] = values
+		}
+	}
+
+	return result
+}
+
+// PrettyStruct formats json
+func PrettyStruct(data interface{}) (string, error) {
+	val, err := json.MarshalIndent(data, "", "    ")
+	if err != nil {
+		return "", err
+	}
+	return string(val), nil
+}
+
+// TLSVersion，Ciphers，Extensions，EllipticCurves，EllipticCurvePointFormats
+func createTlsVersion(ver uint16, disableGrease bool) (tlsMaxVersion uint16, tlsMinVersion uint16, tlsSuppor utls.TLSExtension, err error) {
+	switch ver {
+	case utls.VersionTLS13:
+		tlsMaxVersion = utls.VersionTLS13
+		tlsMinVersion = utls.VersionTLS12
+		versions := []uint16{}
+		if !disableGrease {
+			versions = append(versions, utls.GREASE_PLACEHOLDER)
+		}
+		versions = append(versions, utls.VersionTLS13, utls.VersionTLS12)
+		tlsSuppor = &utls.SupportedVersionsExtension{
+			Versions: versions,
+		}
+	case utls.VersionTLS12:
+		tlsMaxVersion = utls.VersionTLS12
+		tlsMinVersion = utls.VersionTLS11
+		versions := []uint16{}
+		if !disableGrease {
+			versions = append(versions, utls.GREASE_PLACEHOLDER)
+		}
+		versions = append(versions, utls.VersionTLS12, utls.VersionTLS11)
+		tlsSuppor = &utls.SupportedVersionsExtension{
+			Versions: versions,
+		}
+	case utls.VersionTLS11:
+		tlsMaxVersion = utls.VersionTLS11
+		tlsMinVersion = utls.VersionTLS10
+		versions := []uint16{}
+		if !disableGrease {
+			versions = append(versions, utls.GREASE_PLACEHOLDER)
+		}
+		versions = append(versions, utls.VersionTLS11, utls.VersionTLS10)
+		tlsSuppor = &utls.SupportedVersionsExtension{
+			Versions: versions,
+		}
+	default:
+		err = errors.New("ja3Str tls version error")
+	}
+	return
+}
+
+func genMap(disableGrease bool) (extMap map[string]utls.TLSExtension) {
 	extMap = map[string]utls.TLSExtension{
 		"0": &utls.SNIExtension{},
 		"5": &utls.StatusRequestExtension{},
@@ -211,41 +933,220 @@ func genMap() (extMap map[string]utls.TLSExtension) {
 		"16": &utls.ALPNExtension{
 			AlpnProtocols: []string{"h2", "http/1.1"},
 		},
+		"17": &utls.GenericExtension{Id: 17}, // status_request_v2
 		"18": &utls.SCTExtension{},
 		"21": &utls.UtlsPaddingExtension{GetPaddingLen: utls.BoringPaddingStyle},
 		"22": &utls.GenericExtension{Id: 22}, // encrypt_then_mac
 		"23": &utls.UtlsExtendedMasterSecretExtension{},
+		"24": &utls.GenericExtension{Id: 24}, // token_binding (FakeTokenBindingExtension not available in this utls version)
 		"27": &utls.CompressCertificateExtension{
 			Algorithms: []utls.CertCompressionAlgo{utls.CertCompressionBrotli},
 		},
-		"28": &utls.FakeRecordSizeLimitExtension{}, //Limit: 0x4001
+		"28": &utls.FakeRecordSizeLimitExtension{
+			Limit: 0x4001,
+		}, //Limit: 0x4001
+		"34": &utls.GenericExtension{Id: 34}, // delegated_credentials (DelegatedCredentialsExtension not available in this utls version)
 		"35": &utls.SessionTicketExtension{},
-		"34": &utls.GenericExtension{Id: 34},
-		"41": &utls.GenericExtension{Id: 41}, //FIXME pre_shared_key
-		"43": &utls.SupportedVersionsExtension{Versions: []uint16{
-			utls.GREASE_PLACEHOLDER,
-			utls.VersionTLS13,
-			utls.VersionTLS12,
-			utls.VersionTLS11,
-			utls.VersionTLS10}},
+		"41": &utls.GenericExtension{Id: 41}, // pre_shared_key (UtlsPreSharedKeyExtension not available in this utls version)
+		// "43": &utls.SupportedVersionsExtension{Versions: []uint16{ this gets set above
+		// 	utls.VersionTLS13,
+		// 	utls.VersionTLS12,
+		// }},
 		"44": &utls.CookieExtension{},
 		"45": &utls.PSKKeyExchangeModesExtension{Modes: []uint8{
 			utls.PskModeDHE,
 		}},
 		"49": &utls.GenericExtension{Id: 49}, // post_handshake_auth
-		"50": &utls.GenericExtension{Id: 50}, // signature_algorithms_cert
-		"51": &utls.KeyShareExtension{KeyShares: []utls.KeyShare{
-			{Group: utls.CurveID(utls.GREASE_PLACEHOLDER), Data: []byte{0}},
-			{Group: utls.X25519},
-
-			// {Group: utls.CurveP384}, known bug missing correct extensions for handshake
-		}},
-		"30032": &utls.GenericExtension{Id: 0x7550, Data: []byte{0}}, //FIXME
+		"50": &utls.SignatureAlgorithmsExtension{ // Use SignatureAlgorithmsExtension instead of SignatureAlgorithmsCertExtension
+			SupportedSignatureAlgorithms: []utls.SignatureScheme{
+				utls.ECDSAWithP256AndSHA256,
+				utls.ECDSAWithP384AndSHA384,
+				utls.ECDSAWithP521AndSHA512,
+				utls.PSSWithSHA256,
+				utls.PSSWithSHA384,
+				utls.PSSWithSHA512,
+				utls.PKCS1WithSHA256,
+				utls.PKCS1WithSHA384,
+				utls.SignatureScheme(0x0806),
+				utls.SignatureScheme(0x0601),
+			},
+		}, // signature_algorithms_cert
+		"51": func() *utls.KeyShareExtension {
+			if disableGrease {
+				return &utls.KeyShareExtension{KeyShares: []utls.KeyShare{
+					{Group: utls.X25519},
+					// {Group: utls.CurveP384}, known bug missing correct extensions for handshake
+				}}
+			} else {
+				return &utls.KeyShareExtension{KeyShares: []utls.KeyShare{
+					{Group: utls.CurveID(utls.GREASE_PLACEHOLDER), Data: []byte{0}},
+					{Group: utls.X25519},
+					// {Group: utls.CurveP384}, known bug missing correct extensions for handshake
+				}}
+			}
+		}(),
+		"57":    &utls.GenericExtension{Id: 57}, // quic_transport_parameters (QUICTransportParametersExtension not available in this utls version)
 		"13172": &utls.NPNExtension{},
+		"17513": &utls.GenericExtension{ // application_settings (ApplicationSettingsExtension not available in this utls version)
+			Id:   17513,
+			Data: []byte{0x00, 0x03, 0x02, 0x68, 0x32}, // h2
+		},
+		"17613": &utls.GenericExtension{
+			Id:   17613,
+			Data: []byte{0x00, 0x03, 0x02, 0x68, 0x32},
+		},
+		"30032": &utls.GenericExtension{Id: 0x7550, Data: []byte{0}}, // Channel ID extension
 		"65281": &utls.RenegotiationInfoExtension{
 			Renegotiation: utls.RenegotiateOnceAsClient,
 		},
+		"65037": &utls.GenericExtension{Id: 65037}, // encrypted_client_hello (BoringGREASEECH not available in this utls version)
 	}
 	return
+}
 
+// QUIC fingerprinting utilities
+func CreateUQuicSpecFromFingerprint(quicFingerprint string) (*uquic.QUICSpec, error) {
+	if quicFingerprint == "" {
+		return nil, errors.New("empty QUIC fingerprint")
+	}
+
+	// Todo: we are using a default QUIC specification based on Chrome
+	// In the future, this could be enhanced to parse the actual fingerprint
+	// and create a custom specification once I find a route to test against
+	spec, err := uquic.QUICID2Spec(uquic.QUICChrome_115)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create QUIC spec: %w", err)
+	}
+
+	return &spec, nil
+}
+
+// CreateUQuicSpecFromJA4 creates a QUIC specification from a JA4 fingerprint
+// This function maps JA4 characteristics to appropriate QUIC transport specs
+func CreateUQuicSpecFromJA4(ja4r string) (*uquic.QUICSpec, error) {
+	if ja4r == "" {
+		return nil, errors.New("empty JA4 fingerprint")
+	}
+
+	// Parse the JA4R fingerprint to extract TLS characteristics
+	components, err := ParseJA4RString(ja4r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JA4R: %w", err)
+	}
+
+	// For now, we use Chrome_115 as the base QUIC spec since it's the most compatible
+	// TODO: In the future, this could be enhanced to create custom QUIC specs
+	// based on the specific JA4 characteristics once more QUIC specs are available
+
+	// Log the JA4 characteristics for future enhancement
+	_ = components // Keep this to show JA4 parsing works
+
+	// Use the proven Chrome 115 QUIC spec as it works well with modern servers
+	spec, err := uquic.QUICID2Spec(uquic.QUICChrome_115)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create QUIC spec from JA4: %w", err)
+	}
+
+	return &spec, nil
+}
+
+// QUICStringToSpec creates a ClientHelloSpec based on a QUIC fingerprint string
+func QUICStringToSpec(quicFingerprint string, userAgent string, forceHTTP1 bool) (*utls.ClientHelloSpec, error) {
+	if quicFingerprint == "" {
+		return nil, errors.New("empty QUIC fingerprint")
+	}
+
+	// Basic validation - QUIC fingerprints should be reasonably long
+	if len(quicFingerprint) < 100 {
+		return nil, errors.New("invalid QUIC fingerprint: too short")
+	}
+
+	parsedUserAgent := parseUserAgent(userAgent)
+	extMap := genMap(false)
+
+	// Default to TLS 1.3 for QUIC (as QUIC typically uses TLS 1.3)
+	var tlsVersion uint16 = utls.VersionTLS13
+
+	// Create TLS configuration for QUIC
+	tlsMaxVersion, tlsMinVersion, tlsExtension, err := createTlsVersion(tlsVersion, false)
+	if err != nil {
+		return nil, err
+	}
+	extMap["43"] = tlsExtension
+
+	// QUIC-specific cipher suites (TLS 1.3 only)
+	var suites []uint16
+	if parsedUserAgent.UserAgent == chrome {
+		suites = append(suites, utls.GREASE_PLACEHOLDER)
+	}
+
+	// Add TLS 1.3 cipher suites commonly used with QUIC
+	suites = append(suites, []uint16{
+		utls.TLS_AES_128_GCM_SHA256,
+		utls.TLS_AES_256_GCM_SHA384,
+		utls.TLS_CHACHA20_POLY1305_SHA256,
+		utls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		utls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		utls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		utls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	}...)
+
+	// Set up curves for QUIC
+	var targetCurves []utls.CurveID
+	if parsedUserAgent.UserAgent == chrome {
+		targetCurves = append(targetCurves, utls.CurveID(utls.GREASE_PLACEHOLDER))
+	}
+
+	// Add common curves for QUIC
+	targetCurves = append(targetCurves, []utls.CurveID{
+		utls.X25519,
+		utls.CurveP256,
+		utls.CurveP384,
+		utls.CurveP521,
+	}...)
+	extMap["10"] = &utls.SupportedCurvesExtension{Curves: targetCurves}
+
+	// Set point formats
+	extMap["11"] = &utls.SupportedPointsExtension{SupportedPoints: []byte{0}}
+
+	// Force HTTP/1.1 if requested (though this is unusual for QUIC)
+	if forceHTTP1 {
+		extMap["16"] = &utls.ALPNExtension{
+			AlpnProtocols: []string{"http/1.1"},
+		}
+	} else {
+		// Default ALPN protocols for QUIC/HTTP3
+		extMap["16"] = &utls.ALPNExtension{
+			AlpnProtocols: []string{"h3", "h3-29", "h3-28", "h3-27"},
+		}
+	}
+
+	// Add QUIC transport parameters extension (critical for QUIC)
+	extMap["57"] = &utls.GenericExtension{Id: 57} // QUICTransportParametersExtension not available in this utls version
+
+	// Build extensions list with QUIC-appropriate extensions
+	var exts []utls.TLSExtension
+	if parsedUserAgent.UserAgent == chrome {
+		exts = append(exts, &utls.UtlsGREASEExtension{})
+	}
+
+	// QUIC-specific extension order
+	quicExtensions := []string{"0", "23", "65281", "10", "11", "35", "16", "5", "51", "43", "13", "45", "28", "57", "21"}
+	for _, e := range quicExtensions {
+		if te, ok := extMap[e]; ok {
+			if e == "21" && parsedUserAgent.UserAgent == chrome {
+				exts = append(exts, &utls.UtlsGREASEExtension{})
+			}
+			exts = append(exts, te)
+		}
+	}
+
+	return &utls.ClientHelloSpec{
+		TLSVersMin:         tlsMinVersion,
+		TLSVersMax:         tlsMaxVersion,
+		CipherSuites:       suites,
+		CompressionMethods: []byte{0},
+		Extensions:         exts,
+		GetSessionID:       sha256.Sum256,
+	}, nil
 }
