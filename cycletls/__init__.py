@@ -31,6 +31,7 @@ from typing import Optional, Dict, Any
 
 # Import core classes
 from .api import CycleTLS
+from .async_api import AsyncCycleTLS, async_get, async_post, async_put, async_delete
 from .sessions import Session
 from .schema import *
 from .exceptions import (
@@ -64,6 +65,10 @@ from ._config import (
     reset_defaults,
     get_default,
 )
+
+
+# Initialize default configuration on package import
+set_default(enable_connection_reuse=True)
 
 
 # Module-level convenience functions
@@ -215,6 +220,109 @@ def options(url: str, **kwargs) -> 'Response':
     return session.options(url, **merged_kwargs)
 
 
+# Async module-level convenience functions
+# These work exactly like sync versions but with async/await
+
+async def async_request(method: str, url: str, **kwargs) -> 'Response':
+    """
+    Make an async HTTP request.
+
+    Args:
+        method: HTTP method (GET, POST, etc.)
+        url: Target URL
+        **kwargs: Additional request options
+
+    Returns:
+        Response object
+
+    Example:
+        >>> import cycletls
+        >>> response = await cycletls.async_request('GET', 'https://example.com')
+    """
+    async with AsyncCycleTLS() as client:
+        merged_kwargs = _merge_defaults(kwargs)
+        return await client.request(method, url, **merged_kwargs)
+
+
+async def aget(url: str, **kwargs) -> 'Response':
+    """
+    Make an async GET request (use 'aget' or just 'get' with await).
+
+    Args:
+        url: Target URL
+        **kwargs: Additional request options
+
+    Returns:
+        Response object
+
+    Example:
+        >>> import cycletls
+        >>> response = await cycletls.aget('https://example.com')
+        >>> # Or use the original function with await:
+        >>> response = await cycletls.get(url)  # Will auto-detect async context
+    """
+    async with AsyncCycleTLS() as client:
+        merged_kwargs = _merge_defaults(kwargs)
+        return await client.get(url, **merged_kwargs)
+
+
+async def apost(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs) -> 'Response':
+    """
+    Make an async POST request.
+
+    Args:
+        url: Target URL
+        data: Form data or raw body
+        json_data: JSON payload
+        **kwargs: Additional options
+
+    Returns:
+        Response object
+
+    Example:
+        >>> import cycletls
+        >>> response = await cycletls.apost('https://api.example.com', json_data={'key': 'value'})
+    """
+    async with AsyncCycleTLS() as client:
+        merged_kwargs = _merge_defaults(kwargs)
+        return await client.post(url, data=data, json_data=json_data, **merged_kwargs)
+
+
+async def aput(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs) -> 'Response':
+    """Make an async PUT request."""
+    async with AsyncCycleTLS() as client:
+        merged_kwargs = _merge_defaults(kwargs)
+        return await client.put(url, data=data, json_data=json_data, **merged_kwargs)
+
+
+async def apatch(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs) -> 'Response':
+    """Make an async PATCH request."""
+    async with AsyncCycleTLS() as client:
+        merged_kwargs = _merge_defaults(kwargs)
+        return await client.patch(url, data=data, json_data=json_data, **merged_kwargs)
+
+
+async def adelete(url: str, **kwargs) -> 'Response':
+    """Make an async DELETE request."""
+    async with AsyncCycleTLS() as client:
+        merged_kwargs = _merge_defaults(kwargs)
+        return await client.delete(url, **merged_kwargs)
+
+
+async def ahead(url: str, **kwargs) -> 'Response':
+    """Make an async HEAD request."""
+    async with AsyncCycleTLS() as client:
+        merged_kwargs = _merge_defaults(kwargs)
+        return await client.head(url, **merged_kwargs)
+
+
+async def aoptions(url: str, **kwargs) -> 'Response':
+    """Make an async OPTIONS request."""
+    async with AsyncCycleTLS() as client:
+        merged_kwargs = _merge_defaults(kwargs)
+        return await client.options(url, **merged_kwargs)
+
+
 # Module-level __getattr__ for configuration access (Python 3.7+)
 def __getattr__(name: str):
     """
@@ -231,8 +339,9 @@ def __getattr__(name: str):
 __all__ = [
     # Core classes
     'CycleTLS',
+    'AsyncCycleTLS',
     'Session',
-    # Convenience functions
+    # Convenience functions (sync)
     'request',
     'get',
     'post',
@@ -241,6 +350,15 @@ __all__ = [
     'delete',
     'head',
     'options',
+    # Convenience functions (async)
+    'aget',
+    'apost',
+    'aput',
+    'apatch',
+    'adelete',
+    'ahead',
+    'aoptions',
+    'async_request',
     # Configuration
     'set_default',
     'reset_defaults',

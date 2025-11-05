@@ -1,18 +1,24 @@
-from pydantic import BaseModel
+"""Data models shared across the CycleTLS Python client."""
+
+from __future__ import annotations
+
+import base64
 import json
 import re
-from typing import Optional, List, Union, TYPE_CHECKING
-from enum import Enum
+from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
+from typing import Any, List, Optional, Union, TYPE_CHECKING
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard
     from .exceptions import HTTPError
 
 from .structures import CaseInsensitiveDict, CookieJar
 
 
 class Protocol(str, Enum):
-    """Protocol type for requests"""
+    """Protocol type for requests."""
+
     HTTP1 = "http1"
     HTTP2 = "http2"
     HTTP3 = "http3"
@@ -20,8 +26,10 @@ class Protocol(str, Enum):
     SSE = "sse"
 
 
-class Cookie(BaseModel):
-    """Cookie model with full attributes"""
+@dataclass
+class Cookie:
+    """Cookie model with full attributes."""
+
     name: str
     value: str
     path: Optional[str] = None
@@ -32,38 +40,41 @@ class Cookie(BaseModel):
     http_only: bool = False
     same_site: Optional[str] = None
 
-    class Config:
-        fields = {
-            "http_only": "httpOnly",
-            "same_site": "sameSite",
-            "max_age": "maxAge",
-        }
+    def __repr__(self) -> str:
+        """Return detailed string representation of the Cookie."""
+        return f"<Cookie {self.name}={self.value} for {self.domain or 'any domain'}>"
+
+    def __str__(self) -> str:
+        """Return user-friendly string representation of the Cookie."""
+        return f"{self.name}={self.value}"
 
 
-class Request(BaseModel):
-    """Enhanced request model with all CycleTLS features"""
+@dataclass
+class Request:
+    """Enhanced request model with all CycleTLS features."""
+
     url: str
     method: str
     body: str = ""
-    body_bytes: Optional[bytes] = None  # Binary request body
-    headers: dict = {}
+    body_bytes: Optional[bytes] = None
+    headers: dict = field(default_factory=dict)
 
     # TLS Fingerprinting options
     ja3: str = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0"
-    ja4r: Optional[str] = None  # JA4 raw format
-    http2_fingerprint: Optional[str] = None  # HTTP/2 fingerprinting
-    quic_fingerprint: Optional[str] = None  # QUIC fingerprinting
-    disable_grease: bool = False  # Disable GREASE for exact JA4 matching
+    ja4r: Optional[str] = None
+    http2_fingerprint: Optional[str] = None
+    quic_fingerprint: Optional[str] = None
+    disable_grease: bool = False
 
     # TLS Configuration
-    server_name: Optional[str] = None  # Custom SNI override
-    insecure_skip_verify: bool = False  # Skip TLS certificate verification
-    tls13_auto_retry: bool = True  # Auto-retry with TLS 1.3 compatible curves
+    server_name: Optional[str] = None
+    insecure_skip_verify: bool = False
+    tls13_auto_retry: bool = True
 
     # Protocol options
-    force_http1: bool = False  # Force HTTP/1.1 protocol
-    force_http3: bool = False  # Force HTTP/3 protocol
-    protocol: Optional[Protocol] = None  # Explicit protocol selection
+    force_http1: bool = False
+    force_http3: bool = False
+    protocol: Optional[Protocol] = None
 
     # Connection options
     user_agent: str = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:87.0) Gecko/20100101 Firefox/87.0"
@@ -71,224 +82,171 @@ class Request(BaseModel):
     cookies: Optional[List[Cookie]] = None
     timeout: int = 6
     disable_redirect: bool = False
-    enable_connection_reuse: bool = True  # Connection pooling
+    enable_connection_reuse: bool = True
 
     # Header options
     header_order: Optional[List[str]] = None
     order_headers_as_provided: Optional[bool] = None
 
-    class Config:
-        fields = {
-            "user_agent": "userAgent",
-            "body_bytes": "bodyBytes",
-            "ja4r": "ja4r",
-            "http2_fingerprint": "http2Fingerprint",
-            "quic_fingerprint": "quicFingerprint",
-            "disable_grease": "disableGrease",
-            "server_name": "serverName",
-            "insecure_skip_verify": "insecureSkipVerify",
-            "tls13_auto_retry": "tls13AutoRetry",
-            "force_http1": "forceHTTP1",
-            "force_http3": "forceHTTP3",
-            "disable_redirect": "disableRedirect",
-            "enable_connection_reuse": "enableConnectionReuse",
-            "header_order": "headerOrder",
-            "order_headers_as_provided": "orderHeadersAsProvided",
+    def __repr__(self) -> str:
+        """Return detailed string representation of the Request."""
+        proxy_info = f" via {self.proxy}" if self.proxy else ""
+        return f"<Request [{self.method} {self.url}{proxy_info}]>"
+
+    def __str__(self) -> str:
+        """Return user-friendly string representation of the Request."""
+        return f"{self.method} {self.url}"
+
+    def to_dict(self) -> dict:
+        """Convert Request to dictionary for serialization (optimized)."""
+        # Build dict with required fields (batch assignment is faster)
+        result = {
+            "url": self.url,
+            "method": self.method,
+            "body": self.body,
+            "headers": self.headers,
+            "ja3": self.ja3,
+            "disableGrease": self.disable_grease,
+            "insecureSkipVerify": self.insecure_skip_verify,
+            "tls13AutoRetry": self.tls13_auto_retry,
+            "forceHTTP1": self.force_http1,
+            "forceHTTP3": self.force_http3,
+            "userAgent": self.user_agent,
+            "proxy": self.proxy,
+            "timeout": self.timeout,
+            "disableRedirect": self.disable_redirect,
+            "enableConnectionReuse": self.enable_connection_reuse,
         }
 
+        # Add optional fields only if set (minimize conditionals)
+        if self.body_bytes is not None:
+            result["bodyBytes"] = self.body_bytes  # Let msgpack handle binary
+        if self.ja4r is not None:
+            result["ja4r"] = self.ja4r
+        if self.http2_fingerprint is not None:
+            result["http2Fingerprint"] = self.http2_fingerprint
+        if self.quic_fingerprint is not None:
+            result["quicFingerprint"] = self.quic_fingerprint
+        if self.server_name is not None:
+            result["serverName"] = self.server_name
+        if self.protocol is not None:
+            result["protocol"] = self.protocol.value
+        if self.cookies is not None:
+            result["cookies"] = [_cookie_to_dict(c) for c in self.cookies]
+        if self.header_order is not None:
+            result["headerOrder"] = self.header_order
+        if self.order_headers_as_provided is not None:
+            result["orderHeadersAsProvided"] = self.order_headers_as_provided
 
-class WebSocketMessage(BaseModel):
-    """WebSocket message model"""
-    type: str = "websocket"
+        return result
+
+
+@dataclass
+class WebSocketMessage:
+    """WebSocket message model."""
+
     message_type: int  # 1 = text, 2 = binary
     data: Union[str, bytes]
-
-    class Config:
-        fields = {
-            "message_type": "messageType",
-        }
+    type: str = "websocket"
 
 
-class SSEEvent(BaseModel):
-    """Server-Sent Event model"""
-    event: str = "message"
+@dataclass
+class SSEEvent:
+    """Server-Sent Event model."""
+
     data: str
+    event: str = "message"
     id: Optional[str] = None
     retry: Optional[int] = None
 
 
-class Response(BaseModel):
-    """Enhanced response model with binary data and cookies"""
+@dataclass
+class Response:
+    """Enhanced response model with binary data and cookies."""
+
     request_id: str
     status_code: int
-    _headers: dict
+    raw_headers: dict = field(default_factory=dict)
     body: str = ""
-    body_bytes: Optional[bytes] = None  # Binary response body
-    _cookies: Optional[List[Cookie]] = None  # Response cookies
-    final_url: Optional[str] = None  # Final URL after redirects
+    body_bytes: Optional[bytes] = None
+    raw_cookies: Optional[List[Cookie]] = None
+    final_url: Optional[str] = None
 
-    class Config:
-        fields = {
-            "request_id": "RequestID",
-            "status_code": "Status",
-            "_headers": "Headers",
-            "body": "Body",
-            "body_bytes": "BodyBytes",
-            "_cookies": "Cookies",
-            "final_url": "FinalUrl",
-        }
-
-    def __init__(self, **data):
-        super().__init__(**data)
+    def __post_init__(self):
+        """Initialize cached properties."""
         self._headers_dict: Optional[CaseInsensitiveDict] = None
         self._cookie_jar: Optional[CookieJar] = None
 
     @property
     def text(self) -> str:
-        """
-        Alias for body. Returns the response body as a string.
-
-        Returns:
-            str: The response body text
-        """
+        """Alias for body. Returns the response body as a string."""
         return self.body
 
     @property
     def content(self) -> bytes:
-        """
-        Returns the response body as bytes.
-
-        If body_bytes is available, returns that. Otherwise, encodes
-        the body string to UTF-8 bytes.
-
-        Returns:
-            bytes: The response body as bytes
-        """
-        return self.body_bytes if self.body_bytes is not None else self.body.encode('utf-8')
+        """Return the response body as bytes."""
+        return self.body_bytes if self.body_bytes is not None else self.body.encode("utf-8")
 
     @property
     def headers(self) -> CaseInsensitiveDict:
-        """
-        Returns headers as a case-insensitive dictionary.
-
-        The dictionary is cached for efficiency.
-
-        Returns:
-            CaseInsensitiveDict: Case-insensitive headers dictionary
-        """
+        """Return headers as a case-insensitive dictionary."""
         if self._headers_dict is None:
-            self._headers_dict = CaseInsensitiveDict(self._headers)
+            self._headers_dict = CaseInsensitiveDict(self.raw_headers)
         return self._headers_dict
 
     @property
     def cookies(self) -> CookieJar:
-        """
-        Returns cookies as a CookieJar object.
-
-        The CookieJar is cached for efficiency.
-
-        Returns:
-            CookieJar: Cookie jar containing response cookies
-        """
+        """Return cookies as a CookieJar object."""
         if self._cookie_jar is None:
-            self._cookie_jar = CookieJar(self._cookies or [])
+            self._cookie_jar = CookieJar(self.raw_cookies or [])
         return self._cookie_jar
 
     @property
     def ok(self) -> bool:
-        """
-        Returns True if status code indicates success (200-399).
-
-        Returns:
-            bool: True if 200 <= status_code < 400
-        """
+        """Return True if status code indicates success (200-399)."""
         return 200 <= self.status_code < 400
 
     @property
     def is_redirect(self) -> bool:
-        """
-        Returns True if status code indicates a redirect (300-399).
-
-        Returns:
-            bool: True if 300 <= status_code < 400
-        """
+        """Return True if status code indicates a redirect (300-399)."""
         return 300 <= self.status_code < 400
 
     @property
     def is_client_error(self) -> bool:
-        """
-        Returns True if status code indicates a client error (400-499).
-
-        Returns:
-            bool: True if 400 <= status_code < 500
-        """
+        """Return True if status code indicates a client error (400-499)."""
         return 400 <= self.status_code < 500
 
     @property
     def is_server_error(self) -> bool:
-        """
-        Returns True if status code indicates a server error (500-599).
-
-        Returns:
-            bool: True if 500 <= status_code < 600
-        """
+        """Return True if status code indicates a server error (500-599)."""
         return 500 <= self.status_code < 600
 
     @property
     def is_error(self) -> bool:
-        """
-        Returns True if status code indicates any error (400+).
-
-        Returns:
-            bool: True if status_code >= 400
-        """
+        """Return True if status code indicates any error (400+)."""
         return self.status_code >= 400
 
     @property
     def reason(self) -> str:
-        """
-        Returns the HTTP reason phrase for the status code.
-
-        Returns:
-            str: HTTP reason phrase (e.g., "OK", "Not Found")
-        """
+        """Return the HTTP reason phrase for the status code."""
         return self._get_reason()
 
     @property
     def url(self) -> Optional[str]:
-        """
-        Alias for final_url. Returns the final URL after redirects.
-
-        Returns:
-            Optional[str]: The final URL after following redirects
-        """
+        """Alias for final_url. Returns the final URL after redirects."""
         return self.final_url
 
     @property
     def encoding(self) -> str:
-        """
-        Detects encoding from Content-Type header, defaults to 'utf-8'.
-
-        Parses the Content-Type header to extract the charset parameter.
-        If not found, returns 'utf-8' as the default encoding.
-
-        Returns:
-            str: Character encoding (e.g., 'utf-8', 'iso-8859-1')
-        """
-        content_type = self.headers.get('content-type', '')
-        # Parse charset from Content-Type header
-        match = re.search(r'charset=([^\s;]+)', content_type, re.IGNORECASE)
+        """Detect encoding from Content-Type header, default to 'utf-8'."""
+        content_type = self.headers.get("content-type", "")
+        match = re.search(r"charset=([^\s;]+)", content_type, re.IGNORECASE)
         if match:
             return match.group(1).strip('"\'')
-        return 'utf-8'
+        return "utf-8"
 
     def _get_reason(self) -> str:
-        """
-        Helper method to get HTTP reason phrases for status codes.
-
-        Returns:
-            str: HTTP reason phrase
-        """
+        """Helper to get HTTP reason phrases for status codes."""
         status_phrases = {
             # 1xx Informational
             100: "Continue",
@@ -361,28 +319,89 @@ class Response(BaseModel):
         return status_phrases.get(self.status_code, "Unknown")
 
     def raise_for_status(self) -> None:
-        """
-        Raises HTTPError if the response status indicates an error.
-
-        Checks if the response status code is in the error range (400+).
-        If so, raises an HTTPError with a detailed message including
-        the status code, reason phrase, and URL.
-
-        Raises:
-            HTTPError: If status_code >= 400
-        """
+        """Raise HTTPError if the response status indicates an error."""
         if self.is_error:
-            from .exceptions import HTTPError
+            from .exceptions import HTTPError  # Local import to avoid cycle
 
             error_msg = f"{self.status_code} {self.reason}"
             if self.final_url:
                 error_msg += f" for url: {self.final_url}"
-
             raise HTTPError(error_msg, response=self)
 
     def json(self) -> dict:
-        """Parse response body as JSON"""
+        """Parse response body as JSON."""
         return json.loads(self.body)
 
+    def __repr__(self) -> str:
+        """Return detailed string representation of the Response."""
+        return f"<Response [{self.status_code} {self.reason}]>"
+
+    def __str__(self) -> str:
+        """Return user-friendly string representation of the Response."""
+        return f"<Response [{self.status_code}]>"
 
 
+def _cookie_to_dict(cookie: Cookie) -> dict:
+    """Convert Cookie to dictionary for serialization."""
+    result = {
+        "name": cookie.name,
+        "value": cookie.value,
+        "secure": cookie.secure,
+        "httpOnly": cookie.http_only,
+    }
+    if cookie.path is not None:
+        result["path"] = cookie.path
+    if cookie.domain is not None:
+        result["domain"] = cookie.domain
+    if cookie.expires is not None:
+        result["expires"] = cookie.expires.isoformat()
+    if cookie.max_age is not None:
+        result["maxAge"] = cookie.max_age
+    if cookie.same_site is not None:
+        result["sameSite"] = cookie.same_site
+    return result
+
+
+def _dict_to_cookie(data: dict) -> Cookie:
+    """Convert dictionary to Cookie object."""
+    expires = None
+    if "expires" in data and data["expires"]:
+        expires = datetime.fromisoformat(data["expires"])
+
+    return Cookie(
+        name=data["name"],
+        value=data["value"],
+        path=data.get("path"),
+        domain=data.get("domain"),
+        expires=expires,
+        max_age=data.get("maxAge"),
+        secure=data.get("secure", False),
+        http_only=data.get("httpOnly", False),
+        same_site=data.get("sameSite"),
+    )
+
+
+def _dict_to_response(data: dict) -> Response:
+    """Convert dictionary to Response object."""
+    # Decode base64 body_bytes if present
+    body_bytes = None
+    if "BodyBytes" in data and data["BodyBytes"]:
+        try:
+            body_bytes = base64.b64decode(data["BodyBytes"])
+        except Exception:
+            pass
+
+    # Convert cookies
+    raw_cookies = None
+    if "Cookies" in data and data["Cookies"]:
+        raw_cookies = [_dict_to_cookie(c) for c in data["Cookies"]]
+
+    return Response(
+        request_id=data.get("RequestID", ""),
+        status_code=data.get("Status", 0),
+        raw_headers=data.get("Headers", {}),
+        body=data.get("Body", ""),
+        body_bytes=body_bytes,
+        raw_cookies=raw_cookies,
+        final_url=data.get("FinalUrl"),
+    )

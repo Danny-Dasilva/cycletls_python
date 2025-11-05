@@ -6,8 +6,17 @@ in a way that's consistent with the requests library.
 """
 
 from collections.abc import MutableMapping
-from typing import List, Optional, Iterator, Tuple, Any
-from .schema import Cookie
+from typing import List, Optional, Iterator, Tuple, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .schema import Cookie
+
+
+def _get_cookie_class():
+    """Import Cookie lazily to avoid circular imports."""
+    from .schema import Cookie
+
+    return Cookie
 
 
 class CaseInsensitiveDict(MutableMapping):
@@ -93,7 +102,7 @@ class CookieJar:
         jar.get_dict()  # Returns {'session': 'abc123', 'user': 'john'}
     """
 
-    def __init__(self, cookies: Optional[List[Cookie]] = None):
+    def __init__(self, cookies: Optional[List['Cookie']] = None):
         """Initialize a CookieJar with an optional list of Cookie objects.
 
         Args:
@@ -125,7 +134,8 @@ class CookieJar:
             name: The name of the cookie.
             value: The value of the cookie.
         """
-        self._cookies[name] = Cookie(name=name, value=value)
+        cookie_cls = _get_cookie_class()
+        self._cookies[name] = cookie_cls(name=name, value=value)
 
     def get(self, name: str, default: Optional[str] = None) -> Optional[str]:
         """Get a cookie's value by name, returning a default if not found.
@@ -148,7 +158,8 @@ class CookieJar:
             value: The value of the cookie.
             **kwargs: Additional Cookie attributes (path, domain, expires, etc.).
         """
-        self._cookies[name] = Cookie(name=name, value=value, **kwargs)
+        cookie_cls = _get_cookie_class()
+        self._cookies[name] = cookie_cls(name=name, value=value, **kwargs)
 
     def items(self) -> Iterator[Tuple[str, str]]:
         """Return an iterator of (name, value) tuples for all cookies.
@@ -167,7 +178,7 @@ class CookieJar:
         """
         return {name: cookie.value for name, cookie in self._cookies.items()}
 
-    def get_cookies(self) -> List[Cookie]:
+    def get_cookies(self) -> List['Cookie']:
         """Return a list of all Cookie objects.
 
         Returns:
@@ -191,10 +202,44 @@ class CookieJar:
         """
         return len(self._cookies)
 
+    def __contains__(self, name: str) -> bool:
+        """Check if a cookie exists in the jar.
+
+        Args:
+            name: The name of the cookie.
+
+        Returns:
+            True if the cookie exists, False otherwise.
+        """
+        return name in self._cookies
+
+    def __eq__(self, other: Any) -> bool:
+        """Compare two CookieJars for equality.
+
+        Args:
+            other: Another CookieJar or dict to compare with.
+
+        Returns:
+            True if the cookies are equal, False otherwise.
+        """
+        if isinstance(other, CookieJar):
+            return self.get_dict() == other.get_dict()
+        elif isinstance(other, dict):
+            return self.get_dict() == other
+        return NotImplemented
+
     def __repr__(self) -> str:
         """Return a string representation of the CookieJar.
 
         Returns:
             A string representation showing all cookies.
         """
-        return f"CookieJar({self.get_dict()})"
+        return f"<CookieJar({len(self)} cookies)>"
+
+    def __str__(self) -> str:
+        """Return a user-friendly string representation.
+
+        Returns:
+            A string showing the cookie dict.
+        """
+        return str(self.get_dict())

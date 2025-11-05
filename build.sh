@@ -60,6 +60,46 @@ build_platform() {
 }
 
 # Build for all platforms
+build_shared_library() {
+    local OUTPUT_NAME
+    local HOST_OS=$(uname -s)
+
+    case ${HOST_OS} in
+        Linux)
+            OUTPUT_NAME="libcycletls.so"
+            ;;
+        Darwin)
+            OUTPUT_NAME="libcycletls.dylib"
+            ;;
+        MINGW*|MSYS*|CYGWIN*|Windows*)
+            OUTPUT_NAME="cycletls.dll"
+            ;;
+        *)
+            echo -e "${YELLOW}Skipping shared library build: unsupported host OS (${HOST_OS}).${NC}"
+            return 0
+            ;;
+    esac
+
+    echo -e "${BLUE}Building shared library for host platform...${NC}"
+
+    cd "${GOLANG_DIR}"
+    unset GOOS
+    unset GOARCH
+    export CGO_ENABLED=1
+
+    if go build -buildmode=c-shared -o "${DIST_DIR}/${OUTPUT_NAME}" .; then
+        echo -e "${GREEN}✓ Built ${OUTPUT_NAME}${NC}"
+        if [ -f "${DIST_DIR}/libcycletls.h" ]; then
+            echo -e "${GREEN}✓ Generated libcycletls.h header${NC}"
+        fi
+    else
+        echo -e "${RED}✗ Failed to build shared library${NC}"
+        return 1
+    fi
+
+    cd "${PROJECT_ROOT}"
+}
+
 echo -e "${BLUE}Building binaries for all platforms...${NC}"
 echo ""
 
@@ -77,6 +117,10 @@ build_platform "darwin" "arm64" "cycletls-darwin-arm64"
 
 # Windows AMD64
 build_platform "windows" "amd64" "cycletls-windows-amd64.exe"
+
+echo ""
+# Host shared library
+build_shared_library
 
 echo ""
 echo -e "${BLUE}========================================${NC}"

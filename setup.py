@@ -12,36 +12,23 @@ README = (HERE / "README.md").read_text()
 # Determine which binary to include based on platform
 def get_package_data():
     """
-    Determine which platform-specific binary to include in the package.
+    Determine which shared library to include in the package.
     """
     system = platform.system()
-    machine = platform.machine().lower()
-
-    # Map architecture names
-    if machine in ("x86_64", "amd64"):
-        arch = "amd64"
-    elif machine in ("aarch64", "arm64"):
-        arch = "arm64"
+    if system == "Windows":
+        candidates = ["dist/cycletls.dll"]
+    elif system == "Darwin":
+        candidates = ["dist/libcycletls.dylib"]
     else:
-        arch = machine
+        candidates = ["dist/libcycletls.so"]
 
-    # Determine binary name
-    if system == "Linux":
-        binary = f"dist/cycletls-linux-{arch}"
-    elif system == "Darwin":  # macOS
-        binary = f"dist/cycletls-darwin-{arch}"
-    elif system == "Windows":
-        binary = f"dist/cycletls-windows-{arch}.exe"
-    else:
-        # Fallback - include all binaries
-        return ['dist/*']
+    data = [path for path in candidates if os.path.exists(os.path.join(HERE, path))]
 
-    # Check if the platform-specific binary exists
-    if os.path.exists(os.path.join(HERE, binary)):
-        return [binary]
-    else:
-        # Fallback - include all binaries if specific one doesn't exist
-        return ['dist/*']
+    header_path = os.path.join(HERE, "dist/libcycletls.h")
+    if os.path.exists(header_path):
+        data.append('dist/libcycletls.h')
+
+    return data or ['dist/*']
 
 
 setup(
@@ -57,9 +44,9 @@ setup(
     long_description_content_type="text/markdown",
     long_description=README,
     install_requires=[
-        'pydantic>=1.8.0',
-        'websocket-client>=1.0.0',
-        'psutil>=5.8.0',
+        'cffi>=1.15.0',
+        'orjson>=3.9.0',
+        'msgpack>=1.0.0',
     ],
     extras_require={
         'dev': [

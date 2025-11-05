@@ -95,47 +95,47 @@ type Cookie struct {
 
 // Options sets CycleTLS client options
 type Options struct {
-	URL       string            `json:"url"`
-	Method    string            `json:"method"`
-	Headers   map[string]string `json:"headers"`
-	Body      string            `json:"body"`
-	BodyBytes []byte            `json:"bodyBytes"` // New field for binary request data
+	URL       string            `json:"url" msgpack:"url"`
+	Method    string            `json:"method" msgpack:"method"`
+	Headers   map[string]string `json:"headers" msgpack:"headers"`
+	Body      string            `json:"body" msgpack:"body"`
+	BodyBytes []byte            `json:"bodyBytes" msgpack:"bodyBytes"` // New field for binary request data
 
 	// TLS fingerprinting options
-	Ja3              string `json:"ja3"`
-	Ja4r             string `json:"ja4r"` // JA4 raw format with explicit cipher/extension values
-	HTTP2Fingerprint string `json:"http2Fingerprint"`
-	QUICFingerprint  string `json:"quicFingerprint"`
-	DisableGrease    bool   `json:"disableGrease"` // Disable GREASE for exact JA4 matching
+	Ja3              string `json:"ja3" msgpack:"ja3"`
+	Ja4r             string `json:"ja4r" msgpack:"ja4r"` // JA4 raw format with explicit cipher/extension values
+	HTTP2Fingerprint string `json:"http2Fingerprint" msgpack:"http2Fingerprint"`
+	QUICFingerprint  string `json:"quicFingerprint" msgpack:"quicFingerprint"`
+	DisableGrease    bool   `json:"disableGrease" msgpack:"disableGrease"` // Disable GREASE for exact JA4 matching
 
 	// Browser identification
-	UserAgent string `json:"userAgent"`
+	UserAgent string `json:"userAgent" msgpack:"userAgent"`
 
 	// Connection options
-	Proxy              string   `json:"proxy"`
-	ServerName         string   `json:"serverName"` // Custom TLS SNI override
-	Cookies            []Cookie `json:"cookies"`
-	Timeout            int      `json:"timeout"`
-	DisableRedirect    bool     `json:"disableRedirect"`
-	HeaderOrder        []string `json:"headerOrder"`
-	OrderAsProvided    bool     `json:"orderAsProvided"` //TODO
-	InsecureSkipVerify bool     `json:"insecureSkipVerify"`
+	Proxy              string   `json:"proxy" msgpack:"proxy"`
+	ServerName         string   `json:"serverName" msgpack:"serverName"` // Custom TLS SNI override
+	Cookies            []Cookie `json:"cookies" msgpack:"cookies"`
+	Timeout            int      `json:"timeout" msgpack:"timeout"`
+	DisableRedirect    bool     `json:"disableRedirect" msgpack:"disableRedirect"`
+	HeaderOrder        []string `json:"headerOrder" msgpack:"headerOrder"`
+	OrderAsProvided    bool     `json:"orderAsProvided" msgpack:"orderAsProvided"` //TODO
+	InsecureSkipVerify bool     `json:"insecureSkipVerify" msgpack:"insecureSkipVerify"`
 
 	// Protocol options
-	ForceHTTP1 bool   `json:"forceHTTP1"`
-	ForceHTTP3 bool   `json:"forceHTTP3"`
-	Protocol   string `json:"protocol"` // "http1", "http2", "http3", "websocket", "sse"
+	ForceHTTP1 bool   `json:"forceHTTP1" msgpack:"forceHTTP1"`
+	ForceHTTP3 bool   `json:"forceHTTP3" msgpack:"forceHTTP3"`
+	Protocol   string `json:"protocol" msgpack:"protocol"` // "http1", "http2", "http3", "websocket", "sse"
 
 	// TLS 1.3 specific options
-	TLS13AutoRetry bool `json:"tls13AutoRetry"` // Automatically retry with TLS 1.3 compatible curves (default: true)
+	TLS13AutoRetry bool `json:"tls13AutoRetry" msgpack:"tls13AutoRetry"` // Automatically retry with TLS 1.3 compatible curves (default: true)
 
 	// Connection reuse options
-	EnableConnectionReuse bool `json:"enableConnectionReuse"` // Enable connection reuse across requests (default: true)
+	EnableConnectionReuse bool `json:"enableConnectionReuse" msgpack:"enableConnectionReuse"` // Enable connection reuse across requests (default: true)
 }
 
 type cycleTLSRequest struct {
-	RequestID string  `json:"requestId"`
-	Options   Options `json:"options"`
+	RequestID string  `json:"requestId" msgpack:"requestId"`
+	Options   Options `json:"options" msgpack:"options"`
 }
 
 // rename to request+client+options

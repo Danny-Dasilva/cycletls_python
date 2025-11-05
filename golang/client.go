@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	fhttp "github.com/Danny-Dasilva/fhttp"
+	"hash/crc32"
 	"sync"
 	"time"
 
@@ -31,6 +31,12 @@ type ClientPoolEntry struct {
 var (
 	advancedClientPool      = make(map[string]*ClientPoolEntry)
 	advancedClientPoolMutex = sync.RWMutex{}
+)
+
+// Client key cache to avoid recomputing hashes
+var (
+	clientKeyCache      = make(map[string]string)
+	clientKeyCacheMutex = sync.RWMutex{}
 )
 
 type Browser struct {
@@ -181,9 +187,24 @@ func generateClientKey(browser Browser, timeout int, disableRedirect bool, proxy
 		cookieStr,
 	)
 
-	// Generate SHA256 hash for the key
-	hash := sha256.Sum256([]byte(configStr))
-	return fmt.Sprintf("%x", hash[:16]) // Use first 16 bytes for shorter key
+	// Check cache first
+	clientKeyCacheMutex.RLock()
+	if cached, exists := clientKeyCache[configStr]; exists {
+		clientKeyCacheMutex.RUnlock()
+		return cached
+	}
+	clientKeyCacheMutex.RUnlock()
+
+	// Generate CRC32 hash for the key (much faster than SHA256)
+	crc := crc32.ChecksumIEEE([]byte(configStr))
+	key := fmt.Sprintf("%08x", crc)
+
+	// Cache the result
+	clientKeyCacheMutex.Lock()
+	clientKeyCache[configStr] = key
+	clientKeyCacheMutex.Unlock()
+
+	return key
 }
 
 // getOrCreateClient retrieves a client from the pool or creates a new one

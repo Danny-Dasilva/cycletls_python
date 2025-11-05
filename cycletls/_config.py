@@ -1,9 +1,35 @@
 """Configuration management for CycleTLS module-level defaults."""
 
+import threading
 from typing import Any, Dict, Optional
 
 # Configuration storage
 _config: Dict[str, Any] = {}
+
+# Cache for merged defaults (optimization for empty kwargs)
+_merged_cache: Optional[Dict[str, Any]] = None
+_cache_lock = threading.Lock()
+
+# Mapping from config keys to parameter names (pre-computed for performance)
+_CONFIG_TO_PARAM_MAPPING = {
+    'default_ja3': 'ja3',
+    'default_ja4r': 'ja4r',
+    'default_http2_fingerprint': 'http2_fingerprint',
+    'default_quic_fingerprint': 'quic_fingerprint',
+    'default_disable_grease': 'disable_grease',
+    'default_user_agent': 'user_agent',
+    'default_proxy': 'proxy',
+    'default_timeout': 'timeout',
+    'default_enable_connection_reuse': 'enable_connection_reuse',
+    'default_insecure_skip_verify': 'insecure_skip_verify',
+    'default_server_name': 'server_name',
+    'default_force_http1': 'force_http1',
+    'default_force_http3': 'force_http3',
+    'default_protocol': 'protocol',
+    'default_disable_redirect': 'disable_redirect',
+    'default_header_order': 'header_order',
+    'default_order_headers_as_provided': 'order_headers_as_provided',
+}
 
 # Valid configuration attributes
 _CONFIGURABLE_ATTRS = {
@@ -67,31 +93,33 @@ def _merge_defaults(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Merged dictionary with defaults + kwargs
     """
+    global _merged_cache
+
+    # Fast path 1: if no defaults are set, just return kwargs
+    if not _config:
+        return kwargs
+
+    # Fast path 2: if kwargs are empty, use cached merged defaults
+    if not kwargs:
+        if _merged_cache is not None:
+            return _merged_cache
+
+        # Build and cache the defaults-only result
+        with _cache_lock:
+            # Double-check after acquiring lock
+            if _merged_cache is None:
+                result = {}
+                for config_key, param_key in _CONFIG_TO_PARAM_MAPPING.items():
+                    if config_key in _config:
+                        result[param_key] = _config[config_key]
+                _merged_cache = result
+            return _merged_cache
+
+    # Slow path: merge defaults with non-empty kwargs
     result = {}
 
-    # Map default_* to actual parameter names
-    mapping = {
-        'default_ja3': 'ja3',
-        'default_ja4r': 'ja4r',
-        'default_http2_fingerprint': 'http2_fingerprint',
-        'default_quic_fingerprint': 'quic_fingerprint',
-        'default_disable_grease': 'disable_grease',
-        'default_user_agent': 'user_agent',
-        'default_proxy': 'proxy',
-        'default_timeout': 'timeout',
-        'default_enable_connection_reuse': 'enable_connection_reuse',
-        'default_insecure_skip_verify': 'insecure_skip_verify',
-        'default_server_name': 'server_name',
-        'default_force_http1': 'force_http1',
-        'default_force_http3': 'force_http3',
-        'default_protocol': 'protocol',
-        'default_disable_redirect': 'disable_redirect',
-        'default_header_order': 'header_order',
-        'default_order_headers_as_provided': 'order_headers_as_provided',
-    }
-
     # Apply defaults first (only if not in kwargs)
-    for config_key, param_key in mapping.items():
+    for config_key, param_key in _CONFIG_TO_PARAM_MAPPING.items():
         if config_key in _config and param_key not in kwargs:
             result[param_key] = _config[config_key]
 
@@ -133,12 +161,17 @@ def set_default(**kwargs) -> None:
         ... )
         >>> response = cycletls.get('https://example.com')  # Uses defaults
     """
+    global _merged_cache
+
     for key, value in kwargs.items():
         config_key = f'default_{key}'
         if config_key not in _CONFIGURABLE_ATTRS:
             raise ValueError(f"Unknown configuration option: {key}")
         _validate_config(config_key, value)
         _config[config_key] = value
+
+    # Invalidate cache when defaults change
+    _merged_cache = None
 
 
 def reset_defaults() -> None:
@@ -150,7 +183,11 @@ def reset_defaults() -> None:
         >>> cycletls.set_default(proxy='socks5://127.0.0.1:9050')
         >>> cycletls.reset_defaults()  # Clear all defaults
     """
+    global _merged_cache
+
     _config.clear()
+    # Invalidate cache when defaults are reset
+    _merged_cache = None
 
 
 def get_default(key: str) -> Optional[Any]:

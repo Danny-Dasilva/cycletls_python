@@ -1,194 +1,231 @@
-import json
-import urllib.parse
-import warnings
-import threading
-import weakref
-from typing import Union
-from websocket import create_connection
-from .schema import Response, Request, Protocol
-import subprocess
-from time import sleep
-import psutil
-import platform
+"""Core CycleTLS client implementation backed by the Go shared library."""
+
+from __future__ import annotations
+
+import io
+import mimetypes
 import os
+import urllib.parse
+import json
+import warnings
+import logging
+import threading
+from collections.abc import Mapping, Sequence
+from typing import Any, BinaryIO, Dict, Iterable, Optional, Tuple, Union
+
+from ._ffi import send_request as ffi_send_request
+from .exceptions import CycleTLSError
+from .schema import Request, Response, _dict_to_response
+
+# Setup module logger
+logger = logging.getLogger(__name__)
+
+# Request ID counter (faster than UUID) - use thread-local for zero-lock overhead
+_request_counter_local = threading.local()
 
 
-def get_binary_path():
+def _next_request_id() -> str:
+    """Generate next request ID using thread-local counter (no locks needed)."""
+    if not hasattr(_request_counter_local, 'counter'):
+        _request_counter_local.counter = 0
+    _request_counter_local.counter += 1
+    # Include thread ID for uniqueness across threads
+    return f"req_{threading.current_thread().ident}_{_request_counter_local.counter}"
+
+
+ParamValue = Union[str, int, float, bool, None]
+ParamsType = Union[
+    Mapping[str, Union[ParamValue, Sequence[ParamValue]]],
+    Sequence[Tuple[str, Union[ParamValue, Sequence[ParamValue]]]],
+]
+
+
+def _merge_url_params(url: str, params: Optional[ParamsType]) -> str:
+    """Attach query parameters to a URL, preserving existing values."""
+    if not params:
+        return url
+
+    parsed = urllib.parse.urlsplit(url)
+    existing = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+
+    def iter_params() -> Iterable[Tuple[str, str]]:
+        source: Iterable[Tuple[Any, Any]]
+        if isinstance(params, Mapping):
+            source = params.items()
+        else:
+            source = params
+
+        for key, value in source:
+            if value is None:
+                continue
+
+            if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+                for item in value:
+                    if item is None:
+                        continue
+                    yield str(key), str(item)
+            else:
+                yield str(key), str(value)
+
+    combined = existing + list(iter_params())
+    query = urllib.parse.urlencode(combined, doseq=True)
+    return urllib.parse.urlunsplit(parsed._replace(query=query))
+
+
+def _encode_multipart_formdata(
+    fields: Optional[Dict[str, Any]] = None,
+    files: Optional[Dict[str, Any]] = None
+) -> Tuple[bytes, str]:
     """
-    Detect the correct binary path based on platform and architecture.
+    Encode data and files as multipart/form-data.
+
+    Args:
+        fields: Dictionary of form fields
+        files: Dictionary of files to upload
+            Format: {'field_name': file_object} or
+                   {'field_name': ('filename', file_object)} or
+                   {'field_name': ('filename', file_object, 'content_type')}
 
     Returns:
-        str: Path to the platform-specific CycleTLS binary
+        Tuple of (body_bytes, content_type_header)
     """
-    system = platform.system()
-    arch = platform.machine().lower()
+    import uuid
 
-    # Map common architecture names
-    if arch in ("x86_64", "amd64"):
-        arch = "amd64"
-    elif arch in ("aarch64", "arm64"):
-        arch = "arm64"
+    # Generate unique boundary
+    boundary = f'----WebKitFormBoundary{uuid.uuid4().hex[:16]}'
+    body = io.BytesIO()
 
-    # Determine binary name based on platform
-    if system == "Linux":
-        binary = f"./dist/cycletls-linux-{arch}"
-    elif system == "Darwin":  # macOS
-        binary = f"./dist/cycletls-darwin-{arch}"
-    elif system == "Windows":
-        binary = f"./dist/cycletls-windows-{arch}.exe"
-    else:
-        # Fallback to generic binary
-        binary = "./dist/cycletls"
+    # Add form fields
+    if fields:
+        for field_name, field_value in fields.items():
+            body.write(f'--{boundary}\r\n'.encode('utf-8'))
+            body.write(f'Content-Disposition: form-data; name="{field_name}"\r\n\r\n'.encode('utf-8'))
+            body.write(str(field_value).encode('utf-8'))
+            body.write(b'\r\n')
 
-    # Check if platform-specific binary exists, otherwise use generic
-    if not os.path.exists(binary):
-        binary = "./dist/cycletls"
+    # Add files
+    if files:
+        for field_name, file_info in files.items():
+            # Parse file_info
+            if isinstance(file_info, tuple):
+                if len(file_info) == 2:
+                    filename, file_obj = file_info
+                    content_type = None
+                elif len(file_info) == 3:
+                    filename, file_obj, content_type = file_info
+                else:
+                    raise ValueError(f"Invalid file info format for field '{field_name}'")
+            else:
+                # file_info is a file object
+                file_obj = file_info
+                filename = getattr(file_obj, 'name', field_name)
+                content_type = None
 
-    return binary
+            # Guess content type if not provided
+            if content_type is None:
+                content_type, _ = mimetypes.guess_type(filename)
+                if content_type is None:
+                    content_type = 'application/octet-stream'
 
+            # Read file data
+            if hasattr(file_obj, 'read'):
+                file_data = file_obj.read()
+                # Reset file pointer if possible
+                if hasattr(file_obj, 'seek'):
+                    try:
+                        file_obj.seek(0)
+                    except (OSError, io.UnsupportedOperation):
+                        pass
+            else:
+                # file_obj is already bytes
+                file_data = file_obj
 
-def kill(proc_pid):
-    """
-    Kill a process and all its children.
+            # Write file part
+            body.write(f'--{boundary}\r\n'.encode('utf-8'))
+            body.write(
+                f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode('utf-8')
+            )
+            body.write(f'Content-Type: {content_type}\r\n\r\n'.encode('utf-8'))
 
-    Args:
-        proc_pid: Process or PID to kill. If None, kills all 'cycletls' processes.
-    """
-    if proc_pid:
-        process = psutil.Process(proc_pid.pid)
-        for proc in process.children(recursive=True):
-            proc.kill()
-        process.kill()
-    else:
-        for proc in psutil.process_iter():
-            # check whether the process name matches
-            if proc.name() == "cycletls":
-                proc.kill()
+            # Ensure file_data is bytes
+            if isinstance(file_data, str):
+                file_data = file_data.encode('utf-8')
+            body.write(file_data)
+            body.write(b'\r\n')
 
+    # Write final boundary
+    body.write(f'--{boundary}--\r\n'.encode('utf-8'))
 
-def _cleanup_cycletls_instance(ws, proc):
-    """
-    Cleanup function for weakref.finalize.
-
-    This function has no self reference to avoid circular references.
-
-    Args:
-        ws: WebSocket connection
-        proc: Subprocess instance
-    """
-    try:
-        ws.close()
-    except:
-        pass
-
-    try:
-        if proc:
-            kill(proc)
-    except:
-        pass
+    content_type_header = f'multipart/form-data; boundary={boundary}'
+    return body.getvalue(), content_type_header
 
 
 class CycleTLS:
-    """
-    CycleTLS client for making HTTP requests with advanced TLS fingerprinting.
+    """CycleTLS client for making HTTP requests with advanced TLS fingerprinting."""
 
-    Supports:
-    - JA3 and JA4 TLS fingerprinting
-    - HTTP/1.1, HTTP/2, and HTTP/3 protocols
-    - WebSocket and Server-Sent Events (SSE)
-    - Connection pooling and reuse
-    - Advanced proxy support (HTTP, HTTPS, SOCKS4, SOCKS5)
-    - Binary data handling
-    - Custom TLS configuration
-    """
-
-    def __init__(self, port=9112):
+    def __init__(self, port: int = 9112) -> None:
         """
         Initialize CycleTLS client.
 
         Args:
-            port (int): WebSocket port to use (default: 9112)
+            port: Retained for backward compatibility; no longer used.
         """
         self.port = port
-        self.ws_url = f"ws://localhost:{port}"
-        self._lock = threading.RLock()  # Thread-safe WebSocket access
+        self._closed = False
 
-        try:
-            self.ws = create_connection(self.ws_url)
-            self.proc = None
-        except:
-            # Start the Go binary subprocess
-            binary_path = get_binary_path()
-            env = os.environ.copy()
-            env["WS_PORT"] = str(port)
-
-            self.proc = subprocess.Popen([binary_path], shell=True, env=env)
-            # Wait for server to start
-            sleep(0.1)
-
-            self.ws = create_connection(self.ws_url)
-
-        # Register weakref finalizer for automatic cleanup
-        self._finalizer = weakref.finalize(
-            self,
-            _cleanup_cycletls_instance,
-            self.ws,
-            self.proc
-        )
-
-    def __enter__(self):
-        """Context manager entry."""
+    def __enter__(self) -> "CycleTLS":
+        """Allow usage as a context manager."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - cleanup resources."""
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        """Cleanup resources when exiting a context manager block."""
         self.close()
         return False
 
-    def __del__(self):
-        """Safe cleanup on deletion."""
+    def __del__(self) -> None:  # pragma: no cover - best-effort cleanup
         try:
             self.close()
-        except:
+        except Exception:
             pass
 
-    def request(self, method, url, params=None, data=None, json_data=None, files=None, **kwargs):
+    def close(self) -> None:
+        """Close the client (no-op retained for API compatibility)."""
+        self._closed = True
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        **kwargs: Any
+    ) -> Response:
         """
         Send an HTTP request with enhanced data handling.
 
         Args:
-            method (str): HTTP method (GET, POST, PUT, etc.)
-            url (str): Target URL
-            params (Optional[Dict]): Query parameters to append to URL
-            data (Optional[Union[Dict, str, bytes]]): Form data or raw body
-                - If dict: URL-encoded and Content-Type set to application/x-www-form-urlencoded
-                - If str/bytes: Sent as-is
-            json_data (Optional[Dict]): JSON data (auto-serialized with Content-Type: application/json)
-            files (Optional[Dict]): File uploads (TODO: Not yet implemented)
-            **kwargs: Additional options (headers, cookies, proxy, timeout, etc.)
+            method: HTTP method (GET, POST, etc.)
+            url: Target URL
+            params: Query parameters to append to URL
+            data: Form data or raw body
+            json_data: JSON data (auto-serialized)
+            files: File uploads (not yet supported)
+            **kwargs: Additional CycleTLS options (headers, cookies, proxy, etc.)
 
         Returns:
             Response: Response object with status, headers, body, cookies, etc.
-
-        Examples:
-            # Send JSON data
-            response = client.request('POST', url, json_data={'key': 'value'})
-
-            # Send form data
-            response = client.request('POST', url, data={'username': 'john', 'password': 'secret'})
-
-            # Send raw data
-            response = client.request('POST', url, data=b'raw bytes')
-
-            # Use cookies as dict
-            response = client.request('GET', url, cookies={'session': 'abc123'})
         """
+        if self._closed:
+            raise CycleTLSError("CycleTLS client is closed")
+
         # Handle deprecated body/body_bytes parameters
         if 'body' in kwargs:
             warnings.warn(
                 "The 'body' parameter is deprecated. Use 'data' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
             if data is None:
                 data = kwargs.pop('body')
@@ -197,48 +234,56 @@ class CycleTLS:
             warnings.warn(
                 "The 'body_bytes' parameter is deprecated. Use 'data' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
             if data is None:
                 data = kwargs.pop('body_bytes')
 
-        # Initialize headers if not provided
-        headers = kwargs.get('headers', {})
+        headers = kwargs.get('headers') or {}
         if headers is None:
             headers = {}
 
-        # Handle json parameter
+        # Attach params to URL before building the request
+        url = _merge_url_params(url, params)
+
+        body_value: Optional[str] = None
+        body_bytes_value: Optional[bytes] = None
+
         if json_data is not None:
             if data is not None:
                 raise ValueError("Cannot specify both 'data' and 'json_data' parameters")
-            data = json.dumps(json_data)
+            body_value = json.dumps(json_data)
             headers['Content-Type'] = 'application/json'
-
-        # Handle data parameter
-        if data is not None:
+        elif data is not None:
             if isinstance(data, dict):
-                # URL-encode form data
-                data = urllib.parse.urlencode(data)
+                body_value = urllib.parse.urlencode(data)
                 if 'Content-Type' not in headers:
                     headers['Content-Type'] = 'application/x-www-form-urlencoded'
             elif isinstance(data, bytes):
-                # Pass bytes through, use body_bytes
-                kwargs['body_bytes'] = data
-                data = None
-            elif isinstance(data, str):
-                # Pass string through as body
-                kwargs['body'] = data
-                data = None
+                body_bytes_value = data
+            else:
+                body_value = str(data)
 
-        # Handle files parameter
+        # Handle multipart form data with files
         if files is not None:
-            # TODO: Implement multipart/form-data file upload support
-            raise NotImplementedError(
-                "File uploads are not yet implemented. "
-                "This feature will be added in a future release."
-            )
+            # Extract form fields from data if it's a dict
+            form_fields = None
+            if isinstance(data, dict):
+                form_fields = data
+                data = None  # Clear data since it's now part of multipart
 
-        # Update headers in kwargs
+            # Encode multipart form data
+            body_bytes_value, content_type = _encode_multipart_formdata(
+                fields=form_fields,
+                files=files
+            )
+            headers['Content-Type'] = content_type
+
+        if body_value is not None:
+            kwargs['body'] = body_value
+        if body_bytes_value is not None:
+            kwargs['body_bytes'] = body_bytes_value
+
         if headers:
             kwargs['headers'] = headers
 
@@ -246,185 +291,73 @@ class CycleTLS:
         if 'cookies' in kwargs and kwargs['cookies'] is not None:
             cookies = kwargs['cookies']
             if isinstance(cookies, dict):
-                # Convert dict to list of Cookie objects
                 from .schema import Cookie
-                kwargs['cookies'] = [Cookie(name=k, value=v) for k, v in cookies.items()]
-            elif hasattr(cookies, '_cookies'):
-                # Handle CookieJar
-                kwargs['cookies'] = list(cookies._cookies.values())
-            # Otherwise pass through as-is (assume it's already a list of Cookie objects)
 
-        # Build and send request
-        request = Request(method=method, url=url, params=params, **kwargs)
-        request = {
-            "requestId": "requestId",
-            "options": request.dict(by_alias=True, exclude_none=True),
+                kwargs['cookies'] = [Cookie(name=str(k), value=str(v)) for k, v in cookies.items()]
+            elif hasattr(cookies, '_cookies'):
+                kwargs['cookies'] = list(cookies._cookies.values())
+
+        request_model = Request(method=method, url=url, **kwargs)
+        request_payload = request_model.to_dict()
+
+        payload = {
+            "requestId": _next_request_id(),
+            "options": request_payload,
         }
 
-        # Thread-safe WebSocket communication
-        with self._lock:
-            self.ws.send(json.dumps(request))
-            response = json.loads(self.ws.recv())
+        # Log outgoing request
+        logger.debug(f"Sending {method.upper()} request to {url}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Request headers: {headers}")
+            if 'proxy' in kwargs and kwargs['proxy']:
+                logger.debug(f"Using proxy: {kwargs['proxy']}")
 
-        return Response(**response)
+        try:
+            response_data = ffi_send_request(payload)
+        except Exception as exc:  # pragma: no cover - unexpected backend failure
+            logger.error(f"Request to {url} failed: {exc}")
+            raise CycleTLSError(f"Failed to execute CycleTLS request: {exc}") from exc
+
+        if not isinstance(response_data, dict):
+            logger.error("Invalid response payload received from CycleTLS backend")
+            raise CycleTLSError("Invalid response payload received from CycleTLS backend")
+
+        try:
+            response = _dict_to_response(response_data)
+            # Log response
+            logger.debug(f"Received response: {response.status_code} {response.reason}")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Response headers: {dict(response.headers)}")
+            return response
+        except Exception as exc:  # pragma: no cover - validation error
+            logger.error(f"Failed to parse response: {exc}")
+            raise CycleTLSError(f"Failed to parse CycleTLS response: {exc}") from exc
 
     def get(self, url, params=None, **kwargs) -> Response:
-        """Sends a GET request.
-
-        Args:
-            url (str): URL for the new :class:`Request` object.
-            params (dict): (optional) Dictionary to send in query string.
-            data (Optional[Union[Dict, str, bytes]]): Form data or raw body.
-                - If dict: URL-encoded with Content-Type: application/x-www-form-urlencoded
-                - If str/bytes: Sent as-is
-            json_data (Optional[Dict]): JSON data (auto-serialized with Content-Type: application/json)
-            files (Optional[Dict]): File uploads (not yet implemented)
-            headers (dict): Dictionary of HTTP Headers to send.
-            cookies (Optional[Union[Dict, List[Cookie]]]): Cookies as dict or list.
-                Dict will be auto-converted to Cookie objects.
-
-            TLS Fingerprinting:
-            ja3 (str): JA3 fingerprint string.
-            ja4r (Optional[str]): JA4 raw format fingerprint.
-            http2_fingerprint (Optional[str]): HTTP/2 fingerprint string.
-            quic_fingerprint (Optional[str]): QUIC fingerprint string.
-            disable_grease (bool): Disable GREASE for exact JA4 matching.
-
-            TLS Configuration:
-            server_name (Optional[str]): Custom SNI (Server Name Indication).
-            insecure_skip_verify (bool): Skip TLS certificate verification.
-            tls13_auto_retry (bool): Auto-retry with TLS 1.3 compatible curves.
-
-            Protocol Options:
-            force_http1 (bool): Force HTTP/1.1 protocol.
-            force_http3 (bool): Force HTTP/3 protocol.
-            protocol (Optional[Protocol]): Explicit protocol selection (http1, http2, http3, websocket, sse).
-
-            Connection Options:
-            user_agent (str): User Agent string.
-            proxy (str): Proxy URL (format: http://username:password@hostname.com:443)
-                Supports HTTP, HTTPS, SOCKS4, SOCKS5.
-            timeout (int): Request timeout in seconds.
-            disable_redirect (bool): Disable automatic redirects.
-            enable_connection_reuse (bool): Enable connection pooling.
-
-            Header Options:
-            header_order (Optional[list]): Custom header ordering.
-            order_headers_as_provided (Optional[bool]): Use provided header order.
-
-        Returns:
-            Response: Response object with request_id, status_code, headers, body,
-                body_bytes, cookies, and final_url properties.
-
-        Examples:
-            # Simple GET with query params
-            response = client.get(url, params={'q': 'search'})
-
-            # GET with cookies as dict
-            response = client.get(url, cookies={'session': 'abc123'})
-        """
+        """Sends a GET request."""
         return self.request("get", url, params=params, **kwargs)
 
     def options(self, url, params=None, **kwargs) -> Response:
-        """Sends an OPTIONS request.
-
-        See get() method for full parameter documentation.
-        """
+        """Sends an OPTIONS request."""
         return self.request("options", url, params=params, **kwargs)
 
     def head(self, url, params=None, **kwargs) -> Response:
-        """Sends a HEAD request.
-
-        See get() method for full parameter documentation.
-        """
+        """Sends a HEAD request."""
         return self.request("head", url, params=params, **kwargs)
 
     def post(self, url, params=None, data=None, json_data=None, **kwargs) -> Response:
-        """Sends a POST request.
-
-        Args:
-            url (str): URL for the request.
-            params (dict): (optional) Query parameters.
-            data (Optional[Union[Dict, str, bytes]]): Form data or raw body.
-            json_data (Optional[Dict]): JSON payload (auto-serialized).
-            **kwargs: See get() method for all available options.
-
-        Returns:
-            Response: Response object.
-
-        Examples:
-            # Send JSON data
-            response = client.post(url, json_data={'username': 'john', 'age': 30})
-
-            # Send form data
-            response = client.post(url, data={'username': 'john', 'password': 'secret'})
-
-            # Send raw bytes
-            response = client.post(url, data=b'raw binary data')
-        """
+        """Sends a POST request."""
         return self.request("post", url, params=params, data=data, json_data=json_data, **kwargs)
 
     def put(self, url, params=None, data=None, json_data=None, **kwargs) -> Response:
-        """Sends a PUT request.
-
-        Args:
-            url (str): URL for the request.
-            params (dict): (optional) Query parameters.
-            data (Optional[Union[Dict, str, bytes]]): Form data or raw body.
-            json_data (Optional[Dict]): JSON payload (auto-serialized).
-            **kwargs: See get() method for all available options.
-
-        Examples:
-            # Update resource with JSON
-            response = client.put(url, json_data={'status': 'active'})
-        """
+        """Sends a PUT request."""
         return self.request("put", url, params=params, data=data, json_data=json_data, **kwargs)
 
     def patch(self, url, params=None, data=None, json_data=None, **kwargs) -> Response:
-        """Sends a PATCH request.
-
-        Args:
-            url (str): URL for the request.
-            params (dict): (optional) Query parameters.
-            data (Optional[Union[Dict, str, bytes]]): Form data or raw body.
-            json_data (Optional[Dict]): JSON payload (auto-serialized).
-            **kwargs: See get() method for all available options.
-
-        Examples:
-            # Partial update with JSON
-            response = client.patch(url, json_data={'name': 'New Name'})
-        """
+        """Sends a PATCH request."""
         return self.request("patch", url, params=params, data=data, json_data=json_data, **kwargs)
 
     def delete(self, url, params=None, **kwargs) -> Response:
-        """Sends a DELETE request.
-
-        See get() method for full parameter documentation.
-        """
+        """Sends a DELETE request."""
         return self.request("delete", url, params=params, **kwargs)
 
-    def close(self):
-        """Close the client and cleanup resources gracefully."""
-        try:
-            self.ws.close()
-        except:
-            pass
-
-        # Graceful termination with escalation
-        if self.proc is not None:
-            try:
-                self.proc.terminate()  # Try graceful shutdown first
-                self.proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                # If graceful shutdown times out, force kill
-                self.proc.kill()
-                try:
-                    self.proc.wait(timeout=1)
-                except:
-                    pass
-            except:
-                # Best effort kill
-                try:
-                    self.proc.kill()
-                except:
-                    pass

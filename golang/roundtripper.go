@@ -441,10 +441,10 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 
 		rt.cachedTransports[addr] = &http2Transport
 	default:
-		// HTTP/1.x transport
+		// HTTP/1.x transport - configure to avoid idle channel errors
 		rt.cachedTransports[addr] = &http.Transport{
 			DialTLSContext:    rt.dialTLS,
-			DisableKeepAlives: true,
+			DisableKeepAlives: true, // Disable keep-alives to prevent idle channel errors
 		}
 	}
 
@@ -516,10 +516,10 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 
 		rt.cachedTransports[addr] = &http2Transport
 	default:
-		// HTTP/1.x transport
+		// HTTP/1.x transport - configure to avoid idle channel errors
 		rt.cachedTransports[addr] = &http.Transport{
 			DialTLSContext:    rt.dialTLS,
-			DisableKeepAlives: true,
+			DisableKeepAlives: true, // Disable keep-alives to prevent idle channel errors
 		}
 	}
 
