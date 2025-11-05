@@ -696,11 +696,13 @@ The following content types are automatically handled as binary data:
 
 ### WebSocket Client
 
+> **⚠️ Current Limitation**: WebSocket support currently handles the handshake only. Bidirectional messaging requires streaming support, planned for v1.2.
+
 ```python
 from cycletls import CycleTLS
 
 with CycleTLS() as client:
-    # WebSocket connection with TLS fingerprinting
+    # WebSocket handshake with TLS fingerprinting
     response = client.request(
         'GET',
         'wss://echo.websocket.org',
@@ -716,13 +718,21 @@ with CycleTLS() as client:
         print(f"Response headers: {response.headers}")
 ```
 
+**Current Capabilities:**
+- ✅ WebSocket handshake with custom TLS fingerprints
+- ✅ Connection establishment and upgrade verification
+- ✅ Custom headers and protocols
+- ⏳ Bidirectional messaging (planned for v1.2 with streaming support)
+
 ### Server-Sent Events (SSE)
+
+> **⚠️ Current Limitation**: SSE support currently handles the connection setup only. Event streaming requires streaming support, planned for v1.2.
 
 ```python
 from cycletls import CycleTLS
 
 with CycleTLS() as client:
-    # SSE connection
+    # SSE connection setup
     response = client.request(
         'GET',
         'https://example.com/events',
@@ -735,10 +745,16 @@ with CycleTLS() as client:
         }
     )
 
-    # Parse SSE events
-    events = response.text
-    print(f"Received SSE events: {events}")
+    # Initial response (not streaming)
+    print(f"SSE connection established: {response.status_code}")
+    print(f"Initial content: {response.text}")
 ```
+
+**Current Capabilities:**
+- ✅ SSE connection setup with custom TLS fingerprints
+- ✅ Initial handshake and response
+- ✅ Custom headers
+- ⏳ Long-lived event streaming (planned for v1.2 with streaming support)
 
 ### Session Management
 
@@ -917,6 +933,71 @@ with CycleTLS() as client:
         header_order=['accept', 'user-agent', 'accept-language'],
         order_headers_as_provided=True
     )
+```
+
+### Debugging and Logging
+
+CycleTLS includes comprehensive Python logging support for debugging requests, responses, and FFI operations.
+
+#### Enable Debug Logging
+
+```python
+import logging
+import cycletls
+
+# Enable debug logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# Make a request - see detailed logs
+response = cycletls.get('https://httpbin.org/get')
+```
+
+**Log Output:**
+```
+DEBUG:cycletls.api:Sending GET request to https://httpbin.org/get
+DEBUG:cycletls.api:Request headers: {...}
+DEBUG:cycletls._ffi:Calling Go shared library getRequest()
+DEBUG:cycletls._ffi:Received response from Go (size: 1234 bytes)
+DEBUG:cycletls.api:Received response: 200 OK
+DEBUG:cycletls.api:Response headers: {...}
+```
+
+#### Log Levels
+
+- **DEBUG**: Detailed request/response info, headers, FFI calls, response sizes
+- **INFO**: Library loading events
+- **ERROR**: Request failures, parsing errors
+
+#### Selective Logging
+
+```python
+import logging
+
+# Only log errors
+logging.basicConfig(level=logging.ERROR)
+
+# Or configure specific loggers
+logging.getLogger('cycletls.api').setLevel(logging.DEBUG)
+logging.getLogger('cycletls._ffi').setLevel(logging.INFO)
+```
+
+#### Logging with Proxies
+
+```python
+import logging
+import cycletls
+
+logging.basicConfig(level=logging.DEBUG)
+
+# Proxy usage is logged automatically
+response = cycletls.get(
+    'https://httpbin.org/ip',
+    proxy='socks5://127.0.0.1:9050'
+)
+# Log: "Using proxy: socks5://127.0.0.1:9050"
 ```
 
 ## API Reference
