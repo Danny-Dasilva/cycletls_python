@@ -15,8 +15,13 @@ exclude =
     docs/build
     dist
     .mypy_cache
+    tests
+    benchmarks
+    examples
+    golang
+    build
 
 per-file-ignores =
-    # __init__.py files are allowed to have unused imports and lines-too-long
-    */__init__.py:F401
-    */**/**/__init__.py:F401,E501
+    # __init__.py files are allowed to have unused imports, star imports, and lines-too-long
+    */__init__.py:F401,F403,F405
+    */**/**/__init__.py:F401,F403,F405,E501

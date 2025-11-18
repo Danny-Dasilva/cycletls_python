@@ -8,10 +8,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, List, Optional, Union, TYPE_CHECKING
-
-if TYPE_CHECKING:  # pragma: no cover - import cycle guard
-    from .exceptions import HTTPError
+from typing import List, Optional, Union
 
 from .structures import CaseInsensitiveDict, CookieJar
 
@@ -60,9 +57,9 @@ class Request:
     headers: dict = field(default_factory=dict)
 
     # TLS Fingerprinting options
-    ja3: str = (
-        "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0"
-    )
+    # fmt: off
+    ja3: str = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0"  # noqa: E501
+    # fmt: on
     ja4r: Optional[str] = None
     http2_fingerprint: Optional[str] = None
     quic_fingerprint: Optional[str] = None

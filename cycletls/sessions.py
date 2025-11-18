@@ -5,8 +5,8 @@ This module provides a Session class that maintains persistent cookies
 and headers across multiple requests, similar to requests.Session.
 """
 
-from typing import Optional, Dict, Any
-from .api import CycleTLS
+from typing import Any, Dict, Optional, Union
+from .api import CycleTLS, ParamsType
 from .structures import CookieJar, CaseInsensitiveDict
 from .schema import Response, Cookie
 
@@ -50,11 +50,11 @@ class Session(CycleTLS):
         self,
         method: str,
         url: str,
-        params: Optional[Dict] = None,
-        data: Optional[Any] = None,
-        json_data: Optional[Dict] = None,
-        files: Optional[Dict] = None,
-        **kwargs,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> Response:
         """
         Send an HTTP request with session persistence.

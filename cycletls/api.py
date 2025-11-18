@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import io
 import mimetypes
-import os
 import urllib.parse
 import json
 import warnings
 import logging
 import threading
 from collections.abc import Mapping, Sequence
-from typing import Any, BinaryIO, Dict, Iterable, Optional, Tuple, Union
+from types import TracebackType
+from typing import Any, Dict, Iterable, Literal, Optional, Tuple, Union
 
 from ._ffi import send_request as ffi_send_request
 from .exceptions import CycleTLSError
@@ -180,7 +180,12 @@ class CycleTLS:
         """Allow usage as a context manager."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> Optional[bool]:
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Literal[False]:
         """Cleanup resources when exiting a context manager block."""
         self.close()
         return False
