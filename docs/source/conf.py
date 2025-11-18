@@ -24,7 +24,7 @@ import cycletls  # noqa: E402
 project = "cycletls"
 copyright = f"{datetime.today().year}, Danny-Dasilva"
 author = "Danny-Dasilva"
-version = cycletls.__version__ if hasattr(cycletls, '__version__') else "0.0.2"
+version = cycletls.__version__ if hasattr(cycletls, "__version__") else "0.0.2"
 release = version
 
 

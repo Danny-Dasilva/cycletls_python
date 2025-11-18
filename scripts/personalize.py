@@ -128,7 +128,7 @@ def main(
 
     install_example = Syntax("pip install -e '.[dev]'", "bash")
     print(
-        "[green]\N{check mark} Success![/] You can now install your package locally in development mode with:\n",
+        "[green]\N{CHECK MARK} Success![/] You can now install your package locally in development mode with:\n",
         install_example,
     )
 

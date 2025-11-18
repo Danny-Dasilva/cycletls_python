@@ -37,12 +37,12 @@ jobs:
           - python: '3.12'
             task:
               name: Lint
-              run: flake8 .
+              run: flake8 cycletls setup.py
 
           - python: '3.12'
             task:
               name: Type check
-              run: mypy .
+              run: mypy cycletls
 
           - python: '3.12'
             task:
@@ -54,7 +54,7 @@ jobs:
           - python: '3.12'
             task:
               name: Style
-              run: black --check .
+              run: black --check cycletls setup.py docs/source/conf.py
 
           - python: '3.12'
             task:

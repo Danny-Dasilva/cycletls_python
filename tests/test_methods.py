@@ -4,7 +4,6 @@ Tests GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS requests.
 """
 
 import pytest
-import json
 
 
 class TestHTTPMethods:
@@ -68,14 +67,9 @@ class TestHTTPMethods:
             }
         }
 
-        headers = {
-            "Content-Type": "application/json",
-        }
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=json.dumps(payload),
-            headers=headers
+            json_data=payload
         )
 
         assert response.status_code == 200
@@ -137,14 +131,9 @@ class TestHTTPMethods:
             "status": "active"
         }
 
-        headers = {
-            "Content-Type": "application/json",
-        }
-
         response = cycletls_client.put(
             f"{httpbin_url}/put",
-            body=json.dumps(payload),
-            headers=headers
+            json_data=payload
         )
 
         assert response.status_code == 200
@@ -180,14 +169,9 @@ class TestHTTPMethods:
             "field_to_update": "new_value"
         }
 
-        headers = {
-            "Content-Type": "application/json",
-        }
-
         response = cycletls_client.patch(
             f"{httpbin_url}/patch",
-            body=json.dumps(payload),
-            headers=headers
+            json_data=payload
         )
 
         assert response.status_code == 200
@@ -200,14 +184,9 @@ class TestHTTPMethods:
             "status": "updated"
         }
 
-        headers = {
-            "Content-Type": "application/json",
-        }
-
         response = cycletls_client.patch(
             f"{httpbin_url}/patch",
-            body=json.dumps(payload),
-            headers=headers
+            json_data=payload
         )
 
         assert response.status_code == 200
@@ -243,14 +222,9 @@ class TestHTTPMethods:
             "reason": "no longer needed"
         }
 
-        headers = {
-            "Content-Type": "application/json",
-        }
-
         response = cycletls_client.delete(
             f"{httpbin_url}/delete",
-            body=json.dumps(payload),
-            headers=headers
+            json_data=payload
         )
 
         assert response.status_code == 200
@@ -341,14 +315,9 @@ class TestHTTPMethods:
             "items": [{"id": i, "data": f"item_{i}"} for i in range(100)]
         }
 
-        headers = {
-            "Content-Type": "application/json",
-        }
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=json.dumps(large_payload),
-            headers=headers
+            json_data=large_payload
         )
 
         assert response.status_code == 200
@@ -370,14 +339,9 @@ class TestHTTPMethods:
         """Test POST request returns response body"""
         payload = {"test": "data"}
 
-        headers = {
-            "Content-Type": "application/json",
-        }
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=json.dumps(payload),
-            headers=headers
+            json_data=payload
         )
 
         assert response.status_code == 200

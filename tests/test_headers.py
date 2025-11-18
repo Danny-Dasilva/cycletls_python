@@ -65,7 +65,7 @@ class TestHeaders:
         response = cycletls_client.post(
             f"{httpbin_url}/headers",
             headers=headers,
-            body='{"test": "data"}'
+            json_data={'test': 'data'}
         )
 
         assert response.status_code == 200

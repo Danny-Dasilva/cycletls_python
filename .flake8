@@ -20,6 +20,11 @@ exclude =
     examples
     golang
     build
+    client.py
+    benchmarks.py
+    benchmarks_async.py
+    test_async.py
+    test_cache.py
 
 per-file-ignores =
     # __init__.py files are allowed to have unused imports, star imports, and lines-too-long

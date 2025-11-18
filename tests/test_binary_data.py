@@ -228,11 +228,9 @@ class TestMixedBinaryText:
         assert_valid_response(binary_response, expected_status=200)
 
         # Upload text data
-        text_data = '{"message": "Hello, world!", "binary": true}'
         text_response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=text_data,
-            headers={'Content-Type': 'application/json'}
+            json_data={"message": "Hello, world!", "binary": True}
         )
         assert_valid_response(text_response, expected_status=200)
 

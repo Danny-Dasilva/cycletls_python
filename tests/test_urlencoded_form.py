@@ -13,7 +13,6 @@ All tests use httpbin.org/post endpoint for testing form submissions.
 
 import pytest
 import json
-from urllib.parse import urlencode
 from test_utils import (
     assert_valid_response,
     assert_valid_json_response,
@@ -30,15 +29,9 @@ class TestBasicURLEncodedForm:
             "key2": "value2"
         }
 
-        # Encode as URL-encoded format
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -59,14 +52,9 @@ class TestBasicURLEncodedForm:
             "remember": "on"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -79,14 +67,11 @@ class TestBasicURLEncodedForm:
 
     def test_empty_form_submission(self, cycletls_client, httpbin_url):
         """Test submitting an empty form."""
-        encoded_data = ""
+        form_data = {}
 
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -108,14 +93,9 @@ class TestSpecialCharacters:
             "symbols": "!@#$%^&*()"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -142,14 +122,9 @@ class TestSpecialCharacters:
             "arabic": "مرحبا بالعالم"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -174,14 +149,9 @@ class TestSpecialCharacters:
             "mixed": "Text with\n\ttabs and\r\nnewlines"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -202,14 +172,9 @@ class TestSpecialCharacters:
             "mixed": 'Test "quotes" and \\ backslashes'
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -229,7 +194,7 @@ class TestArrayValues:
 
     def test_multiple_values_same_key(self, cycletls_client, httpbin_url):
         """Test form data with multiple values for the same key (arrays)."""
-        # URL-encoded format for arrays: key=value1&key=value2&key=value3
+        # For multiple values with the same key, use a list of tuples
         form_pairs = [
             ("colors", "red"),
             ("colors", "green"),
@@ -237,14 +202,9 @@ class TestArrayValues:
             ("category", "electronics")
         ]
 
-        encoded_data = urlencode(form_pairs)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_pairs
         )
 
         assert_valid_response(response, expected_status=200)
