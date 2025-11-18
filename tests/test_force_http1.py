@@ -98,8 +98,7 @@ def test_http1_with_post_request(client, chrome_ja3, chrome_user_agent):
 
     result = client.post(
         url,
-        body='{"test": "data"}',
-        headers={"Content-Type": "application/json"},
+        json_data={"test": "data"},
         ja3=chrome_ja3,
         user_agent=chrome_user_agent,
         force_http1=True
@@ -273,12 +272,12 @@ def test_http1_with_various_methods(client, chrome_ja3, chrome_user_agent, metho
     if method == "GET":
         result = client.get(url, ja3=chrome_ja3, user_agent=chrome_user_agent, force_http1=True)
     elif method == "POST":
-        result = client.post(url, body='{"test": "data"}', ja3=chrome_ja3, user_agent=chrome_user_agent, force_http1=True)
+        result = client.post(url, json_data={"test": "data"}, ja3=chrome_ja3, user_agent=chrome_user_agent, force_http1=True)
     elif method == "PUT":
-        result = client.put(url, body='{"test": "data"}', ja3=chrome_ja3, user_agent=chrome_user_agent, force_http1=True)
+        result = client.put(url, json_data={"test": "data"}, ja3=chrome_ja3, user_agent=chrome_user_agent, force_http1=True)
     elif method == "DELETE":
         result = client.delete(url, ja3=chrome_ja3, user_agent=chrome_user_agent, force_http1=True)
     elif method == "PATCH":
-        result = client.patch(url, body='{"test": "data"}', ja3=chrome_ja3, user_agent=chrome_user_agent, force_http1=True)
+        result = client.patch(url, json_data={"test": "data"}, ja3=chrome_ja3, user_agent=chrome_user_agent, force_http1=True)
 
     assert result.status_code == 200

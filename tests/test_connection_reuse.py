@@ -156,8 +156,6 @@ class TestConnectionReuse:
 
     def test_connection_reuse_with_post_requests(self, cycle_with_reuse):
         """Test connection reuse with POST requests"""
-        import json
-
         ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0"
 
         payload1 = {"request": 1, "data": "first"}
@@ -166,16 +164,14 @@ class TestConnectionReuse:
         # Make multiple POST requests
         response1 = cycle_with_reuse.post(
             "https://httpbin.org/post",
-            body=json.dumps(payload1),
-            headers={"Content-Type": "application/json"},
+            json_data=payload1,
             ja3=ja3,
             enable_connection_reuse=True
         )
 
         response2 = cycle_with_reuse.post(
             "https://httpbin.org/post",
-            body=json.dumps(payload2),
-            headers={"Content-Type": "application/json"},
+            json_data=payload2,
             ja3=ja3,
             enable_connection_reuse=True
         )
@@ -204,8 +200,7 @@ class TestConnectionReuse:
         # POST request
         response_post = cycle_with_reuse.post(
             "https://httpbin.org/post",
-            body='{"test": "data"}',
-            headers={"Content-Type": "application/json"},
+            json_data={"test": "data"},
             ja3=ja3,
             enable_connection_reuse=True
         )
@@ -213,8 +208,7 @@ class TestConnectionReuse:
         # PUT request
         response_put = cycle_with_reuse.put(
             "https://httpbin.org/put",
-            body='{"test": "put"}',
-            headers={"Content-Type": "application/json"},
+            json_data={"test": "put"},
             ja3=ja3,
             enable_connection_reuse=True
         )

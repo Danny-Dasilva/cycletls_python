@@ -221,8 +221,7 @@ class TestRedirectWithDifferentMethods:
             "https://httpbin.org/redirect-to?url=https://httpbin.org/post",
             ja3=firefox_ja3,
             user_agent=firefox_user_agent,
-            body='{"test": "data"}',
-            headers={"Content-Type": "application/json"}
+            json_data={"test": "data"}
         )
 
         assert response.status_code == 200
@@ -234,8 +233,7 @@ class TestRedirectWithDifferentMethods:
             ja3=firefox_ja3,
             user_agent=firefox_user_agent,
             disable_redirect=True,
-            body='{"test": "data"}',
-            headers={"Content-Type": "application/json"}
+            json_data={"test": "data"}
         )
 
         assert response.status_code == 302

@@ -218,8 +218,7 @@ def test_proxy_with_post_request(client):
     result = client.post(
         "https://httpbin.org/post",
         proxy="socks5://127.0.0.1:9050",
-        body='{"test": "data"}',
-        headers={"Content-Type": "application/json"}
+        json_data={"test": "data"}
     )
 
     assert result.status_code == 200

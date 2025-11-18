@@ -64,8 +64,7 @@ def test_timeout_with_post(client):
     # Test POST request with timeout
     result = client.post(
         "https://httpbin.org/delay/1",
-        body='{"test": "data"}',
-        headers={"Content-Type": "application/json"},
+        json_data={"test": "data"},
         timeout=5
     )
     assert result.status_code == 200

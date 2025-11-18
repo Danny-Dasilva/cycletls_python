@@ -72,8 +72,7 @@ class TestPerRequestTimeout:
         response = cycletls_client.post(
             "https://httpbin.org/delay/1",
             ja3=chrome_ja3,
-            body='{"test": "data"}',
-            headers={"Content-Type": "application/json"},
+            json_data={"test": "data"},
             timeout=10
         )
 
@@ -84,8 +83,7 @@ class TestPerRequestTimeout:
             cycletls_client.post(
                 "https://httpbin.org/delay/5",
                 ja3=chrome_ja3,
-                body='{"test": "data"}',
-                headers={"Content-Type": "application/json"},
+                json_data={"test": "data"},
                 timeout=1
             )
 

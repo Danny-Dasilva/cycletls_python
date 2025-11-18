@@ -92,8 +92,6 @@ class TestHTTP2:
 
     def test_http2_post_with_json_body(self, cycle):
         """Test HTTP/2 POST request with JSON body"""
-        import json
-
         payload = {
             "name": "test",
             "value": "http2-test",
@@ -102,8 +100,7 @@ class TestHTTP2:
 
         response = cycle.post(
             "https://httpbin.org/post",
-            body=json.dumps(payload),
-            headers={"Content-Type": "application/json"},
+            json_data=payload,
             force_http1=False,
             ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0"
         )

@@ -352,9 +352,8 @@ class TestHTTP2WithOtherFeatures:
 
         response = cycletls_client.post(
             'https://httpbin.org/post',
-            body=json.dumps(payload),
+            json_data=payload,
             http2_fingerprint=firefox_http2,
-            headers={'Content-Type': 'application/json'},
             timeout=30
         )
 

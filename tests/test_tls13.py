@@ -296,9 +296,8 @@ class TestTLS13WithHttpbin:
 
         response = cycletls_client.post(
             "https://httpbin.org/post",
-            body=json.dumps(payload),
+            json_data=payload,
             ja3=chrome_ja3,
-            headers={'Content-Type': 'application/json'},
             timeout=30
         )
 

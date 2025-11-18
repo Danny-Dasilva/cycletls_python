@@ -90,22 +90,22 @@ class TestConcurrentRequests:
             {
                 'method': 'post',
                 'url': f'{httpbin_url}/post',
-                'params': {'body': json.dumps({'field': 'POST-VAL'})}
+                'params': {'json_data': {'field': 'POST-VAL'}}
             },
             {
                 'method': 'put',
                 'url': f'{httpbin_url}/put',
-                'params': {'body': json.dumps({'field': 'PUT-VAL'})}
+                'params': {'json_data': {'field': 'PUT-VAL'}}
             },
             {
                 'method': 'patch',
                 'url': f'{httpbin_url}/patch',
-                'params': {'body': json.dumps({'field': 'PATCH-VAL'})}
+                'params': {'json_data': {'field': 'PATCH-VAL'}}
             },
             {
                 'method': 'delete',
                 'url': f'{httpbin_url}/delete',
-                'params': {'body': json.dumps({'field': 'DELETE-VAL'})}
+                'params': {'json_data': {'field': 'DELETE-VAL'}}
             },
         ]
 

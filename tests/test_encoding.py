@@ -199,9 +199,8 @@ def test_gzip_with_post_request(client, chrome_ja3, chrome_user_agent):
 
     result = client.post(
         url,
-        body='{"test": "data", "encoding": "test"}',
+        json_data={"test": "data", "encoding": "test"},
         headers={
-            "Content-Type": "application/json",
             "Accept-Encoding": "gzip, deflate, br"
         },
         ja3=chrome_ja3,

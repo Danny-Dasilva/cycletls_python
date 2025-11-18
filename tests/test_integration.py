@@ -110,7 +110,7 @@ class TestHTTPMethods:
 
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=json.dumps(payload)
+            json_data=payload
         )
         assert_valid_response(response, expected_status=200)
 
@@ -131,7 +131,7 @@ class TestHTTPMethods:
 
         response = cycletls_client.put(
             f"{httpbin_url}/put",
-            body=json.dumps(payload)
+            json_data=payload
         )
         assert_valid_response(response, expected_status=200)
 
@@ -151,7 +151,7 @@ class TestHTTPMethods:
 
         response = cycletls_client.patch(
             f"{httpbin_url}/patch",
-            body=json.dumps(payload)
+            json_data=payload
         )
         assert_valid_response(response, expected_status=200)
 
@@ -171,7 +171,7 @@ class TestHTTPMethods:
 
         response = cycletls_client.delete(
             f"{httpbin_url}/delete",
-            body=json.dumps(payload)
+            json_data=payload
         )
         assert_valid_response(response, expected_status=200)
 
@@ -318,7 +318,7 @@ class TestComplexScenarios:
 
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=json.dumps(payload),
+            json_data=payload,
             headers=headers,
             cookies=cookies
         )

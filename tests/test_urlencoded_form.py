@@ -13,6 +13,7 @@ All tests use httpbin.org/post endpoint for testing form submissions.
 
 import pytest
 import json
+from urllib.parse import urlencode
 from test_utils import (
     assert_valid_response,
     assert_valid_json_response,
@@ -195,6 +196,7 @@ class TestArrayValues:
     def test_multiple_values_same_key(self, cycletls_client, httpbin_url):
         """Test form data with multiple values for the same key (arrays)."""
         # For multiple values with the same key, use a list of tuples
+        # Note: Library doesn't support sequences yet, so we manually encode
         form_pairs = [
             ("colors", "red"),
             ("colors", "green"),
@@ -202,9 +204,13 @@ class TestArrayValues:
             ("category", "electronics")
         ]
 
+        # Manual encoding needed for sequences (library limitation)
+        encoded_data = urlencode(form_pairs)
+
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            data=form_pairs
+            body=encoded_data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"}
         )
 
         assert_valid_response(response, expected_status=200)

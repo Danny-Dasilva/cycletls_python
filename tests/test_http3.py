@@ -97,8 +97,6 @@ class TestHTTP3BasicRequests:
     @pytest.mark.skip(reason="HTTP/3 POST functionality may not be fully implemented")
     def test_http3_post_request(self, cycle_client):
         """Test HTTP/3 POST request with body"""
-        import json
-
         payload = {
             "protocol": "http3",
             "test": "post_request",
@@ -108,8 +106,7 @@ class TestHTTP3BasicRequests:
         response = cycle_client.post(
             "https://cloudflare-quic.com/",
             force_http3=True,
-            body=json.dumps(payload),
-            headers={"Content-Type": "application/json"},
+            json_data=payload,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
 
