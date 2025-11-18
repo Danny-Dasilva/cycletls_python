@@ -226,14 +226,9 @@ class TestArrayValues:
             "count": "3"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -262,14 +257,9 @@ class TestNestedStructures:
             "address[zip]": "10001"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -294,14 +284,9 @@ class TestNestedStructures:
             "data[settings][notifications][sms]": "false"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -324,14 +309,9 @@ class TestLargeFormData:
         # Create form with 100 fields
         form_data = {f"field_{i}": f"value_{i}" for i in range(100)}
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -356,14 +336,9 @@ class TestLargeFormData:
             "title": "Short title"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -391,14 +366,9 @@ class TestEdgeCases:
             "field4": "value4"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -420,14 +390,9 @@ class TestEdgeCases:
             "percentage": "75.5"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -451,14 +416,9 @@ class TestEdgeCases:
             "no_field": "no"
         }
 
-        encoded_data = urlencode(form_data)
-
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            body=encoded_data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)

@@ -7,10 +7,12 @@ import os
 import sys
 
 # Set environment variable to use local build
-os.environ['CYCLETLS_LIB_PATH'] = '/Users/dannydasilva/Documents/personal/cycletls_python/dist/libcycletls.dylib'
+os.environ["CYCLETLS_LIB_PATH"] = (
+    "/Users/dannydasilva/Documents/personal/cycletls_python/dist/libcycletls.dylib"
+)
 
 # Add cycletls to path
-sys.path.insert(0, '/Users/dannydasilva/Documents/personal/cycletls_python')
+sys.path.insert(0, "/Users/dannydasilva/Documents/personal/cycletls_python")
 
 from cycletls import _ffi
 
@@ -26,7 +28,7 @@ async def test_single_async_request():
         "options": {
             "url": "http://localhost:5001/",
             "method": "GET",
-        }
+        },
     }
 
     start = time.time()
@@ -51,7 +53,7 @@ async def test_concurrent_async_requests():
             "options": {
                 "url": "http://localhost:5001/",
                 "method": "GET",
-            }
+            },
         }
         for i in range(10)
     ]
@@ -79,7 +81,7 @@ async def test_large_batch():
             "options": {
                 "url": "http://localhost:5001/",
                 "method": "GET",
-            }
+            },
         }
         for i in range(100)
     ]
@@ -88,7 +90,7 @@ async def test_large_batch():
     results = await _ffi.send_requests_batch(payloads)
     elapsed = time.time() - start
 
-    successful = sum(1 for r in results if r.get('Status') == 200)
+    successful = sum(1 for r in results if r.get("Status") == 200)
 
     print(f"Completed: {successful}/{len(results)} successful")
     print(f"Total time: {elapsed:.4f}s")
@@ -108,7 +110,7 @@ async def test_sync_vs_async():
         "options": {
             "url": "http://localhost:5001/",
             "method": "GET",
-        }
+        },
     }
 
     # Test sync (sequential)
@@ -129,7 +131,7 @@ async def test_sync_vs_async():
             "options": {
                 "url": "http://localhost:5001/",
                 "method": "GET",
-            }
+            },
         }
         for i in range(10)
     ]
@@ -163,6 +165,7 @@ async def main():
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

@@ -5,8 +5,10 @@ import os
 import sys
 import time
 
-os.environ['CYCLETLS_LIB_PATH'] = '/Users/dannydasilva/Documents/personal/cycletls_python/dist/libcycletls.dylib'
-sys.path.insert(0, '/Users/dannydasilva/Documents/personal/cycletls_python')
+os.environ["CYCLETLS_LIB_PATH"] = (
+    "/Users/dannydasilva/Documents/personal/cycletls_python/dist/libcycletls.dylib"
+)
+sys.path.insert(0, "/Users/dannydasilva/Documents/personal/cycletls_python")
 
 from cycletls._config import _merge_defaults, _merged_cache
 
@@ -28,7 +30,7 @@ print()
 print("Test 2: Non-empty kwargs (should not use cache)")
 start = time.time()
 for i in range(10000):
-    result = _merge_defaults({'timeout': 10})
+    result = _merge_defaults({"timeout": 10})
 elapsed = time.time() - start
 print(f"  Time for 10k calls with kwargs: {elapsed:.4f}s")
 print(f"  Avg time per call: {elapsed / 10000 * 1000000:.2f}μs")
