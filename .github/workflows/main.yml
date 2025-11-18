@@ -27,45 +27,45 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.7', '3.8', '3.9', '3.10']
+        python: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
         task:
           - name: Test
             run: |
               pytest -v --color=yes tests/
 
         include:
-          - python: '3.10'
+          - python: '3.12'
             task:
               name: Lint
               run: flake8 .
 
-          - python: '3.10'
+          - python: '3.12'
             task:
               name: Type check
               run: mypy .
 
-          - python: '3.10'
+          - python: '3.12'
             task:
               name: Build
               run: |
                 python setup.py check
                 python setup.py bdist_wheel sdist
 
-          - python: '3.10'
+          - python: '3.12'
             task:
               name: Style
               run: black --check .
 
-          - python: '3.10'
+          - python: '3.12'
             task:
               name: Docs
               run: cd docs && make html
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
 
@@ -82,7 +82,7 @@ jobs:
           # Use week number in cache key so we can refresh the cache weekly.
           echo "WEEK_NUMBER=$(date +%V)" >> $GITHUB_ENV
 
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: virtualenv-cache
         with:
           path: .venv
@@ -117,7 +117,7 @@ jobs:
 
       - name: Upload package distribution files
         if: matrix.task.name == 'Build'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: package
           path: dist
@@ -134,12 +134,12 @@ jobs:
     needs: [checks]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install requirements
         run: |
@@ -151,7 +151,7 @@ jobs:
           echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
       - name: Download package distribution files
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: package
           path: dist
