@@ -9,7 +9,7 @@ import os
 # Add parent directory to path to import cycletls
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from cycletls import CycleTLS
+from cycletls import CycleTLS, AsyncCycleTLS
 
 
 @pytest.fixture(scope="session")
@@ -62,3 +62,27 @@ def firefox_ja3():
 def safari_ja3():
     """Safari 17 JA3 fingerprint."""
     return "771,4865-4867-4866-49196-49195-52393-49200-49199-52392-49162-49161-49172-49171-157-156-53-47-49160-49170-10,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24-25,0"
+
+
+# Async fixtures
+
+@pytest.fixture(scope="session")
+async def async_cycletls_client():
+    """
+    Session-scoped AsyncCycleTLS client fixture.
+    Creates a single async client instance for all async tests.
+    """
+    client = AsyncCycleTLS()
+    yield client
+    await client.close()
+
+
+@pytest.fixture(scope="function")
+async def async_cycletls_client_function():
+    """
+    Function-scoped AsyncCycleTLS client fixture.
+    Creates a new async client instance for each test function.
+    """
+    client = AsyncCycleTLS()
+    yield client
+    await client.close()

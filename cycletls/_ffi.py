@@ -30,7 +30,7 @@ _ffi.cdef(
 
 _lib = None
 _lib_lock = threading.Lock()
-_send_lock = threading.RLock()
+# _send_lock removed: Go backend is thread-safe (singleton client with sync.RWMutex on pool)
 
 
 def _get_library_filename() -> str:
@@ -97,8 +97,8 @@ def send_request(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     logger.debug("Calling Go shared library getRequest()")
 
-    with _send_lock:
-        response_ptr = lib.getRequest(buf)
+    # No lock needed: Go backend is thread-safe
+    response_ptr = lib.getRequest(buf)
 
     if response_ptr == _ffi.NULL:
         error_msg = "CycleTLS shared library returned NULL response"

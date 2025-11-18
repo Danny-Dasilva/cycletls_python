@@ -1,0 +1,22 @@
+# Include metadata files
+include README.md
+include pyproject.toml
+include setup.py
+
+# Include all platform shared libraries and headers
+recursive-include cycletls/dist *.so *.dylib *.dll *.h
+
+# Include all Python source files
+recursive-include cycletls *.py
+
+# Exclude development and build artifacts
+recursive-exclude tests *
+recursive-exclude examples *
+recursive-exclude golang *
+recursive-exclude benchmarks *
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+exclude .gitignore
+exclude .gitattributes
+global-exclude *.egg-info
+global-exclude .DS_Store

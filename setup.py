@@ -9,31 +9,32 @@ HERE = pathlib.Path(__file__).parent
 # The text of the README file
 README = (HERE / "README.md").read_text()
 
-# Determine which binary to include based on platform
+# Determine which binaries to include in the package
 def get_package_data():
     """
-    Determine which shared library to include in the package.
+    Include all platform-specific shared libraries in the package.
+    For source distributions, include all available platforms.
+    For wheels, the runtime will load the appropriate library.
     """
-    system = platform.system()
-    if system == "Windows":
-        candidates = ["dist/cycletls.dll"]
-    elif system == "Darwin":
-        candidates = ["dist/libcycletls.dylib"]
-    else:
-        candidates = ["dist/libcycletls.so"]
+    package_root = pathlib.Path(__file__).parent / "cycletls"
+    dist_dir = package_root / "dist"
 
-    data = [path for path in candidates if os.path.exists(os.path.join(HERE, path))]
+    files = []
 
-    header_path = os.path.join(HERE, "dist/libcycletls.h")
-    if os.path.exists(header_path):
-        data.append('dist/libcycletls.h')
+    # Check if dist directory exists
+    if dist_dir.exists():
+        # Include all shared libraries for all platforms
+        for pattern in ['*.so', '*.dylib', '*.dll', '*.h']:
+            for file_path in dist_dir.glob(pattern):
+                files.append(f"dist/{file_path.name}")
 
-    return data or ['dist/*']
+    # Fallback to wildcard if directory doesn't exist or no files found
+    return files if files else ['dist/*']
 
 
 setup(
     name='cycletls',
-    version='1.0.0',
+    version='0.0.2',
     packages=find_packages(exclude=['tests*', 'golang*', 'examples*']),
     package_data={
         'cycletls': get_package_data(),

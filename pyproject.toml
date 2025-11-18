@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cycletls"
-version = "1.0.0"
+version = "0.0.2"
 description = "Advanced TLS fingerprinting library with JA3, JA4, HTTP/2, HTTP/3, WebSocket, and SSE support"
 readme = "README.md"
 authors = [
@@ -40,6 +40,25 @@ dev = [
     "black>=22.0.0",
     "isort>=5.10.0",
     "mypy>=0.950",
+]
+benchmark = [
+    # HTTP client libraries for testing
+    "requests>=2.31.0",
+    "httpx>=0.24.0",
+    "aiohttp>=3.8.0",
+    "curl-cffi>=0.5.0",
+    "niquests>=3.0.0",
+    "pycurl>=7.45.0",
+    "tls-client>=0.2.0",
+    "ry>=0.0.66",
+    "rnet>=0.0.1",
+    # Visualization and data processing
+    "matplotlib>=3.7.0",
+    "pandas>=2.0.0",
+    "seaborn>=0.12.0",
+    # Performance utilities
+    "uvloop>=0.17.0; sys_platform != 'win32'",
+    "typing-extensions>=4.5.0",
 ]
 
 [project.urls]

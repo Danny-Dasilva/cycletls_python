@@ -200,15 +200,24 @@ func getRequest(data *C.char) *C.char {
     }
 
     request.Options.Method = normalizeMethod(request.Options.Method)
-    client := getFFIClient()
 
-    resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
-    if err != nil {
-        log.Printf("cycletls: request failed: %v", err)
-        return marshalPayload(buildErrorPayload(request.RequestID, err.Error()))
-    }
+    // Use goroutine-based execution to allow Go scheduler to handle concurrency
+    // This ensures sync calls benefit from goroutine parallelism when called from multiple threads
+    resultCh := make(chan *C.char, 1)
 
-    return marshalPayload(buildResponsePayload(request.RequestID, resp))
+    go func() {
+        client := getFFIClient()
+        resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
+        if err != nil {
+            log.Printf("cycletls: request failed: %v", err)
+            resultCh <- marshalPayload(buildErrorPayload(request.RequestID, err.Error()))
+        } else {
+            resultCh <- marshalPayload(buildResponsePayload(request.RequestID, resp))
+        }
+    }()
+
+    // Block until result is ready (maintains sync semantics)
+    return <-resultCh
 }
 
 //export submitRequestAsync
