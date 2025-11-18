@@ -12,7 +12,7 @@ import pytest
 import asyncio
 import cycletls
 from cycletls import AsyncCycleTLS
-from cycletls.exceptions import HTTPError, RequestError
+from cycletls.exceptions import HTTPError
 
 
 class TestAsyncHTTPErrors:
