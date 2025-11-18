@@ -3,9 +3,17 @@
 .eggs/
 .mypy_cache
 *.egg-info/
+*.egg-info
 build/
 dist/
 pip-wheel-metadata/
+*.whl
+*.tar.gz
+
+# benchmark results
+results.csv
+results_async.csv
+BENCHMARK_SUMMARY.md
 
 
 # dev tools
