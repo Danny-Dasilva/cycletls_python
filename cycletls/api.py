@@ -26,7 +26,7 @@ _request_counter_local = threading.local()
 
 def _next_request_id() -> str:
     """Generate next request ID using thread-local counter (no locks needed)."""
-    if not hasattr(_request_counter_local, 'counter'):
+    if not hasattr(_request_counter_local, "counter"):
         _request_counter_local.counter = 0
     _request_counter_local.counter += 1
     # Include thread ID for uniqueness across threads
@@ -73,8 +73,7 @@ def _merge_url_params(url: str, params: Optional[ParamsType]) -> str:
 
 
 def _encode_multipart_formdata(
-    fields: Optional[Dict[str, Any]] = None,
-    files: Optional[Dict[str, Any]] = None
+    fields: Optional[Dict[str, Any]] = None, files: Optional[Dict[str, Any]] = None
 ) -> Tuple[bytes, str]:
     """
     Encode data and files as multipart/form-data.
@@ -92,16 +91,18 @@ def _encode_multipart_formdata(
     import uuid
 
     # Generate unique boundary
-    boundary = f'----WebKitFormBoundary{uuid.uuid4().hex[:16]}'
+    boundary = f"----WebKitFormBoundary{uuid.uuid4().hex[:16]}"
     body = io.BytesIO()
 
     # Add form fields
     if fields:
         for field_name, field_value in fields.items():
-            body.write(f'--{boundary}\r\n'.encode('utf-8'))
-            body.write(f'Content-Disposition: form-data; name="{field_name}"\r\n\r\n'.encode('utf-8'))
-            body.write(str(field_value).encode('utf-8'))
-            body.write(b'\r\n')
+            body.write(f"--{boundary}\r\n".encode("utf-8"))
+            body.write(
+                f'Content-Disposition: form-data; name="{field_name}"\r\n\r\n'.encode("utf-8")
+            )
+            body.write(str(field_value).encode("utf-8"))
+            body.write(b"\r\n")
 
     # Add files
     if files:
@@ -118,20 +119,20 @@ def _encode_multipart_formdata(
             else:
                 # file_info is a file object
                 file_obj = file_info
-                filename = getattr(file_obj, 'name', field_name)
+                filename = getattr(file_obj, "name", field_name)
                 content_type = None
 
             # Guess content type if not provided
             if content_type is None:
                 content_type, _ = mimetypes.guess_type(filename)
                 if content_type is None:
-                    content_type = 'application/octet-stream'
+                    content_type = "application/octet-stream"
 
             # Read file data
-            if hasattr(file_obj, 'read'):
+            if hasattr(file_obj, "read"):
                 file_data = file_obj.read()
                 # Reset file pointer if possible
-                if hasattr(file_obj, 'seek'):
+                if hasattr(file_obj, "seek"):
                     try:
                         file_obj.seek(0)
                     except (OSError, io.UnsupportedOperation):
@@ -141,22 +142,24 @@ def _encode_multipart_formdata(
                 file_data = file_obj
 
             # Write file part
-            body.write(f'--{boundary}\r\n'.encode('utf-8'))
+            body.write(f"--{boundary}\r\n".encode("utf-8"))
             body.write(
-                f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode('utf-8')
+                f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode(
+                    "utf-8"
+                )
             )
-            body.write(f'Content-Type: {content_type}\r\n\r\n'.encode('utf-8'))
+            body.write(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
 
             # Ensure file_data is bytes
             if isinstance(file_data, str):
-                file_data = file_data.encode('utf-8')
+                file_data = file_data.encode("utf-8")
             body.write(file_data)
-            body.write(b'\r\n')
+            body.write(b"\r\n")
 
     # Write final boundary
-    body.write(f'--{boundary}--\r\n'.encode('utf-8'))
+    body.write(f"--{boundary}--\r\n".encode("utf-8"))
 
-    content_type_header = f'multipart/form-data; boundary={boundary}'
+    content_type_header = f"multipart/form-data; boundary={boundary}"
     return body.getvalue(), content_type_header
 
 
@@ -177,7 +180,7 @@ class CycleTLS:
         """Allow usage as a context manager."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+    def __exit__(self, exc_type, exc_val, exc_tb) -> Optional[bool]:
         """Cleanup resources when exiting a context manager block."""
         self.close()
         return False
@@ -200,7 +203,7 @@ class CycleTLS:
         data: Optional[Union[Dict[str, Any], str, bytes]] = None,
         json_data: Optional[Dict[str, Any]] = None,
         files: Optional[Dict[str, Any]] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Response:
         """
         Send an HTTP request with enhanced data handling.
@@ -221,25 +224,25 @@ class CycleTLS:
             raise CycleTLSError("CycleTLS client is closed")
 
         # Handle deprecated body/body_bytes parameters
-        if 'body' in kwargs:
+        if "body" in kwargs:
             warnings.warn(
                 "The 'body' parameter is deprecated. Use 'data' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
             if data is None:
-                data = kwargs.pop('body')
+                data = kwargs.pop("body")
 
-        if 'body_bytes' in kwargs:
+        if "body_bytes" in kwargs:
             warnings.warn(
                 "The 'body_bytes' parameter is deprecated. Use 'data' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
             if data is None:
-                data = kwargs.pop('body_bytes')
+                data = kwargs.pop("body_bytes")
 
-        headers = kwargs.get('headers') or {}
+        headers = kwargs.get("headers") or {}
         if headers is None:
             headers = {}
 
@@ -253,12 +256,12 @@ class CycleTLS:
             if data is not None:
                 raise ValueError("Cannot specify both 'data' and 'json_data' parameters")
             body_value = json.dumps(json_data)
-            headers['Content-Type'] = 'application/json'
+            headers["Content-Type"] = "application/json"
         elif data is not None:
             if isinstance(data, dict):
                 body_value = urllib.parse.urlencode(data)
-                if 'Content-Type' not in headers:
-                    headers['Content-Type'] = 'application/x-www-form-urlencoded'
+                if "Content-Type" not in headers:
+                    headers["Content-Type"] = "application/x-www-form-urlencoded"
             elif isinstance(data, bytes):
                 body_bytes_value = data
             else:
@@ -274,28 +277,27 @@ class CycleTLS:
 
             # Encode multipart form data
             body_bytes_value, content_type = _encode_multipart_formdata(
-                fields=form_fields,
-                files=files
+                fields=form_fields, files=files
             )
-            headers['Content-Type'] = content_type
+            headers["Content-Type"] = content_type
 
         if body_value is not None:
-            kwargs['body'] = body_value
+            kwargs["body"] = body_value
         if body_bytes_value is not None:
-            kwargs['body_bytes'] = body_bytes_value
+            kwargs["body_bytes"] = body_bytes_value
 
         if headers:
-            kwargs['headers'] = headers
+            kwargs["headers"] = headers
 
         # Simplify cookie input - handle dict or CookieJar
-        if 'cookies' in kwargs and kwargs['cookies'] is not None:
-            cookies = kwargs['cookies']
+        if "cookies" in kwargs and kwargs["cookies"] is not None:
+            cookies = kwargs["cookies"]
             if isinstance(cookies, dict):
                 from .schema import Cookie
 
-                kwargs['cookies'] = [Cookie(name=str(k), value=str(v)) for k, v in cookies.items()]
-            elif hasattr(cookies, '_cookies'):
-                kwargs['cookies'] = list(cookies._cookies.values())
+                kwargs["cookies"] = [Cookie(name=str(k), value=str(v)) for k, v in cookies.items()]
+            elif hasattr(cookies, "_cookies"):
+                kwargs["cookies"] = list(cookies._cookies.values())
 
         request_model = Request(method=method, url=url, **kwargs)
         request_payload = request_model.to_dict()
@@ -309,7 +311,7 @@ class CycleTLS:
         logger.debug(f"Sending {method.upper()} request to {url}")
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Request headers: {headers}")
-            if 'proxy' in kwargs and kwargs['proxy']:
+            if "proxy" in kwargs and kwargs["proxy"]:
                 logger.debug(f"Using proxy: {kwargs['proxy']}")
 
         try:
@@ -360,4 +362,3 @@ class CycleTLS:
     def delete(self, url, params=None, **kwargs) -> Response:
         """Sends a DELETE request."""
         return self.request("delete", url, params=params, **kwargs)
-

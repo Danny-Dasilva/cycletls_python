@@ -18,6 +18,7 @@ class CycleTLSError(Exception):
     All CycleTLS-specific exceptions inherit from this class,
     making it easy to catch any CycleTLS-related error.
     """
+
     pass
 
 
@@ -28,6 +29,7 @@ class RequestException(CycleTLSError):
     This is the base exception for errors that occur during
     the request/response cycle.
     """
+
     pass
 
 
@@ -42,7 +44,7 @@ class HTTPError(RequestException):
         response: The Response object (if available)
     """
 
-    def __init__(self, message: str, response: Optional['Response'] = None):
+    def __init__(self, message: str, response: Optional["Response"] = None):
         """
         Initialize HTTPError.
 
@@ -61,6 +63,7 @@ class ConnectionError(RequestException):
     Raised when a request fails due to network connectivity issues,
     such as DNS lookup failures or connection refused errors.
     """
+
     pass
 
 
@@ -71,6 +74,7 @@ class Timeout(RequestException):
     Raised when a request exceeds the specified timeout duration.
     This includes both connection timeouts and read timeouts.
     """
+
     pass
 
 
@@ -80,6 +84,7 @@ class TooManyRedirects(RequestException):
 
     Raised when the maximum number of redirects is exceeded.
     """
+
     pass
 
 
@@ -90,6 +95,7 @@ class InvalidURL(RequestException):
     Raised when attempting to make a request with a malformed
     or invalid URL.
     """
+
     pass
 
 
@@ -100,6 +106,7 @@ class TLSError(RequestException):
     Raised when there are issues with TLS/SSL certificates,
     protocol version mismatches, or other TLS-related errors.
     """
+
     pass
 
 
@@ -110,6 +117,7 @@ class ProxyError(RequestException):
     Raised when there are issues connecting to or communicating
     through a proxy server.
     """
+
     pass
 
 
@@ -120,6 +128,7 @@ class InvalidHeader(RequestException):
     Raised when attempting to use an invalid HTTP header name
     or value.
     """
+
     pass
 
 

@@ -54,7 +54,7 @@ class Session(CycleTLS):
         data: Optional[Any] = None,
         json_data: Optional[Dict] = None,
         files: Optional[Dict] = None,
-        **kwargs
+        **kwargs,
     ) -> Response:
         """
         Send an HTTP request with session persistence.
@@ -84,9 +84,9 @@ class Session(CycleTLS):
         """
         # Merge session headers with request headers
         merged_headers = CaseInsensitiveDict(self.headers)
-        if 'headers' in kwargs and kwargs['headers']:
-            merged_headers.update(kwargs['headers'])
-        kwargs['headers'] = dict(merged_headers)
+        if "headers" in kwargs and kwargs["headers"]:
+            merged_headers.update(kwargs["headers"])
+        kwargs["headers"] = dict(merged_headers)
 
         # Merge session cookies with request cookies
         merged_cookies = []
@@ -96,8 +96,8 @@ class Session(CycleTLS):
             merged_cookies.append(cookie)
 
         # Add request-specific cookies
-        if 'cookies' in kwargs and kwargs['cookies']:
-            request_cookies = kwargs['cookies']
+        if "cookies" in kwargs and kwargs["cookies"]:
+            request_cookies = kwargs["cookies"]
 
             # Handle dict cookies
             if isinstance(request_cookies, dict):
@@ -116,7 +116,7 @@ class Session(CycleTLS):
                         merged_cookies.append(new_cookie)
 
             # Handle CookieJar
-            elif hasattr(request_cookies, 'get_cookies'):
+            elif hasattr(request_cookies, "get_cookies"):
                 for cookie in request_cookies.get_cookies():
                     # Override session cookie if same name
                     existing = None
@@ -145,7 +145,7 @@ class Session(CycleTLS):
                     else:
                         merged_cookies.append(cookie)
 
-        kwargs['cookies'] = merged_cookies if merged_cookies else None
+        kwargs["cookies"] = merged_cookies if merged_cookies else None
 
         # Make the request using parent class
         response = super().request(method, url, params, data, json_data, files, **kwargs)

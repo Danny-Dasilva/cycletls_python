@@ -72,7 +72,7 @@ set_default(enable_connection_reuse=True)
 
 
 # Module-level convenience functions
-def request(method: str, url: str, **kwargs) -> 'Response':
+def request(method: str, url: str, **kwargs) -> "Response":
     """
     Make an HTTP request using the global session with defaults.
 
@@ -93,7 +93,7 @@ def request(method: str, url: str, **kwargs) -> 'Response':
     return session.request(method, url, **merged_kwargs)
 
 
-def get(url: str, **kwargs) -> 'Response':
+def get(url: str, **kwargs) -> "Response":
     """
     Make a GET request using the global session with defaults.
 
@@ -114,7 +114,9 @@ def get(url: str, **kwargs) -> 'Response':
     return session.get(url, **merged_kwargs)
 
 
-def post(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs) -> 'Response':
+def post(
+    url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs
+) -> "Response":
     """
     Make a POST request using the global session with defaults.
 
@@ -136,7 +138,9 @@ def post(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None,
     return session.post(url, data=data, json_data=json_data, **merged_kwargs)
 
 
-def put(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs) -> 'Response':
+def put(
+    url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs
+) -> "Response":
     """
     Make a PUT request using the global session with defaults.
 
@@ -154,7 +158,9 @@ def put(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, 
     return session.put(url, data=data, json_data=json_data, **merged_kwargs)
 
 
-def patch(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs) -> 'Response':
+def patch(
+    url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs
+) -> "Response":
     """
     Make a PATCH request using the global session with defaults.
 
@@ -172,7 +178,7 @@ def patch(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None
     return session.patch(url, data=data, json_data=json_data, **merged_kwargs)
 
 
-def delete(url: str, **kwargs) -> 'Response':
+def delete(url: str, **kwargs) -> "Response":
     """
     Make a DELETE request using the global session with defaults.
 
@@ -188,7 +194,7 @@ def delete(url: str, **kwargs) -> 'Response':
     return session.delete(url, **merged_kwargs)
 
 
-def head(url: str, **kwargs) -> 'Response':
+def head(url: str, **kwargs) -> "Response":
     """
     Make a HEAD request using the global session with defaults.
 
@@ -204,7 +210,7 @@ def head(url: str, **kwargs) -> 'Response':
     return session.head(url, **merged_kwargs)
 
 
-def options(url: str, **kwargs) -> 'Response':
+def options(url: str, **kwargs) -> "Response":
     """
     Make an OPTIONS request using the global session with defaults.
 
@@ -223,7 +229,8 @@ def options(url: str, **kwargs) -> 'Response':
 # Async module-level convenience functions
 # These work exactly like sync versions but with async/await
 
-async def async_request(method: str, url: str, **kwargs) -> 'Response':
+
+async def async_request(method: str, url: str, **kwargs) -> "Response":
     """
     Make an async HTTP request.
 
@@ -244,7 +251,7 @@ async def async_request(method: str, url: str, **kwargs) -> 'Response':
         return await client.request(method, url, **merged_kwargs)
 
 
-async def aget(url: str, **kwargs) -> 'Response':
+async def aget(url: str, **kwargs) -> "Response":
     """
     Make an async GET request (use 'aget' or just 'get' with await).
 
@@ -266,7 +273,9 @@ async def aget(url: str, **kwargs) -> 'Response':
         return await client.get(url, **merged_kwargs)
 
 
-async def apost(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs) -> 'Response':
+async def apost(
+    url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs
+) -> "Response":
     """
     Make an async POST request.
 
@@ -288,35 +297,39 @@ async def apost(url: str, data: Optional[Any] = None, json_data: Optional[Dict] 
         return await client.post(url, data=data, json_data=json_data, **merged_kwargs)
 
 
-async def aput(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs) -> 'Response':
+async def aput(
+    url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs
+) -> "Response":
     """Make an async PUT request."""
     async with AsyncCycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
         return await client.put(url, data=data, json_data=json_data, **merged_kwargs)
 
 
-async def apatch(url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs) -> 'Response':
+async def apatch(
+    url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs
+) -> "Response":
     """Make an async PATCH request."""
     async with AsyncCycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
         return await client.patch(url, data=data, json_data=json_data, **merged_kwargs)
 
 
-async def adelete(url: str, **kwargs) -> 'Response':
+async def adelete(url: str, **kwargs) -> "Response":
     """Make an async DELETE request."""
     async with AsyncCycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
         return await client.delete(url, **merged_kwargs)
 
 
-async def ahead(url: str, **kwargs) -> 'Response':
+async def ahead(url: str, **kwargs) -> "Response":
     """Make an async HEAD request."""
     async with AsyncCycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
         return await client.head(url, **merged_kwargs)
 
 
-async def aoptions(url: str, **kwargs) -> 'Response':
+async def aoptions(url: str, **kwargs) -> "Response":
     """Make an async OPTIONS request."""
     async with AsyncCycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
@@ -338,46 +351,46 @@ def __getattr__(name: str):
 # Export public API
 __all__ = [
     # Core classes
-    'CycleTLS',
-    'AsyncCycleTLS',
-    'Session',
+    "CycleTLS",
+    "AsyncCycleTLS",
+    "Session",
     # Convenience functions (sync)
-    'request',
-    'get',
-    'post',
-    'put',
-    'patch',
-    'delete',
-    'head',
-    'options',
+    "request",
+    "get",
+    "post",
+    "put",
+    "patch",
+    "delete",
+    "head",
+    "options",
     # Convenience functions (async)
-    'aget',
-    'apost',
-    'aput',
-    'apatch',
-    'adelete',
-    'ahead',
-    'aoptions',
-    'async_request',
+    "aget",
+    "apost",
+    "aput",
+    "apatch",
+    "adelete",
+    "ahead",
+    "aoptions",
+    "async_request",
     # Configuration
-    'set_default',
-    'reset_defaults',
-    'get_default',
-    'close_global_session',
+    "set_default",
+    "reset_defaults",
+    "get_default",
+    "close_global_session",
     # Structures
-    'CaseInsensitiveDict',
-    'CookieJar',
+    "CaseInsensitiveDict",
+    "CookieJar",
     # Exceptions
-    'CycleTLSError',
-    'RequestException',
-    'HTTPError',
-    'ConnectionError',
-    'Timeout',
-    'TooManyRedirects',
-    'InvalidURL',
-    'TLSError',
-    'ProxyError',
-    'InvalidHeader',
-    'ConnectTimeout',
-    'ReadTimeout',
+    "CycleTLSError",
+    "RequestException",
+    "HTTPError",
+    "ConnectionError",
+    "Timeout",
+    "TooManyRedirects",
+    "InvalidURL",
+    "TLSError",
+    "ProxyError",
+    "InvalidHeader",
+    "ConnectTimeout",
+    "ReadTimeout",
 ]

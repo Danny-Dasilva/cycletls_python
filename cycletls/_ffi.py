@@ -186,9 +186,7 @@ def check_request_async(handle: int) -> Optional[Dict[str, Any]]:
 
 
 async def send_request_async(
-    payload: Dict[str, Any],
-    poll_interval: float = 0.0,
-    timeout: float = 30.0
+    payload: Dict[str, Any], poll_interval: float = 0.0, timeout: float = 30.0
 ) -> Dict[str, Any]:
     """Execute a request asynchronously with polling.
 
@@ -221,9 +219,7 @@ async def send_request_async(
         elapsed = asyncio.get_event_loop().time() - start_time
         if elapsed > timeout:
             logger.error(f"Async request {handle} timed out after {timeout}s")
-            raise asyncio.TimeoutError(
-                f"Request timed out after {timeout} seconds"
-            )
+            raise asyncio.TimeoutError(f"Request timed out after {timeout} seconds")
 
         # Adaptive polling: tight loop for fast responses, backoff for slow ones
         check_count += 1
@@ -244,9 +240,7 @@ async def send_request_async(
 
 
 async def send_requests_batch(
-    payloads: list[Dict[str, Any]],
-    poll_interval: float = 0.001,
-    timeout: float = 30.0
+    payloads: list[Dict[str, Any]], poll_interval: float = 0.001, timeout: float = 30.0
 ) -> list[Dict[str, Any]]:
     """Execute multiple requests concurrently with async polling.
 
@@ -262,10 +256,9 @@ async def send_requests_batch(
         RuntimeError: If any request fails
         asyncio.TimeoutError: If timeout is exceeded
     """
-    return await asyncio.gather(*[
-        send_request_async(payload, poll_interval, timeout)
-        for payload in payloads
-    ])
+    return await asyncio.gather(
+        *[send_request_async(payload, poll_interval, timeout) for payload in payloads]
+    )
 
 
 __all__ = [
@@ -275,4 +268,3 @@ __all__ = [
     "send_request_async",
     "send_requests_batch",
 ]
-

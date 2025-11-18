@@ -12,68 +12,68 @@ _cache_lock = threading.Lock()
 
 # Mapping from config keys to parameter names (pre-computed for performance)
 _CONFIG_TO_PARAM_MAPPING = {
-    'default_ja3': 'ja3',
-    'default_ja4r': 'ja4r',
-    'default_http2_fingerprint': 'http2_fingerprint',
-    'default_quic_fingerprint': 'quic_fingerprint',
-    'default_disable_grease': 'disable_grease',
-    'default_user_agent': 'user_agent',
-    'default_proxy': 'proxy',
-    'default_timeout': 'timeout',
-    'default_enable_connection_reuse': 'enable_connection_reuse',
-    'default_insecure_skip_verify': 'insecure_skip_verify',
-    'default_server_name': 'server_name',
-    'default_force_http1': 'force_http1',
-    'default_force_http3': 'force_http3',
-    'default_protocol': 'protocol',
-    'default_disable_redirect': 'disable_redirect',
-    'default_header_order': 'header_order',
-    'default_order_headers_as_provided': 'order_headers_as_provided',
+    "default_ja3": "ja3",
+    "default_ja4r": "ja4r",
+    "default_http2_fingerprint": "http2_fingerprint",
+    "default_quic_fingerprint": "quic_fingerprint",
+    "default_disable_grease": "disable_grease",
+    "default_user_agent": "user_agent",
+    "default_proxy": "proxy",
+    "default_timeout": "timeout",
+    "default_enable_connection_reuse": "enable_connection_reuse",
+    "default_insecure_skip_verify": "insecure_skip_verify",
+    "default_server_name": "server_name",
+    "default_force_http1": "force_http1",
+    "default_force_http3": "force_http3",
+    "default_protocol": "protocol",
+    "default_disable_redirect": "disable_redirect",
+    "default_header_order": "header_order",
+    "default_order_headers_as_provided": "order_headers_as_provided",
 }
 
 # Valid configuration attributes
 _CONFIGURABLE_ATTRS = {
-    'default_ja3',
-    'default_ja4r',
-    'default_http2_fingerprint',
-    'default_quic_fingerprint',
-    'default_disable_grease',
-    'default_user_agent',
-    'default_proxy',
-    'default_timeout',
-    'default_port',
-    'default_enable_connection_reuse',
-    'default_insecure_skip_verify',
-    'default_server_name',
-    'default_force_http1',
-    'default_force_http3',
-    'default_protocol',
-    'default_disable_redirect',
-    'default_header_order',
-    'default_order_headers_as_provided',
+    "default_ja3",
+    "default_ja4r",
+    "default_http2_fingerprint",
+    "default_quic_fingerprint",
+    "default_disable_grease",
+    "default_user_agent",
+    "default_proxy",
+    "default_timeout",
+    "default_port",
+    "default_enable_connection_reuse",
+    "default_insecure_skip_verify",
+    "default_server_name",
+    "default_force_http1",
+    "default_force_http3",
+    "default_protocol",
+    "default_disable_redirect",
+    "default_header_order",
+    "default_order_headers_as_provided",
 }
 
 
 def _validate_config(name: str, value: Any) -> None:
     """Validate configuration values."""
     validators = {
-        'default_timeout': lambda v: isinstance(v, (int, float)) and v > 0,
-        'default_port': lambda v: isinstance(v, int) and 1 <= v <= 65535,
-        'default_enable_connection_reuse': lambda v: isinstance(v, bool),
-        'default_insecure_skip_verify': lambda v: isinstance(v, bool),
-        'default_force_http1': lambda v: isinstance(v, bool),
-        'default_force_http3': lambda v: isinstance(v, bool),
-        'default_disable_redirect': lambda v: isinstance(v, bool),
-        'default_disable_grease': lambda v: isinstance(v, bool),
-        'default_order_headers_as_provided': lambda v: isinstance(v, bool),
-        'default_proxy': lambda v: v is None or isinstance(v, str),
-        'default_ja3': lambda v: v is None or isinstance(v, str),
-        'default_ja4r': lambda v: v is None or isinstance(v, str),
-        'default_user_agent': lambda v: v is None or isinstance(v, str),
-        'default_server_name': lambda v: v is None or isinstance(v, str),
-        'default_http2_fingerprint': lambda v: v is None or isinstance(v, str),
-        'default_quic_fingerprint': lambda v: v is None or isinstance(v, str),
-        'default_header_order': lambda v: v is None or isinstance(v, list),
+        "default_timeout": lambda v: isinstance(v, (int, float)) and v > 0,
+        "default_port": lambda v: isinstance(v, int) and 1 <= v <= 65535,
+        "default_enable_connection_reuse": lambda v: isinstance(v, bool),
+        "default_insecure_skip_verify": lambda v: isinstance(v, bool),
+        "default_force_http1": lambda v: isinstance(v, bool),
+        "default_force_http3": lambda v: isinstance(v, bool),
+        "default_disable_redirect": lambda v: isinstance(v, bool),
+        "default_disable_grease": lambda v: isinstance(v, bool),
+        "default_order_headers_as_provided": lambda v: isinstance(v, bool),
+        "default_proxy": lambda v: v is None or isinstance(v, str),
+        "default_ja3": lambda v: v is None or isinstance(v, str),
+        "default_ja4r": lambda v: v is None or isinstance(v, str),
+        "default_user_agent": lambda v: v is None or isinstance(v, str),
+        "default_server_name": lambda v: v is None or isinstance(v, str),
+        "default_http2_fingerprint": lambda v: v is None or isinstance(v, str),
+        "default_quic_fingerprint": lambda v: v is None or isinstance(v, str),
+        "default_header_order": lambda v: v is None or isinstance(v, list),
     }
 
     validator = validators.get(name)
@@ -164,7 +164,7 @@ def set_default(**kwargs) -> None:
     global _merged_cache
 
     for key, value in kwargs.items():
-        config_key = f'default_{key}'
+        config_key = f"default_{key}"
         if config_key not in _CONFIGURABLE_ATTRS:
             raise ValueError(f"Unknown configuration option: {key}")
         _validate_config(config_key, value)
@@ -206,7 +206,7 @@ def get_default(key: str) -> Optional[Any]:
         >>> cycletls.get_default('timeout')
         10
     """
-    config_key = f'default_{key}'
+    config_key = f"default_{key}"
     if config_key not in _CONFIGURABLE_ATTRS:
         raise ValueError(f"Unknown configuration option: {key}")
     return _config.get(config_key)

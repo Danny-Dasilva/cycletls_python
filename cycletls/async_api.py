@@ -42,7 +42,7 @@ class AsyncCycleTLS:
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> Optional[bool]:
         """Async context manager exit."""
         await self.close()
         return False
@@ -61,7 +61,7 @@ class AsyncCycleTLS:
         files: Optional[Dict[str, Any]] = None,
         poll_interval: float = 0.0,
         timeout: float = 30.0,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Response:
         """
         Send an async HTTP request with enhanced data handling.
@@ -84,25 +84,25 @@ class AsyncCycleTLS:
             raise CycleTLSError("AsyncCycleTLS client is closed")
 
         # Handle deprecated body/body_bytes parameters
-        if 'body' in kwargs:
+        if "body" in kwargs:
             warnings.warn(
                 "The 'body' parameter is deprecated. Use 'data' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
             if data is None:
-                data = kwargs.pop('body')
+                data = kwargs.pop("body")
 
-        if 'body_bytes' in kwargs:
+        if "body_bytes" in kwargs:
             warnings.warn(
                 "The 'body_bytes' parameter is deprecated. Use 'data' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
             if data is None:
-                data = kwargs.pop('body_bytes')
+                data = kwargs.pop("body_bytes")
 
-        headers = kwargs.get('headers') or {}
+        headers = kwargs.get("headers") or {}
         if headers is None:
             headers = {}
 
@@ -116,12 +116,12 @@ class AsyncCycleTLS:
             if data is not None:
                 raise ValueError("Cannot specify both 'data' and 'json_data' parameters")
             body_value = json.dumps(json_data)
-            headers['Content-Type'] = 'application/json'
+            headers["Content-Type"] = "application/json"
         elif data is not None:
             if isinstance(data, dict):
                 body_value = urllib.parse.urlencode(data)
-                if 'Content-Type' not in headers:
-                    headers['Content-Type'] = 'application/x-www-form-urlencoded'
+                if "Content-Type" not in headers:
+                    headers["Content-Type"] = "application/x-www-form-urlencoded"
             elif isinstance(data, bytes):
                 body_bytes_value = data
             else:
@@ -137,26 +137,25 @@ class AsyncCycleTLS:
 
             # Encode multipart form data
             body_bytes_value, content_type = _encode_multipart_formdata(
-                fields=form_fields,
-                files=files
+                fields=form_fields, files=files
             )
-            headers['Content-Type'] = content_type
+            headers["Content-Type"] = content_type
 
         if body_value is not None:
-            kwargs['body'] = body_value
+            kwargs["body"] = body_value
         if body_bytes_value is not None:
-            kwargs['body_bytes'] = body_bytes_value
+            kwargs["body_bytes"] = body_bytes_value
 
         if headers:
-            kwargs['headers'] = headers
+            kwargs["headers"] = headers
 
         # Simplify cookie input - handle dict or CookieJar
-        if 'cookies' in kwargs and kwargs['cookies'] is not None:
-            cookies = kwargs['cookies']
+        if "cookies" in kwargs and kwargs["cookies"] is not None:
+            cookies = kwargs["cookies"]
             if isinstance(cookies, dict):
-                kwargs['cookies'] = [Cookie(name=str(k), value=str(v)) for k, v in cookies.items()]
-            elif hasattr(cookies, '_cookies'):
-                kwargs['cookies'] = list(cookies._cookies.values())
+                kwargs["cookies"] = [Cookie(name=str(k), value=str(v)) for k, v in cookies.items()]
+            elif hasattr(cookies, "_cookies"):
+                kwargs["cookies"] = list(cookies._cookies.values())
 
         request_model = Request(method=method, url=url, **kwargs)
         request_payload = request_model.to_dict()
@@ -170,7 +169,7 @@ class AsyncCycleTLS:
         logger.debug(f"Sending async {method.upper()} request to {url}")
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Request headers: {headers}")
-            if 'proxy' in kwargs and kwargs['proxy']:
+            if "proxy" in kwargs and kwargs["proxy"]:
                 logger.debug(f"Using proxy: {kwargs['proxy']}")
 
         try:
@@ -208,15 +207,21 @@ class AsyncCycleTLS:
 
     async def post(self, url, params=None, data=None, json_data=None, **kwargs) -> Response:
         """Sends an async POST request."""
-        return await self.request("post", url, params=params, data=data, json_data=json_data, **kwargs)
+        return await self.request(
+            "post", url, params=params, data=data, json_data=json_data, **kwargs
+        )
 
     async def put(self, url, params=None, data=None, json_data=None, **kwargs) -> Response:
         """Sends an async PUT request."""
-        return await self.request("put", url, params=params, data=data, json_data=json_data, **kwargs)
+        return await self.request(
+            "put", url, params=params, data=data, json_data=json_data, **kwargs
+        )
 
     async def patch(self, url, params=None, data=None, json_data=None, **kwargs) -> Response:
         """Sends an async PATCH request."""
-        return await self.request("patch", url, params=params, data=data, json_data=json_data, **kwargs)
+        return await self.request(
+            "patch", url, params=params, data=data, json_data=json_data, **kwargs
+        )
 
     async def delete(self, url, params=None, **kwargs) -> Response:
         """Sends an async DELETE request."""

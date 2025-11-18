@@ -17,11 +17,12 @@ def _import_cycletls():
     global _CycleTLS
     if _CycleTLS is None:
         from .api import CycleTLS
+
         _CycleTLS = CycleTLS
 
 
 # Global state
-_global_session: Optional['CycleTLS'] = None
+_global_session: Optional["CycleTLS"] = None
 _global_lock = threading.Lock()
 _cleanup_registered = False
 _parent_pid = os.getpid()
@@ -54,7 +55,7 @@ def get_global_session():
                 # Import config at runtime
                 from ._config import _config
 
-                port = _config.get('default_port', 9112)
+                port = _config.get("default_port", 9112)
                 _global_session = _CycleTLS(port=port)
 
                 # Register cleanup ONCE

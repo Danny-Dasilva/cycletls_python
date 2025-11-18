@@ -66,11 +66,7 @@ class CaseInsensitiveDict(MutableMapping):
 
     def lower_items(self):
         """Like iteritems(), but with all lowercase keys."""
-        return (
-            (lowerkey, keyval[1])
-            for (lowerkey, keyval)
-            in self._store.items()
-        )
+        return ((lowerkey, keyval[1]) for (lowerkey, keyval) in self._store.items())
 
     def __eq__(self, other):
         if isinstance(other, MutableMapping):
@@ -102,7 +98,7 @@ class CookieJar:
         jar.get_dict()  # Returns {'session': 'abc123', 'user': 'john'}
     """
 
-    def __init__(self, cookies: Optional[List['Cookie']] = None):
+    def __init__(self, cookies: Optional[List["Cookie"]] = None):
         """Initialize a CookieJar with an optional list of Cookie objects.
 
         Args:
@@ -178,7 +174,7 @@ class CookieJar:
         """
         return {name: cookie.value for name, cookie in self._cookies.items()}
 
-    def get_cookies(self) -> List['Cookie']:
+    def get_cookies(self) -> List["Cookie"]:
         """Return a list of all Cookie objects.
 
         Returns:
