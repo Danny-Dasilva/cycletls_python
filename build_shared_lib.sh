@@ -15,19 +15,34 @@ fi
 mkdir -p "${DIST_DIR}"
 
 HOST_OS="$(go env GOOS)"
+HOST_ARCH="$(go env GOARCH)"
+
+# Normalize architecture names
+case "${HOST_ARCH}" in
+    amd64)
+        ARCH_NAME="x64"
+        ;;
+    arm64)
+        ARCH_NAME="arm64"
+        ;;
+    *)
+        ARCH_NAME="${HOST_ARCH}"
+        ;;
+esac
+
 case "${HOST_OS}" in
     windows)
-        OUTPUT_NAME="cycletls.dll"
+        OUTPUT_NAME="cycletls-win-${ARCH_NAME}.dll"
         ;;
     darwin)
-        OUTPUT_NAME="libcycletls.dylib"
+        OUTPUT_NAME="libcycletls-darwin-${ARCH_NAME}.dylib"
         ;;
     linux)
-        OUTPUT_NAME="libcycletls.so"
+        OUTPUT_NAME="libcycletls-linux-${ARCH_NAME}.so"
         ;;
     *)
         echo "warning: unsupported GOOS '${HOST_OS}'. Defaulting to Linux-style .so output." >&2
-        OUTPUT_NAME="libcycletls.so"
+        OUTPUT_NAME="libcycletls-linux-${ARCH_NAME}.so"
         ;;
  esac
 

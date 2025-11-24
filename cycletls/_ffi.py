@@ -33,15 +33,38 @@ _lib_lock = threading.Lock()
 # _send_lock removed: Go backend is thread-safe (singleton client with sync.RWMutex on pool)
 
 
-def _get_library_filename() -> str:
+def _get_library_filenames() -> list[str]:
+    """Get list of library filenames to try, in priority order.
+
+    Returns platform-specific names first, then falls back to generic names
+    for backward compatibility.
+    """
     system = platform.system()
+    machine = platform.machine().lower()
+
+    # Normalize architecture names to match build script output
+    if machine in ("x86_64", "amd64"):
+        arch = "x64"
+    elif machine in ("aarch64", "arm64"):
+        arch = "arm64"
+    else:
+        arch = machine
+
+    filenames = []
 
     if system == "Windows":
-        return "cycletls.dll"
-    if system == "Darwin":
-        return "libcycletls.dylib"
-    # Default to Unix-style shared library
-    return "libcycletls.so"
+        # Try platform-specific first, then generic
+        filenames.append(f"cycletls-win-{arch}.dll")
+        filenames.append("cycletls.dll")
+    elif system == "Darwin":
+        filenames.append(f"libcycletls-darwin-{arch}.dylib")
+        filenames.append("libcycletls.dylib")
+    else:
+        # Default to Unix-style shared library (Linux, etc.)
+        filenames.append(f"libcycletls-linux-{arch}.so")
+        filenames.append("libcycletls.so")
+
+    return filenames
 
 
 def _iter_library_candidates() -> Iterator[str]:
@@ -50,16 +73,18 @@ def _iter_library_candidates() -> Iterator[str]:
     if env_override:
         yield env_override
 
-    filename = _get_library_filename()
+    filenames = _get_library_filenames()
     package_dir = os.path.abspath(os.path.dirname(__file__))
 
-    # Common locations inside the package
-    yield os.path.join(package_dir, "dist", filename)
-    yield os.path.join(package_dir, filename)
+    # Try each filename in each location
+    for filename in filenames:
+        # Common locations inside the package
+        yield os.path.join(package_dir, "dist", filename)
+        yield os.path.join(package_dir, filename)
 
-    # Project root during development
-    project_root = os.path.abspath(os.path.join(package_dir, os.pardir))
-    yield os.path.join(project_root, "dist", filename)
+        # Project root during development
+        project_root = os.path.abspath(os.path.join(package_dir, os.pardir))
+        yield os.path.join(project_root, "dist", filename)
 
 
 def _load_library():

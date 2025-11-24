@@ -64,6 +64,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: |
+            go.sum
+            golang/go.sum
+
+      - name: Build CycleTLS shared library
+        run: |
+          chmod +x build_shared_lib.sh
+          ./build_shared_lib.sh
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -135,10 +148,103 @@ jobs:
           . .venv/bin/activate
           pip uninstall -y my-package
 
-  release:
-    name: Release
+  build-wheels:
+    name: Build wheels on ${{ matrix.os }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    if: startsWith(github.ref, 'refs/tags/')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - os: ubuntu-latest
+            arch: x64
+            platform: linux
+            go-arch: amd64
+          # Linux ARM64 (cross-compile)
+          - os: ubuntu-latest
+            arch: arm64
+            platform: linux
+            go-arch: arm64
+          # macOS Intel
+          - os: macos-13
+            arch: x64
+            platform: darwin
+            go-arch: amd64
+          # macOS Apple Silicon
+          - os: macos-14
+            arch: arm64
+            platform: darwin
+            go-arch: arm64
+          # Windows x86_64
+          - os: windows-latest
+            arch: x64
+            platform: windows
+            go-arch: amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      # Linux ARM64 cross-compilation setup
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.platform == 'linux' && matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Build shared library (Linux ARM64)
+        if: matrix.platform == 'linux' && matrix.arch == 'arm64'
+        env:
+          CGO_ENABLED: 1
+          GOOS: linux
+          GOARCH: arm64
+          CC: aarch64-linux-gnu-gcc
+          CXX: aarch64-linux-gnu-g++
+        run: |
+          mkdir -p dist
+          cd golang
+          go build -buildmode=c-shared -o ../dist/libcycletls-linux-arm64.so .
+
+      - name: Build shared library (Native)
+        if: "!(matrix.platform == 'linux' && matrix.arch == 'arm64')"
+        run: |
+          chmod +x build_shared_lib.sh
+          ./build_shared_lib.sh
+        shell: bash
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: |
+          pip install --upgrade pip build wheel setuptools
+
+      - name: Copy library to package dist
+        run: |
+          mkdir -p cycletls/dist
+          cp dist/* cycletls/dist/
+        shell: bash
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/*.whl
+
+  test-pypi-release:
+    name: Test PyPI Release
     runs-on: ubuntu-latest
-    needs: [checks]
+    needs: [checks, build-wheels]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
@@ -157,19 +263,72 @@ jobs:
           echo "RELEASE_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
           echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
-      - name: Download package distribution files
+      # Download all platform wheels
+      - name: Download wheels
         uses: actions/download-artifact@v4
         with:
-          name: package
+          pattern: wheel-*
           path: dist
+          merge-multiple: true
+
+      - name: List distribution files
+        run: ls -lh dist/
+
+      - name: Publish to Test PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+        run: |
+          twine upload --repository testpypi dist/*.whl --verbose || echo "Upload failed (possibly version exists)"
+
+  pypi-release:
+    name: Production PyPI Release
+    runs-on: ubuntu-latest
+    needs: [test-pypi-release]
+    if: startsWith(github.ref, 'refs/tags/')
+    environment:
+      name: pypi-production
+      url: https://pypi.org/p/cycletls
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install requirements
+        run: |
+          pip install --upgrade pip setuptools wheel twine
+
+      - name: Prepare environment
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+          echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      # Download all platform wheels
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist
+          merge-multiple: true
+
+      - name: List distribution files
+        run: ls -lh dist/
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          twine upload dist/*.whl --verbose
 
       - name: Generate release notes
         run: |
-          python scripts/release_notes.py > ${{ github.workspace }}-RELEASE_NOTES.md
-
-      - name: Publish package to PyPI
-        run: |
-          twine upload -u ${{ secrets.PYPI_USERNAME }} -p ${{ secrets.PYPI_PASSWORD }} dist/*
+          echo "# CycleTLS ${{ env.RELEASE_VERSION }}" > ${{ github.workspace }}-RELEASE_NOTES.md
+          echo "" >> ${{ github.workspace }}-RELEASE_NOTES.md
+          echo "Released to PyPI: https://pypi.org/project/cycletls/${{ env.RELEASE_VERSION }}/" >> ${{ github.workspace }}-RELEASE_NOTES.md
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
@@ -179,4 +338,4 @@ jobs:
           body_path: ${{ github.workspace }}-RELEASE_NOTES.md
           prerelease: ${{ contains(env.TAG, 'rc') }}
           files: |
-            dist/*
+            dist/*.whl
