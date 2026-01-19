@@ -58,8 +58,7 @@ class CycleTLSDemo:
             print("\nPOST request:")
             response = self.client.post(
                 "https://httpbin.org/post",
-                body=json.dumps({"key": "value"}),
-                headers={"Content-Type": "application/json"}
+                json_data={"key": "value"}
             )
             print(f"  Status: {response.status_code}")
 
@@ -67,8 +66,7 @@ class CycleTLSDemo:
             print("\nPUT request:")
             response = self.client.put(
                 "https://httpbin.org/put",
-                body=json.dumps({"updated": True}),
-                headers={"Content-Type": "application/json"}
+                json_data={"updated": True}
             )
             print(f"  Status: {response.status_code}")
 
@@ -76,8 +74,7 @@ class CycleTLSDemo:
             print("\nPATCH request:")
             response = self.client.patch(
                 "https://httpbin.org/patch",
-                body=json.dumps({"patched": True}),
-                headers={"Content-Type": "application/json"}
+                json_data={"patched": True}
             )
             print(f"  Status: {response.status_code}")
 
@@ -194,9 +191,9 @@ class CycleTLSDemo:
                 headers={"Accept": "image/png"}
             )
             print(f"  Status: {response.status_code}")
-            if response.body_bytes:
-                print(f"  Downloaded: {len(response.body_bytes)} bytes")
-                if response.body_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+            if response.content:
+                print(f"  Downloaded: {len(response.content)} bytes")
+                if response.content[:8] == b'\x89PNG\r\n\x1a\n':
                     print(f"  Verified: Valid PNG signature")
 
             print("\nBinary data handling successful!")
@@ -238,8 +235,7 @@ class CycleTLSDemo:
 
             response = self.client.post(
                 "https://httpbin.org/post",
-                body=json.dumps(json_data),
-                headers={"Content-Type": "application/json"}
+                json_data=json_data
             )
             print(f"  Status: {response.status_code}")
             if response.status_code == 200:
@@ -427,10 +423,9 @@ class CycleTLSDemo:
             response = self.client.post(
                 url="https://httpbin.org/post",
                 # Body
-                body=json.dumps(form_data),
+                json_data=form_data,
                 # Headers
                 headers={
-                    "Content-Type": "application/json",
                     "Accept": "application/json",
                     "Accept-Language": "en-US,en;q=0.9",
                     "Accept-Encoding": "gzip, deflate, br",
@@ -469,7 +464,7 @@ class CycleTLSDemo:
             )
 
             print(f"  Status: {response.status_code}")
-            print(f"  Response size: {len(response.body)} bytes")
+            print(f"  Response size: {len(response.text)} bytes")
 
             if response.status_code == 200:
                 data = response.json()

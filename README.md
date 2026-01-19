@@ -60,6 +60,12 @@ golang ^1.21x (for building from source)
 
 ## Installation
 
+**With uv (Recommended):**
+```bash
+uv add cycletls
+```
+
+**With pip:**
 ```bash
 pip install cycletls
 ```
@@ -1669,6 +1675,24 @@ Comprehensive examples can be found in the [examples/](examples/) directory:
 
 ## Testing
 
+**With uv:**
+```bash
+# Run all tests
+uv run pytest tests/
+
+# Run specific test categories
+uv run pytest tests/test_ja3_fingerprints.py
+uv run pytest tests/test_http2.py
+uv run pytest tests/test_cookies.py
+
+# Run with verbose output
+uv run pytest -v tests/
+
+# Run with coverage
+uv run pytest --cov=cycletls tests/
+```
+
+**Without uv:**
 ```bash
 # Run all tests
 pytest tests/
@@ -1689,6 +1713,28 @@ pytest --cov=cycletls tests/
 
 If you want to build from source:
 
+**With uv (Recommended):**
+```bash
+# Clone repository
+git clone https://github.com/Danny-Dasilva/cycletls_python.git
+cd cycletls_python
+
+# Install dependencies
+uv sync                    # Install base dependencies
+uv sync --all-extras       # Install with dev/docs/benchmark dependencies
+
+# Build Go binaries
+cd golang
+./build.sh
+
+# Run tests
+uv run pytest tests/
+
+# Run benchmarks
+uv run python benchmarks/benchmark_python.py
+```
+
+**Without uv:**
 ```bash
 # Clone repository
 git clone https://github.com/Danny-Dasilva/cycletls_python.git

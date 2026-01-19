@@ -1,6 +1,6 @@
-__title__ = "requests"
+__title__ = "cycletls"
 __description__ = "Python HTTP for Humans."
-__url__ = "https://requests.readthedocs.io"
+__url__ = "https://cycletls.readthedocs.io"
 __version__ = "0.0.2"
 __build__ = 0x022701
 __author__ = "Danny Dasilva"

@@ -29,6 +29,8 @@ Usage:
 
 from typing import Optional, Dict, Any
 
+__version__ = "0.0.2"
+
 # Import core classes
 from .api import CycleTLS
 from .async_api import AsyncCycleTLS, async_get, async_post, async_put, async_delete
@@ -350,6 +352,8 @@ def __getattr__(name: str):
 
 # Export public API
 __all__ = [
+    # Version
+    "__version__",
     # Core classes
     "CycleTLS",
     "AsyncCycleTLS",

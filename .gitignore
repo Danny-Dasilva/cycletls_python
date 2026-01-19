@@ -1,5 +1,6 @@
 # build artifacts
-
+thoughts/
+.claude/
 .eggs/
 .mypy_cache
 *.egg-info/
@@ -59,3 +60,6 @@ __pycache__
 
 docs/build
 site/
+
+# Continuous Claude cache (local only)
+.claude/cache/

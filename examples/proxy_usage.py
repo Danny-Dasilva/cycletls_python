@@ -20,21 +20,18 @@ def example_http_proxy():
     print("\n=== HTTP Proxy Example ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # Configure HTTP proxy
+            proxy_url = "http://127.0.0.1:8080"
 
-        # Configure HTTP proxy
-        proxy_url = "http://127.0.0.1:8080"
+            response = client.get(
+                "https://httpbin.org/ip",
+                proxy=proxy_url,
+                timeout=10
+            )
 
-        response = client.get(
-            "https://httpbin.org/ip",
-            proxy=proxy_url,
-            timeout=10
-        )
-
-        print(f"Status Code: {response.status_code}")
-        print(f"Response: {response.body}")
-
-        client.close()
+            print(f"Status Code: {response.status_code}")
+            print(f"Response: {response.text}")
 
     except Exception as e:
         print(f"Error with HTTP proxy: {e}")
@@ -46,21 +43,18 @@ def example_https_proxy():
     print("\n=== HTTPS Proxy Example ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # Configure HTTPS proxy
+            proxy_url = "https://127.0.0.1:8443"
 
-        # Configure HTTPS proxy
-        proxy_url = "https://127.0.0.1:8443"
+            response = client.get(
+                "https://httpbin.org/ip",
+                proxy=proxy_url,
+                timeout=10
+            )
 
-        response = client.get(
-            "https://httpbin.org/ip",
-            proxy=proxy_url,
-            timeout=10
-        )
-
-        print(f"Status Code: {response.status_code}")
-        print(f"Response: {response.body}")
-
-        client.close()
+            print(f"Status Code: {response.status_code}")
+            print(f"Response: {response.text}")
 
     except Exception as e:
         print(f"Error with HTTPS proxy: {e}")
@@ -72,21 +66,18 @@ def example_socks4_proxy():
     print("\n=== SOCKS4 Proxy Example ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # Configure SOCKS4 proxy
+            proxy_url = "socks4://127.0.0.1:9050"
 
-        # Configure SOCKS4 proxy
-        proxy_url = "socks4://127.0.0.1:9050"
+            response = client.get(
+                "https://httpbin.org/ip",
+                proxy=proxy_url,
+                timeout=10
+            )
 
-        response = client.get(
-            "https://httpbin.org/ip",
-            proxy=proxy_url,
-            timeout=10
-        )
-
-        print(f"Status Code: {response.status_code}")
-        print(f"Response: {response.body}")
-
-        client.close()
+            print(f"Status Code: {response.status_code}")
+            print(f"Response: {response.text}")
 
     except Exception as e:
         print(f"Error with SOCKS4 proxy: {e}")
@@ -98,21 +89,18 @@ def example_socks5_proxy():
     print("\n=== SOCKS5 Proxy Example ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # Configure SOCKS5 proxy (e.g., Tor)
+            proxy_url = "socks5://127.0.0.1:9050"
 
-        # Configure SOCKS5 proxy (e.g., Tor)
-        proxy_url = "socks5://127.0.0.1:9050"
+            response = client.get(
+                "https://httpbin.org/ip",
+                proxy=proxy_url,
+                timeout=10
+            )
 
-        response = client.get(
-            "https://httpbin.org/ip",
-            proxy=proxy_url,
-            timeout=10
-        )
-
-        print(f"Status Code: {response.status_code}")
-        print(f"Response: {response.body}")
-
-        client.close()
+            print(f"Status Code: {response.status_code}")
+            print(f"Response: {response.text}")
 
     except Exception as e:
         print(f"Error with SOCKS5 proxy: {e}")
@@ -125,22 +113,19 @@ def example_socks5h_proxy():
     print("\n=== SOCKS5h Proxy Example ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # SOCKS5h resolves DNS queries through the proxy
+            # This provides better privacy as DNS queries don't leak
+            proxy_url = "socks5h://127.0.0.1:9050"
 
-        # SOCKS5h resolves DNS queries through the proxy
-        # This provides better privacy as DNS queries don't leak
-        proxy_url = "socks5h://127.0.0.1:9050"
+            response = client.get(
+                "https://httpbin.org/ip",
+                proxy=proxy_url,
+                timeout=10
+            )
 
-        response = client.get(
-            "https://httpbin.org/ip",
-            proxy=proxy_url,
-            timeout=10
-        )
-
-        print(f"Status Code: {response.status_code}")
-        print(f"Response: {response.body}")
-
-        client.close()
+            print(f"Status Code: {response.status_code}")
+            print(f"Response: {response.text}")
 
     except Exception as e:
         print(f"Error with SOCKS5h proxy: {e}")
@@ -151,22 +136,19 @@ def example_authenticated_proxy():
     print("\n=== Authenticated Proxy Example ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # Proxy with authentication
+            # Format: protocol://username:password@hostname:port
+            proxy_url = "http://myuser:mypassword@127.0.0.1:8080"
 
-        # Proxy with authentication
-        # Format: protocol://username:password@hostname:port
-        proxy_url = "http://myuser:mypassword@127.0.0.1:8080"
+            response = client.get(
+                "https://httpbin.org/ip",
+                proxy=proxy_url,
+                timeout=10
+            )
 
-        response = client.get(
-            "https://httpbin.org/ip",
-            proxy=proxy_url,
-            timeout=10
-        )
-
-        print(f"Status Code: {response.status_code}")
-        print(f"Response: {response.body}")
-
-        client.close()
+            print(f"Status Code: {response.status_code}")
+            print(f"Response: {response.text}")
 
     except Exception as e:
         print(f"Error with authenticated proxy: {e}")
@@ -178,30 +160,27 @@ def example_proxy_with_ja3():
     print("\n=== Proxy with JA3 Fingerprint Example ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # Combine proxy with JA3 fingerprinting
+            proxy_url = "socks5://127.0.0.1:9050"
 
-        # Combine proxy with JA3 fingerprinting
-        proxy_url = "socks5://127.0.0.1:9050"
+            # Chrome-like JA3 fingerprint
+            ja3_chrome = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0"
 
-        # Chrome-like JA3 fingerprint
-        ja3_chrome = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0"
+            response = client.get(
+                "https://ja3er.com/json",
+                proxy=proxy_url,
+                ja3=ja3_chrome,
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                timeout=10
+            )
 
-        response = client.get(
-            "https://ja3er.com/json",
-            proxy=proxy_url,
-            ja3=ja3_chrome,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            timeout=10
-        )
+            print(f"Status Code: {response.status_code}")
 
-        print(f"Status Code: {response.status_code}")
-
-        if response.status_code == 200:
-            data = response.json()
-            print(f"JA3 Hash: {data.get('ja3_hash', 'N/A')}")
-            print(f"User Agent: {data.get('User-Agent', 'N/A')}")
-
-        client.close()
+            if response.ok:
+                data = response.json()
+                print(f"JA3 Hash: {data.get('ja3_hash', 'N/A')}")
+                print(f"User Agent: {data.get('User-Agent', 'N/A')}")
 
     except Exception as e:
         print(f"Error with proxy and JA3: {e}")
@@ -212,32 +191,27 @@ def example_proxy_post_request():
     print("\n=== Proxy with POST Request Example ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            proxy_url = "socks5://127.0.0.1:9050"
 
-        proxy_url = "socks5://127.0.0.1:9050"
+            payload = {
+                "name": "CycleTLS",
+                "type": "HTTP client",
+                "features": ["TLS fingerprinting", "Proxy support"]
+            }
 
-        import json
-        payload = {
-            "name": "CycleTLS",
-            "type": "HTTP client",
-            "features": ["TLS fingerprinting", "Proxy support"]
-        }
+            response = client.post(
+                "https://httpbin.org/post",
+                proxy=proxy_url,
+                json_data=payload,
+                timeout=10
+            )
 
-        response = client.post(
-            "https://httpbin.org/post",
-            proxy=proxy_url,
-            body=json.dumps(payload),
-            headers={"Content-Type": "application/json"},
-            timeout=10
-        )
+            print(f"Status Code: {response.status_code}")
 
-        print(f"Status Code: {response.status_code}")
-
-        if response.status_code == 200:
-            data = response.json()
-            print(f"Echo'd JSON: {data.get('json', {})}")
-
-        client.close()
+            if response.ok:
+                data = response.json()
+                print(f"Echo'd JSON: {data.get('json', {})}")
 
     except Exception as e:
         print(f"Error with proxy POST request: {e}")
@@ -248,18 +222,15 @@ def example_no_proxy():
     print("\n=== No Proxy (Direct Connection) Example ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # Direct connection without proxy
+            response = client.get(
+                "https://httpbin.org/ip",
+                timeout=10
+            )
 
-        # Direct connection without proxy
-        response = client.get(
-            "https://httpbin.org/ip",
-            timeout=10
-        )
-
-        print(f"Status Code: {response.status_code}")
-        print(f"Response: {response.body}")
-
-        client.close()
+            print(f"Status Code: {response.status_code}")
+            print(f"Response: {response.text}")
 
     except Exception as e:
         print(f"Error: {e}")

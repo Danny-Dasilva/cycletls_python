@@ -96,34 +96,31 @@ def example_sse_connection():
     print("\n=== Basic SSE Connection ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # Connect to SSE stream endpoint
+            # httpbin.org/stream/N returns N JSON objects as a stream
+            response = client.get(
+                "https://httpbin.org/stream/5",
+                protocol=Protocol.SSE,
+                timeout=10
+            )
 
-        # Connect to SSE stream endpoint
-        # httpbin.org/stream/N returns N JSON objects as a stream
-        response = client.get(
-            "https://httpbin.org/stream/5",
-            protocol=Protocol.SSE,
-            timeout=10
-        )
+            print(f"Status Code: {response.status_code}")
+            print(f"Content-Type: {response.headers.get('content-type', 'N/A')}")
 
-        print(f"Status Code: {response.status_code}")
-        print(f"Content-Type: {response.headers.get('content-type', 'N/A')}")
+            if response.ok:
+                print("SSE connection established!")
 
-        if response.status_code == 200:
-            print("SSE connection established!")
+                # Parse response body
+                if response.text:
+                    # httpbin /stream returns JSON lines, not pure SSE format
+                    # but we can still process the streaming data
+                    lines = [line.strip() for line in response.text.split('\n') if line.strip()]
+                    print(f"\nReceived {len(lines)} data chunks")
 
-            # Parse response body
-            if response.body:
-                # httpbin /stream returns JSON lines, not pure SSE format
-                # but we can still process the streaming data
-                lines = [line.strip() for line in response.body.split('\n') if line.strip()]
-                print(f"\nReceived {len(lines)} data chunks")
-
-                # Print first few chunks
-                for i, line in enumerate(lines[:3], 1):
-                    print(f"  Chunk {i}: {line[:100]}...")
-
-        client.close()
+                    # Print first few chunks
+                    for i, line in enumerate(lines[:3], 1):
+                        print(f"  Chunk {i}: {line[:100]}...")
 
     except Exception as e:
         print(f"Error: {e}")
@@ -135,32 +132,29 @@ def example_sse_with_custom_headers():
     print("\n=== SSE with Custom Headers ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # Custom headers for SSE connection
+            custom_headers = {
+                "Accept": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive"
+            }
 
-        # Custom headers for SSE connection
-        custom_headers = {
-            "Accept": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive"
-        }
+            response = client.get(
+                "https://httpbin.org/stream/3",
+                protocol=Protocol.SSE,
+                headers=custom_headers,
+                timeout=10
+            )
 
-        response = client.get(
-            "https://httpbin.org/stream/3",
-            protocol=Protocol.SSE,
-            headers=custom_headers,
-            timeout=10
-        )
+            print(f"Status Code: {response.status_code}")
 
-        print(f"Status Code: {response.status_code}")
+            if response.ok:
+                print("SSE connection with custom headers successful!")
 
-        if response.status_code == 200:
-            print("SSE connection with custom headers successful!")
-
-            if response.body:
-                lines = [line.strip() for line in response.body.split('\n') if line.strip()]
-                print(f"Received {len(lines)} events")
-
-        client.close()
+                if response.text:
+                    lines = [line.strip() for line in response.text.split('\n') if line.strip()]
+                    print(f"Received {len(lines)} events")
 
     except Exception as e:
         print(f"Error: {e}")
@@ -206,27 +200,24 @@ def example_sse_with_last_event_id():
     print("\n=== SSE with Last-Event-ID ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            # When reconnecting to SSE, send Last-Event-ID header
+            # Server should resume from this event
+            response = client.get(
+                "https://httpbin.org/stream/5",
+                protocol=Protocol.SSE,
+                headers={
+                    "Last-Event-ID": "42",
+                    "Accept": "text/event-stream"
+                },
+                timeout=10
+            )
 
-        # When reconnecting to SSE, send Last-Event-ID header
-        # Server should resume from this event
-        response = client.get(
-            "https://httpbin.org/stream/5",
-            protocol=Protocol.SSE,
-            headers={
-                "Last-Event-ID": "42",
-                "Accept": "text/event-stream"
-            },
-            timeout=10
-        )
+            print(f"Status Code: {response.status_code}")
 
-        print(f"Status Code: {response.status_code}")
-
-        if response.status_code == 200:
-            print("SSE reconnection with Last-Event-ID successful!")
-            print("Server should resume from event ID 42 (if supported)")
-
-        client.close()
+            if response.ok:
+                print("SSE reconnection with Last-Event-ID successful!")
+                print("Server should resume from event ID 42 (if supported)")
 
     except Exception as e:
         print(f"Error: {e}")
@@ -290,21 +281,18 @@ def example_sse_with_proxy():
     print("\n=== SSE Connection Through Proxy ===")
 
     try:
-        client = CycleTLS()
+        with CycleTLS() as client:
+            response = client.get(
+                "https://httpbin.org/stream/3",
+                protocol=Protocol.SSE,
+                proxy="socks5://127.0.0.1:9050",
+                timeout=10
+            )
 
-        response = client.get(
-            "https://httpbin.org/stream/3",
-            protocol=Protocol.SSE,
-            proxy="socks5://127.0.0.1:9050",
-            timeout=10
-        )
+            print(f"Status Code: {response.status_code}")
 
-        print(f"Status Code: {response.status_code}")
-
-        if response.status_code == 200:
-            print("SSE connection through proxy successful!")
-
-        client.close()
+            if response.ok:
+                print("SSE connection through proxy successful!")
 
     except Exception as e:
         print(f"Error: {e}")

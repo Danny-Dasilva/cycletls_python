@@ -50,16 +50,16 @@ def main():
         )
 
         print(f"Status Code: {response.status_code}")
-        print(f"Response Length: {len(response.body)} bytes")
+        print(f"Response Length: {len(response.text)} bytes")
         print(f"Final URL: {response.final_url or 'N/A'}")
 
-        if response.status_code == 200:
+        if response.ok:
             # Check if response contains HTTP/3 indicators
-            if "QUIC" in response.body or "HTTP/3" in response.body:
+            if "QUIC" in response.text or "HTTP/3" in response.text:
                 print("\n✓ HTTP/3 request successful - QUIC protocol confirmed")
             else:
                 print("\n✓ HTTP/3 request successful")
-            print(f"Response preview: {response.body[:200]}...")
+            print(f"Response preview: {response.text[:200]}...")
         else:
             print(f"\n⚠ Request completed but returned status {response.status_code}")
 
@@ -98,7 +98,7 @@ def main():
 
         print(f"Status Code: {response.status_code}")
 
-        if response.status_code == 200:
+        if response.ok:
             print("✓ HTTP/3 request with custom headers successful")
             print(f"Response headers count: {len(response.headers)}")
             print("\nResponse headers (sample):")
@@ -136,7 +136,7 @@ def main():
 
         print(f"  HTTP/2 Status: {response_http2.status_code}")
         print(f"  HTTP/2 Time: {time_http2:.3f} seconds")
-        print(f"  HTTP/2 Response Size: {len(response_http2.body)} bytes")
+        print(f"  HTTP/2 Response Size: {len(response_http2.text)} bytes")
 
         # Test HTTP/3
         print("\nTesting HTTP/3...")
@@ -151,7 +151,7 @@ def main():
 
         print(f"  HTTP/3 Status: {response_http3.status_code}")
         print(f"  HTTP/3 Time: {time_http3:.3f} seconds")
-        print(f"  HTTP/3 Response Size: {len(response_http3.body)} bytes")
+        print(f"  HTTP/3 Response Size: {len(response_http3.text)} bytes")
 
         # Comparison
         print("\n" + "-" * 70)
@@ -206,9 +206,9 @@ def main():
 
             print(f"  Status: {response.status_code}")
             print(f"  Time: {elapsed:.3f}s")
-            print(f"  Size: {len(response.body)} bytes")
+            print(f"  Size: {len(response.text)} bytes")
 
-            if response.status_code == 200:
+            if response.ok:
                 print(f"  ✓ Success")
             else:
                 print(f"  ⚠ Non-200 status")
@@ -237,7 +237,7 @@ def main():
 
         print(f"Status Code: {response.status_code}")
 
-        if response.status_code == 200:
+        if response.ok:
             print("✓ Request successful with QUIC fingerprint parameter")
             print("Note: QUIC fingerprinting may be in development")
         else:
@@ -285,7 +285,7 @@ def main():
 
             print(f"  Status: {response.status_code}")
 
-            if response.status_code == 200:
+            if response.ok:
                 print(f"  ✓ Success (server supports HTTP/3 or fallback occurred)")
             elif 400 <= response.status_code < 600:
                 print(f"  ⚠ Error status (may not support HTTP/3)")
@@ -325,13 +325,13 @@ def main():
             )
 
             print(f"  Status: {response.status_code}")
-            print(f"  Response Size: {len(response.body)} bytes")
+            print(f"  Response Size: {len(response.text)} bytes")
 
             # Try to detect protocol from headers
             if 'content-encoding' in response.headers:
                 print(f"  Content-Encoding: {response.headers['content-encoding']}")
 
-            if response.status_code == 200:
+            if response.ok:
                 print(f"  ✓ {proto['name']} request successful")
 
         except Exception as e:
