@@ -5,6 +5,7 @@ import (
 	"fmt"
 	fhttp "github.com/Danny-Dasilva/fhttp"
 	"hash/crc32"
+	"hash/fnv"
 	"sync"
 	"time"
 
@@ -27,7 +28,42 @@ type ClientPoolEntry struct {
 	LastUsed  time.Time
 }
 
-// Global client pool with metadata
+// NumShards is the number of shards for the client pool
+const NumShards = 16
+
+// PoolShard represents a single shard of the client pool
+type PoolShard struct {
+	mu      sync.RWMutex
+	clients map[string]*ClientPoolEntry
+}
+
+// ShardedPool is a sharded client pool for reduced lock contention
+type ShardedPool struct {
+	shards [NumShards]*PoolShard
+}
+
+// getShard returns the shard for a given key using FNV-1a hash
+func (p *ShardedPool) getShard(key string) *PoolShard {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return p.shards[h.Sum32()%NumShards]
+}
+
+// NewShardedPool creates a new sharded pool
+func NewShardedPool() *ShardedPool {
+	p := &ShardedPool{}
+	for i := 0; i < NumShards; i++ {
+		p.shards[i] = &PoolShard{
+			clients: make(map[string]*ClientPoolEntry),
+		}
+	}
+	return p
+}
+
+// globalPool is the sharded client pool
+var globalPool = NewShardedPool()
+
+// Deprecated: advancedClientPool kept for backward compatibility
 var (
 	advancedClientPool      = make(map[string]*ClientPoolEntry)
 	advancedClientPoolMutex = sync.RWMutex{}
@@ -214,30 +250,33 @@ func getOrCreateClient(browser Browser, timeout int, disableRedirect bool, userA
 		return createNewClient(browser, timeout, disableRedirect, userAgent, proxyURL...)
 	}
 
-	proxy := ""
+	proxyStr := ""
 	if len(proxyURL) > 0 {
-		proxy = proxyURL[0]
+		proxyStr = proxyURL[0]
 	}
 
-	clientKey := generateClientKey(browser, timeout, disableRedirect, proxy)
+	clientKey := generateClientKey(browser, timeout, disableRedirect, proxyStr)
 
-	// Try to get existing client from pool
-	advancedClientPoolMutex.RLock()
-	if entry, exists := advancedClientPool[clientKey]; exists {
+	// Get the appropriate shard for this client key
+	shard := globalPool.getShard(clientKey)
+
+	// Try to get existing client from shard
+	shard.mu.RLock()
+	if entry, exists := shard.clients[clientKey]; exists {
 		// Update last used time
 		entry.LastUsed = time.Now()
 		client := entry.Client
-		advancedClientPoolMutex.RUnlock()
+		shard.mu.RUnlock()
 		return client, nil
 	}
-	advancedClientPoolMutex.RUnlock()
+	shard.mu.RUnlock()
 
-	// Create new client if not found in pool
-	advancedClientPoolMutex.Lock()
-	defer advancedClientPoolMutex.Unlock()
+	// Create new client if not found in shard
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
 
 	// Double-check in case another goroutine created it while we were waiting for the write lock
-	if entry, exists := advancedClientPool[clientKey]; exists {
+	if entry, exists := shard.clients[clientKey]; exists {
 		entry.LastUsed = time.Now()
 		return entry.Client, nil
 	}
@@ -248,9 +287,9 @@ func getOrCreateClient(browser Browser, timeout int, disableRedirect bool, userA
 		return fhttp.Client{}, err
 	}
 
-	// Add to pool
+	// Add to shard
 	now := time.Now()
-	advancedClientPool[clientKey] = &ClientPoolEntry{
+	shard.clients[clientKey] = &ClientPoolEntry{
 		Client:    client,
 		CreatedAt: now,
 		LastUsed:  now,
@@ -280,31 +319,38 @@ func createNewClient(browser Browser, timeout int, disableRedirect bool, userAge
 
 // cleanupClientPool removes old unused clients from the pool
 func cleanupClientPool(maxAge time.Duration) {
-	advancedClientPoolMutex.Lock()
-	defer advancedClientPoolMutex.Unlock()
-
 	now := time.Now()
-	for key, entry := range advancedClientPool {
-		if now.Sub(entry.LastUsed) > maxAge {
-			delete(advancedClientPool, key)
+	// Iterate over all shards
+	for i := 0; i < NumShards; i++ {
+		shard := globalPool.shards[i]
+		shard.mu.Lock()
+		for key, entry := range shard.clients {
+			if now.Sub(entry.LastUsed) > maxAge {
+				delete(shard.clients, key)
+			}
 		}
+		shard.mu.Unlock()
 	}
 }
 
 // clearAllConnections clears all connections from the pool for test isolation
 func clearAllConnections() {
-	advancedClientPoolMutex.Lock()
-	defer advancedClientPoolMutex.Unlock()
+	// Iterate over all shards
+	for i := 0; i < NumShards; i++ {
+		shard := globalPool.shards[i]
+		shard.mu.Lock()
 
-	// Close all connections in the pool before clearing
-	for _, entry := range advancedClientPool {
-		if transport, ok := entry.Client.Transport.(*roundTripper); ok {
-			transport.CloseIdleConnections()
+		// Close all connections in the shard before clearing
+		for _, entry := range shard.clients {
+			if transport, ok := entry.Client.Transport.(*roundTripper); ok {
+				transport.CloseIdleConnections()
+			}
 		}
-	}
 
-	// Clear the entire pool
-	advancedClientPool = make(map[string]*ClientPoolEntry)
+		// Clear the shard
+		shard.clients = make(map[string]*ClientPoolEntry)
+		shard.mu.Unlock()
+	}
 }
 
 // newClient creates a new http client (backward compatibility - defaults to no connection reuse)
