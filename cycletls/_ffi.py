@@ -24,6 +24,7 @@ _ffi.cdef(
     char* getRequest(char* data);
     unsigned long submitRequestAsync(char* data);
     char* checkRequestAsync(unsigned long handle);
+    char* sendBatchRequest(char* data);
     void freeString(char* ptr);
     """
 )
@@ -286,10 +287,63 @@ async def send_requests_batch(
     )
 
 
+def send_batch_request(payloads: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    """Send multiple requests in a single FFI call.
+
+    This is more efficient than individual requests because it amortizes
+    FFI call overhead across all requests. Requests are executed in parallel
+    on the Go side using goroutines.
+
+    Args:
+        payloads: List of request payload dictionaries. Each payload should have:
+            - requestId: Unique identifier for the request
+            - options: Request options dict with url, method, headers, body, etc.
+
+    Returns:
+        List of response dictionaries in the same order as input payloads.
+        Each response contains: RequestID, Status, Body, Headers, FinalUrl, Cookies
+
+    Raises:
+        RuntimeError: If the batch request fails
+    """
+    # Handle empty batch case on Python side (avoid FFI call)
+    if not payloads:
+        return []
+
+    lib = _load_library()
+
+    # Wrap payloads in batch structure
+    batch_data = {"requests": payloads}
+    msgpack_data = msgpack.packb(batch_data, use_bin_type=False)
+    b64_data = base64.b64encode(msgpack_data)
+    buf = _ffi.new("char[]", b64_data)
+
+    logger.debug(f"Sending batch request with {len(payloads)} payloads")
+
+    response_ptr = lib.sendBatchRequest(buf)
+
+    if response_ptr == _ffi.NULL:
+        error_msg = "CycleTLS batch request returned NULL response"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+
+    try:
+        raw_b64 = _ffi.string(response_ptr)
+        logger.debug(f"Received batch response (size: {len(raw_b64)} bytes)")
+    finally:
+        lib.freeString(response_ptr)
+
+    # Decode base64 then unpack msgpack
+    raw = base64.b64decode(raw_b64)
+    result = msgpack.unpackb(raw, raw=False)
+    return result.get("responses", [])
+
+
 __all__ = [
     "send_request",
     "submit_request_async",
     "check_request_async",
     "send_request_async",
     "send_requests_batch",
+    "send_batch_request",
 ]

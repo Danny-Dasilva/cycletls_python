@@ -8,6 +8,7 @@ import "C"
 
 import (
     "encoding/base64"
+    "fmt"
     "log"
     nhttp "net/http"
     "runtime/cgo"
@@ -18,6 +19,16 @@ import (
 
     "github.com/vmihailenco/msgpack/v5"
 )
+
+// BatchRequest holds multiple requests to be processed in parallel
+type BatchRequest struct {
+    Requests []cycleTLSRequest `msgpack:"requests"`
+}
+
+// BatchResponse holds responses for all requests in a batch
+type BatchResponse struct {
+    Responses []map[string]interface{} `msgpack:"responses"`
+}
 
 var (
     ffiClientOnce sync.Once
@@ -308,5 +319,66 @@ func freeString(ptr *C.char) {
     if ptr != nil {
         C.free(unsafe.Pointer(ptr))
     }
+}
+
+//export sendBatchRequest
+func sendBatchRequest(data *C.char) *C.char {
+    if data == nil {
+        return marshalPayload(buildErrorPayload("", "empty payload"))
+    }
+
+    // Decode base64 to get msgpack data
+    b64str := C.GoString(data)
+    msgpackData, err := base64.StdEncoding.DecodeString(b64str)
+    if err != nil {
+        return marshalPayload(buildErrorPayload("", "invalid base64: "+err.Error()))
+    }
+
+    var batch BatchRequest
+    if err := msgpack.Unmarshal(msgpackData, &batch); err != nil {
+        return marshalPayload(buildErrorPayload("", "invalid batch payload: "+err.Error()))
+    }
+
+    // Handle empty batch case
+    if len(batch.Requests) == 0 {
+        batchResp := BatchResponse{Responses: []map[string]interface{}{}}
+        bytes, _ := msgpack.Marshal(batchResp)
+        b64 := base64.StdEncoding.EncodeToString(bytes)
+        return C.CString(b64)
+    }
+
+    // Process all requests in parallel using goroutines
+    responses := make([]map[string]interface{}, len(batch.Requests))
+    var wg sync.WaitGroup
+
+    for i, req := range batch.Requests {
+        wg.Add(1)
+        go func(idx int, r cycleTLSRequest) {
+            defer wg.Done()
+
+            if r.RequestID == "" {
+                r.RequestID = fmt.Sprintf("batch_%d", idx)
+            }
+            r.Options.Method = normalizeMethod(r.Options.Method)
+
+            client := getFFIClient()
+            resp, err := client.Do(r.Options.URL, r.Options, r.Options.Method)
+            if err != nil {
+                responses[idx] = buildErrorPayload(r.RequestID, err.Error())
+            } else {
+                responses[idx] = buildResponsePayload(r.RequestID, resp)
+            }
+        }(i, req)
+    }
+    wg.Wait()
+
+    // Marshal batch response
+    batchResp := BatchResponse{Responses: responses}
+    bytes, err := msgpack.Marshal(batchResp)
+    if err != nil {
+        return marshalPayload(buildErrorPayload("", "failed to marshal batch response: "+err.Error()))
+    }
+    b64 := base64.StdEncoding.EncodeToString(bytes)
+    return C.CString(b64)
 }
 

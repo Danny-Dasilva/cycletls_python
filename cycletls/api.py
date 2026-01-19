@@ -13,7 +13,7 @@ from collections.abc import Mapping, Sequence
 from types import TracebackType
 from typing import Any, Dict, Iterable, Literal, Optional, Tuple, Union
 
-from ._ffi import send_request as ffi_send_request
+from ._ffi import send_request as ffi_send_request, send_batch_request as ffi_send_batch_request
 from .exceptions import CycleTLSError
 from .schema import Request, Response, _dict_to_response
 
@@ -367,3 +367,131 @@ class CycleTLS:
     def delete(self, url, params=None, **kwargs) -> Response:
         """Sends a DELETE request."""
         return self.request("delete", url, params=params, **kwargs)
+
+    def batch(self, requests: list[dict]) -> list[Response]:
+        """Send multiple requests in a single batch.
+
+        This is more efficient than individual requests for high-throughput scenarios
+        because it amortizes FFI call overhead across all requests. Requests are
+        executed in parallel on the Go side.
+
+        Args:
+            requests: List of request dictionaries. Each dict should contain:
+                - url (required): Target URL
+                - method (required): HTTP method (GET, POST, etc.)
+                - params (optional): Query parameters
+                - data (optional): Form data or raw body
+                - json_data (optional): JSON data (auto-serialized)
+                - headers (optional): Custom headers
+                - And any other CycleTLS options (ja3, proxy, timeout, etc.)
+
+        Returns:
+            List of Response objects in the same order as input requests.
+
+        Raises:
+            CycleTLSError: If the client is closed or batch request fails.
+
+        Example:
+            >>> with CycleTLS() as client:
+            ...     responses = client.batch([
+            ...         {"url": "https://api.example.com/users", "method": "GET"},
+            ...         {"url": "https://api.example.com/posts", "method": "GET"},
+            ...         {"url": "https://api.example.com/data", "method": "POST", "json_data": {"key": "value"}},
+            ...     ])
+            ...     for resp in responses:
+            ...         print(resp.status_code)
+        """
+        if self._closed:
+            raise CycleTLSError("CycleTLS client is closed")
+
+        if not requests:
+            return []
+
+        # Build payloads for each request
+        payloads = []
+        for i, req in enumerate(requests):
+            payload = self._build_batch_payload(req, request_id=f"batch_{i}")
+            payloads.append(payload)
+
+        logger.debug(f"Sending batch of {len(payloads)} requests")
+
+        try:
+            response_data_list = ffi_send_batch_request(payloads)
+        except Exception as exc:  # pragma: no cover - unexpected backend failure
+            logger.error(f"Batch request failed: {exc}")
+            raise CycleTLSError(f"Failed to execute batch request: {exc}") from exc
+
+        # Convert response dicts to Response objects
+        responses = []
+        for response_data in response_data_list:
+            if not isinstance(response_data, dict):
+                logger.error("Invalid response payload in batch result")
+                raise CycleTLSError("Invalid response payload in batch result")
+            try:
+                response = _dict_to_response(response_data)
+                responses.append(response)
+            except Exception as exc:  # pragma: no cover - validation error
+                logger.error(f"Failed to parse batch response: {exc}")
+                raise CycleTLSError(f"Failed to parse batch response: {exc}") from exc
+
+        return responses
+
+    def _build_batch_payload(self, req: dict, request_id: str) -> dict:
+        """Build a payload dict for a batch request item.
+
+        Args:
+            req: Request dictionary with url, method, and optional parameters.
+            request_id: Unique ID for this request in the batch.
+
+        Returns:
+            Payload dictionary ready for FFI serialization.
+        """
+        url = req.get("url", "")
+        method = req.get("method", "GET")
+        params = req.get("params")
+        data = req.get("data")
+        json_data = req.get("json_data")
+        headers = dict(req.get("headers") or {})
+
+        # Attach params to URL
+        url = _merge_url_params(url, params)
+
+        body_value: Optional[str] = None
+        body_bytes_value: Optional[bytes] = None
+
+        if json_data is not None:
+            if data is not None:
+                raise ValueError("Cannot specify both 'data' and 'json_data' in batch request")
+            body_value = json.dumps(json_data)
+            headers["Content-Type"] = "application/json"
+        elif data is not None:
+            if isinstance(data, dict):
+                body_value = urllib.parse.urlencode(data)
+                if "Content-Type" not in headers:
+                    headers["Content-Type"] = "application/x-www-form-urlencoded"
+            elif isinstance(data, bytes):
+                body_bytes_value = data
+            else:
+                body_value = str(data)
+
+        # Build options dict - extract known CycleTLS options from req
+        options = {
+            "url": url,
+            "method": method,
+            "headers": headers,
+            "body": body_value or "",
+            "ja3": req.get("ja3", "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0"),
+            "userAgent": req.get("user_agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:87.0) Gecko/20100101 Firefox/87.0"),
+            "timeout": req.get("timeout", 30),
+            "proxy": req.get("proxy", ""),
+            "disableRedirect": req.get("disable_redirect", False),
+            "insecureSkipVerify": req.get("insecure_skip_verify", False),
+        }
+
+        if body_bytes_value is not None:
+            options["bodyBytes"] = body_bytes_value
+
+        return {
+            "requestId": request_id,
+            "options": options,
+        }
