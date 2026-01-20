@@ -7,6 +7,7 @@ package main
 import "C"
 
 import (
+    "context"
     "encoding/base64"
     "fmt"
     "log"
@@ -17,6 +18,7 @@ import (
     "time"
     "unsafe"
 
+    "github.com/gorilla/websocket"
     "github.com/vmihailenco/msgpack/v5"
 )
 
@@ -36,6 +38,12 @@ var (
 
     // Async result store for non-blocking requests
     asyncResults sync.Map // map[uintptr]chan *asyncResult
+
+    // WebSocket connection store
+    wsConnections sync.Map // map[uintptr]*websocket.Conn
+
+    // SSE connection store
+    sseConnections sync.Map // map[uintptr]*SSEResponse
 )
 
 func getFFIClient() *CycleTLS {
@@ -380,5 +388,311 @@ func sendBatchRequest(data *C.char) *C.char {
     }
     b64 := base64.StdEncoding.EncodeToString(bytes)
     return C.CString(b64)
+}
+
+// ============================================================================
+// WebSocket FFI Functions
+// ============================================================================
+
+// wsConnectOptions holds WebSocket connection options
+type wsConnectOptions struct {
+    URL       string            `msgpack:"url"`
+    Headers   map[string]string `msgpack:"headers"`
+    JA3       string            `msgpack:"ja3"`
+    UserAgent string            `msgpack:"userAgent"`
+    Proxy     string            `msgpack:"proxy"`
+    Timeout   int               `msgpack:"timeout"`
+}
+
+//export wsConnect
+func wsConnect(data *C.char) C.uintptr_t {
+    if data == nil {
+        return 0
+    }
+
+    // Decode options
+    b64str := C.GoString(data)
+    msgpackData, err := base64.StdEncoding.DecodeString(b64str)
+    if err != nil {
+        log.Printf("cycletls: wsConnect invalid base64: %v", err)
+        return 0
+    }
+
+    var options wsConnectOptions
+    if err := msgpack.Unmarshal(msgpackData, &options); err != nil {
+        log.Printf("cycletls: wsConnect invalid options: %v", err)
+        return 0
+    }
+
+    // Build HTTP headers
+    headers := nhttp.Header{}
+    for k, v := range options.Headers {
+        headers.Set(k, v)
+    }
+    if options.UserAgent != "" {
+        headers.Set("User-Agent", options.UserAgent)
+    }
+
+    // Create WebSocket client with TLS fingerprinting
+    client := getFFIClient()
+    wsClient := NewWebSocketClient(client.tlsConfig, headers)
+
+    // Connect
+    conn, _, err := wsClient.Connect(options.URL)
+    if err != nil {
+        log.Printf("cycletls: wsConnect failed: %v", err)
+        return 0
+    }
+
+    // Store connection
+    handle := cgo.NewHandle(conn)
+    handleID := uintptr(handle)
+    wsConnections.Store(handleID, conn)
+
+    log.Printf("cycletls: WebSocket connected to %s (handle=%d)", options.URL, handleID)
+    return C.uintptr_t(handleID)
+}
+
+//export wsSend
+func wsSend(handlePtr C.uintptr_t, msgType C.int, data *C.char, dataLen C.int) C.int {
+    if handlePtr == 0 {
+        return -1
+    }
+
+    handleID := uintptr(handlePtr)
+    val, ok := wsConnections.Load(handleID)
+    if !ok {
+        return -2
+    }
+
+    conn := val.(*websocket.Conn)
+
+    // Decode base64 data
+    b64str := C.GoString(data)
+    msgData, err := base64.StdEncoding.DecodeString(b64str)
+    if err != nil {
+        log.Printf("cycletls: wsSend invalid base64: %v", err)
+        return -3
+    }
+
+    // Send message
+    err = conn.WriteMessage(int(msgType), msgData)
+    if err != nil {
+        log.Printf("cycletls: wsSend failed: %v", err)
+        return -4
+    }
+
+    return 0
+}
+
+//export wsReceive
+func wsReceive(handlePtr C.uintptr_t) *C.char {
+    if handlePtr == 0 {
+        return nil
+    }
+
+    handleID := uintptr(handlePtr)
+    val, ok := wsConnections.Load(handleID)
+    if !ok {
+        return nil
+    }
+
+    conn := val.(*websocket.Conn)
+
+    // Read message
+    msgType, msgData, err := conn.ReadMessage()
+    if err != nil {
+        log.Printf("cycletls: wsReceive failed: %v", err)
+        // Return error response
+        payload := map[string]interface{}{
+            "error": err.Error(),
+        }
+        return marshalPayload(payload)
+    }
+
+    // Build response
+    payload := map[string]interface{}{
+        "type": msgType,
+    }
+
+    // For binary messages, base64 encode the data
+    if msgType == websocket.BinaryMessage {
+        payload["data"] = base64.StdEncoding.EncodeToString(msgData)
+    } else {
+        payload["data"] = string(msgData)
+    }
+
+    return marshalPayload(payload)
+}
+
+//export wsClose
+func wsClose(handlePtr C.uintptr_t) {
+    if handlePtr == 0 {
+        return
+    }
+
+    handleID := uintptr(handlePtr)
+    val, ok := wsConnections.Load(handleID)
+    if !ok {
+        return
+    }
+
+    conn := val.(*websocket.Conn)
+
+    // Send close message
+    conn.WriteMessage(websocket.CloseMessage,
+        websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+    conn.Close()
+
+    // Cleanup
+    wsConnections.Delete(handleID)
+    handle := cgo.Handle(handlePtr)
+    handle.Delete()
+
+    log.Printf("cycletls: WebSocket closed (handle=%d)", handleID)
+}
+
+// ============================================================================
+// SSE (Server-Sent Events) FFI Functions
+// ============================================================================
+
+// sseConnectOptions holds SSE connection options
+type sseConnectOptions struct {
+    URL       string            `msgpack:"url"`
+    Headers   map[string]string `msgpack:"headers"`
+    JA3       string            `msgpack:"ja3"`
+    UserAgent string            `msgpack:"userAgent"`
+    Proxy     string            `msgpack:"proxy"`
+    Timeout   int               `msgpack:"timeout"`
+}
+
+//export sseConnect
+func sseConnect(data *C.char) C.uintptr_t {
+    if data == nil {
+        return 0
+    }
+
+    // Decode options
+    b64str := C.GoString(data)
+    msgpackData, err := base64.StdEncoding.DecodeString(b64str)
+    if err != nil {
+        log.Printf("cycletls: sseConnect invalid base64: %v", err)
+        return 0
+    }
+
+    var options sseConnectOptions
+    if err := msgpack.Unmarshal(msgpackData, &options); err != nil {
+        log.Printf("cycletls: sseConnect invalid options: %v", err)
+        return 0
+    }
+
+    // Build HTTP headers
+    headers := nhttp.Header{}
+    for k, v := range options.Headers {
+        headers.Set(k, v)
+    }
+    if options.UserAgent != "" {
+        headers.Set("User-Agent", options.UserAgent)
+    }
+
+    // Get HTTP client from CycleTLS
+    client := getFFIClient()
+
+    // Create SSE client
+    sseClient := NewSSEClient(client.httpClient, headers)
+
+    // Connect with timeout context
+    timeout := time.Duration(options.Timeout) * time.Second
+    if timeout == 0 {
+        timeout = 30 * time.Second
+    }
+    ctx, cancel := context.WithTimeout(context.Background(), timeout)
+    defer cancel()
+
+    sseResp, err := sseClient.Connect(ctx, options.URL)
+    if err != nil {
+        log.Printf("cycletls: sseConnect failed: %v", err)
+        return 0
+    }
+
+    // Store connection
+    handle := cgo.NewHandle(sseResp)
+    handleID := uintptr(handle)
+    sseConnections.Store(handleID, sseResp)
+
+    log.Printf("cycletls: SSE connected to %s (handle=%d)", options.URL, handleID)
+    return C.uintptr_t(handleID)
+}
+
+//export sseNextEvent
+func sseNextEvent(handlePtr C.uintptr_t) *C.char {
+    if handlePtr == 0 {
+        return nil
+    }
+
+    handleID := uintptr(handlePtr)
+    val, ok := sseConnections.Load(handleID)
+    if !ok {
+        return nil
+    }
+
+    sseResp := val.(*SSEResponse)
+
+    // Read next event
+    event, err := sseResp.NextEvent()
+    if err != nil {
+        log.Printf("cycletls: sseNextEvent error: %v", err)
+        // Return error or EOF
+        payload := map[string]interface{}{
+            "error": err.Error(),
+            "eof":   true,
+        }
+        return marshalPayload(payload)
+    }
+
+    if event == nil {
+        // End of stream
+        payload := map[string]interface{}{
+            "eof": true,
+        }
+        return marshalPayload(payload)
+    }
+
+    // Build response
+    payload := map[string]interface{}{
+        "data":  event.Data,
+        "event": event.Event,
+    }
+    if event.ID != "" {
+        payload["id"] = event.ID
+    }
+    if event.Retry != 0 {
+        payload["retry"] = event.Retry
+    }
+
+    return marshalPayload(payload)
+}
+
+//export sseClose
+func sseClose(handlePtr C.uintptr_t) {
+    if handlePtr == 0 {
+        return
+    }
+
+    handleID := uintptr(handlePtr)
+    val, ok := sseConnections.Load(handleID)
+    if !ok {
+        return
+    }
+
+    sseResp := val.(*SSEResponse)
+    sseResp.Close()
+
+    // Cleanup
+    sseConnections.Delete(handleID)
+    handle := cgo.Handle(handlePtr)
+    handle.Delete()
+
+    log.Printf("cycletls: SSE closed (handle=%d)", handleID)
 }
 
