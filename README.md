@@ -2,12 +2,17 @@
 
 <div align="center">
 
-![build](https://img.shields.io/badge/build-passing-brightgreen)
+[![CI](https://github.com/Danny-Dasilva/cycletls_python/actions/workflows/main.yml/badge.svg)](https://github.com/Danny-Dasilva/cycletls_python/actions/workflows/main.yml)
 [![PyPI version](https://img.shields.io/pypi/v/cycletls.svg)](https://pypi.org/project/cycletls/)
+[![Downloads](https://static.pepy.tech/badge/cycletls/month)](https://pepy.tech/project/cycletls)
 [![Python versions](https://img.shields.io/pypi/pyversions/cycletls.svg)](https://pypi.org/project/cycletls/)
 [![license](https://img.shields.io/github/license/Danny-Dasilva/CycleTLS.svg)](https://github.com/Danny-Dasilva/CycleTLS/blob/main/LICENSE)
 
-**High-performance Python HTTP client with advanced TLS fingerprinting**
+**Python HTTP client that impersonates real browsers - bypass anti-bot detection with TLS/JA3/JA4/HTTP2 fingerprinting**
+
+*Advanced TLS fingerprinting library with JA3, JA4, HTTP/2, HTTP/3, WebSocket, and SSE support.*
+
+*Unlike requests or httpx, CycleTLS can make your requests indistinguishable from real browser traffic.*
 
 </div>
 

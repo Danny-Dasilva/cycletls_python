@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "cycletls"
 version = "0.0.2"
-description = "Advanced TLS fingerprinting library with JA3, JA4, HTTP/2, HTTP/3, WebSocket, and SSE support"
+description = "Advanced TLS fingerprinting library with JA3, JA4, HTTP/2, HTTP/3, WebSocket, and SSE support - bypass anti-bot detection by impersonating real browsers"
 readme = "README.md"
 authors = [
     {name = "Danny-Dasilva", email = "dannydasilva.solutions@gmail.com"}
@@ -25,7 +25,17 @@ classifiers = [
     "Topic :: Security",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-keywords = ["tls", "fingerprinting", "ja3", "ja4", "http2", "http3", "websocket", "sse", "quic"]
+keywords = [
+    # Core TLS fingerprinting
+    "tls", "tls-fingerprint", "fingerprinting", "ja3", "ja3-fingerprint", "ja4",
+    # Protocol support
+    "http2", "http2-fingerprint", "http3", "quic", "websocket", "sse",
+    # Use cases (high-value SEO terms)
+    "http-client", "web-scraping", "anti-bot", "bot-detection-bypass",
+    "browser-impersonation", "curl-impersonate",
+    # Ecosystem compatibility
+    "requests", "akamai-fingerprint", "cloudflare-bypass",
+]
 requires-python = ">=3.8"
 dependencies = [
     "cffi>=1.15.0",

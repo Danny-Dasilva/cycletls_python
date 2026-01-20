@@ -1,0 +1,43 @@
+# CycleTLS Python
+
+> Python HTTP client that impersonates real browsers - bypass anti-bot detection with TLS/JA3/JA4/HTTP2 fingerprinting. Unlike requests or httpx, CycleTLS makes your requests indistinguishable from real browser traffic.
+
+CycleTLS is a high-performance Python HTTP client built on a Go backend, providing advanced TLS fingerprinting capabilities. Use it for web scraping, API access, and bypassing bot detection systems that rely on TLS fingerprinting (Cloudflare, Akamai, etc.).
+
+Key capabilities:
+- TLS fingerprint spoofing (JA3, JA4R, HTTP/2 Akamai fingerprints)
+- Browser impersonation (Chrome, Firefox, Safari profiles)
+- Modern protocols (HTTP/2, HTTP/3/QUIC, WebSocket, SSE)
+- requests-like API with full async/await support
+- Session management with persistent cookies
+
+## Quick Start
+- [Installation](https://github.com/Danny-Dasilva/cycletls_python#installation): pip install cycletls
+- [Basic Usage](https://github.com/Danny-Dasilva/cycletls_python#quick-start): Simple API with zero boilerplate
+- [Full Documentation](https://github.com/Danny-Dasilva/cycletls_python#readme): Complete README
+
+## API Reference
+- [CycleTLS Class](https://github.com/Danny-Dasilva/cycletls_python#cycletls-class): Main synchronous client
+- [AsyncCycleTLS Class](https://github.com/Danny-Dasilva/cycletls_python#asynccycletls-class): Async client for concurrent requests
+- [Session Class](https://github.com/Danny-Dasilva/cycletls_python#session-class): Persistent cookies and headers
+- [Request Parameters](https://github.com/Danny-Dasilva/cycletls_python#request-parameters): All configuration options
+- [Response Object](https://github.com/Danny-Dasilva/cycletls_python#response-object): Response properties and methods
+
+## TLS Fingerprinting
+- [JA3 Fingerprinting](https://github.com/Danny-Dasilva/cycletls_python#ja3-fingerprinting): Browser TLS mimicking
+- [JA4R Fingerprinting](https://github.com/Danny-Dasilva/cycletls_python#ja4r-fingerprinting-advanced): Advanced cipher/extension control
+- [HTTP/2 Fingerprinting](https://github.com/Danny-Dasilva/cycletls_python#http2-fingerprinting): Akamai fingerprint configuration
+
+## Examples
+- [Async Concurrent Requests](https://github.com/Danny-Dasilva/cycletls_python#concurrent-requests-the-power-of-async): Parallel request execution
+- [Proxy Configuration](https://github.com/Danny-Dasilva/cycletls_python#proxy-configuration): SOCKS4/5, HTTP proxies
+- [Cookie Handling](https://github.com/Danny-Dasilva/cycletls_python#cookie-handling): Simple and advanced cookies
+- [Binary Data](https://github.com/Danny-Dasilva/cycletls_python#binary-data): Download/upload binary content
+
+## Full Documentation
+- [llms-full.txt](https://github.com/Danny-Dasilva/cycletls_python/blob/main/llms-full.txt): Complete API documentation with all parameters
+
+## Optional
+- [Examples Directory](https://github.com/Danny-Dasilva/cycletls_python/tree/main/examples): Runnable code examples
+- [PyPI Package](https://pypi.org/project/cycletls/): Package page
+- [License](https://github.com/Danny-Dasilva/cycletls_python/blob/main/LICENSE): GPL-3.0
