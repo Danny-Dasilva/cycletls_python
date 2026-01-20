@@ -52,6 +52,19 @@ from .exceptions import (
 )
 from .structures import CaseInsensitiveDict, CookieJar
 
+# Import WebSocket and SSE support
+from .websocket import (
+    MessageType,
+    WebSocketMessage,
+    WebSocketError,
+    WebSocketConnection,
+)
+from .sse import (
+    SSEEvent,
+    SSEError,
+    SSEConnection,
+)
+
 # Import global session management
 from ._global import (
     get_global_session,
@@ -358,6 +371,15 @@ __all__ = [
     "CycleTLS",
     "AsyncCycleTLS",
     "Session",
+    # WebSocket support
+    "MessageType",
+    "WebSocketMessage",
+    "WebSocketError",
+    "WebSocketConnection",
+    # SSE (Server-Sent Events) support
+    "SSEEvent",
+    "SSEError",
+    "SSEConnection",
     # Convenience functions (sync)
     "request",
     "get",

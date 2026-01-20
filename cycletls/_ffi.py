@@ -21,11 +21,23 @@ logger = logging.getLogger(__name__)
 _ffi = FFI()
 _ffi.cdef(
     """
+    // HTTP request functions
     char* getRequest(char* data);
     unsigned long submitRequestAsync(char* data);
     char* checkRequestAsync(unsigned long handle);
     char* sendBatchRequest(char* data);
     void freeString(char* ptr);
+
+    // WebSocket functions
+    unsigned long wsConnect(char* data);
+    int wsSend(unsigned long handle, int msgType, char* data, int dataLen);
+    char* wsReceive(unsigned long handle);
+    void wsClose(unsigned long handle);
+
+    // SSE (Server-Sent Events) functions
+    unsigned long sseConnect(char* data);
+    char* sseNextEvent(unsigned long handle);
+    void sseClose(unsigned long handle);
     """
 )
 
