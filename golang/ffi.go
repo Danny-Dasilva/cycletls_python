@@ -382,3 +382,126 @@ func sendBatchRequest(data *C.char) *C.char {
     return C.CString(b64)
 }
 
+// ============================================================================
+// Zero-Copy FFI Functions
+// ============================================================================
+// These functions accept raw msgpack bytes (no base64 encoding) for better
+// performance. They eliminate the ~33% size overhead and CPU cycles of base64.
+
+// marshalPayloadZeroCopy returns raw msgpack bytes and sets the output length
+func marshalPayloadZeroCopy(payload map[string]interface{}, outLen *C.int) *C.char {
+    bytes, err := msgpack.Marshal(payload)
+    if err != nil {
+        log.Printf("cycletls: failed to marshal payload: %v", err)
+        fallback := map[string]interface{}{
+            "RequestID": payload["RequestID"],
+            "Status":    0,
+            "Body":      "failed to encode response",
+            "Headers":   map[string]string{},
+            "FinalUrl":  "",
+            "Cookies":   []map[string]interface{}{},
+        }
+        bytes, _ = msgpack.Marshal(fallback)
+    }
+    *outLen = C.int(len(bytes))
+    // Copy bytes to C memory (caller must free with freeString)
+    return C.CString(string(bytes))
+}
+
+//export getRequestZeroCopy
+func getRequestZeroCopy(data *C.char, dataLen C.int, outLen *C.int) *C.char {
+    if data == nil || dataLen <= 0 {
+        return marshalPayloadZeroCopy(buildErrorPayload("", "empty payload"), outLen)
+    }
+
+    // Convert C bytes to Go slice without base64 decoding
+    // Use C.GoBytes to copy the exact number of bytes (handles null bytes correctly)
+    msgpackData := C.GoBytes(unsafe.Pointer(data), dataLen)
+
+    request := cycleTLSRequest{}
+    if err := msgpack.Unmarshal(msgpackData, &request); err != nil {
+        return marshalPayloadZeroCopy(buildErrorPayload("", "invalid payload: "+err.Error()), outLen)
+    }
+
+    if request.RequestID == "" {
+        request.RequestID = "cycleTLSRequest"
+    }
+
+    request.Options.Method = normalizeMethod(request.Options.Method)
+
+    // Use goroutine-based execution
+    resultCh := make(chan map[string]interface{}, 1)
+
+    go func() {
+        client := getFFIClient()
+        resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
+        if err != nil {
+            log.Printf("cycletls: request failed: %v", err)
+            resultCh <- buildErrorPayload(request.RequestID, err.Error())
+        } else {
+            resultCh <- buildResponsePayload(request.RequestID, resp)
+        }
+    }()
+
+    // Block until result is ready
+    payload := <-resultCh
+    return marshalPayloadZeroCopy(payload, outLen)
+}
+
+//export sendBatchRequestZeroCopy
+func sendBatchRequestZeroCopy(data *C.char, dataLen C.int, outLen *C.int) *C.char {
+    if data == nil || dataLen <= 0 {
+        return marshalPayloadZeroCopy(buildErrorPayload("", "empty payload"), outLen)
+    }
+
+    // Convert C bytes to Go slice without base64 decoding
+    msgpackData := C.GoBytes(unsafe.Pointer(data), dataLen)
+
+    var batch BatchRequest
+    if err := msgpack.Unmarshal(msgpackData, &batch); err != nil {
+        return marshalPayloadZeroCopy(buildErrorPayload("", "invalid batch payload: "+err.Error()), outLen)
+    }
+
+    // Handle empty batch case
+    if len(batch.Requests) == 0 {
+        batchResp := BatchResponse{Responses: []map[string]interface{}{}}
+        bytes, _ := msgpack.Marshal(batchResp)
+        *outLen = C.int(len(bytes))
+        return C.CString(string(bytes))
+    }
+
+    // Process all requests in parallel using goroutines
+    responses := make([]map[string]interface{}, len(batch.Requests))
+    var wg sync.WaitGroup
+
+    for i, req := range batch.Requests {
+        wg.Add(1)
+        go func(idx int, r cycleTLSRequest) {
+            defer wg.Done()
+
+            if r.RequestID == "" {
+                r.RequestID = fmt.Sprintf("batch_%d", idx)
+            }
+            r.Options.Method = normalizeMethod(r.Options.Method)
+
+            client := getFFIClient()
+            resp, err := client.Do(r.Options.URL, r.Options, r.Options.Method)
+            if err != nil {
+                responses[idx] = buildErrorPayload(r.RequestID, err.Error())
+            } else {
+                responses[idx] = buildResponsePayload(r.RequestID, resp)
+            }
+        }(i, req)
+    }
+    wg.Wait()
+
+    // Marshal batch response (raw msgpack, no base64)
+    batchResp := BatchResponse{Responses: responses}
+    bytes, err := msgpack.Marshal(batchResp)
+    if err != nil {
+        return marshalPayloadZeroCopy(buildErrorPayload("", "failed to marshal batch response: "+err.Error()), outLen)
+    }
+    *outLen = C.int(len(bytes))
+    return C.CString(string(bytes))
+}
+

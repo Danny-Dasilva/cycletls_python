@@ -1,4 +1,11 @@
-"""Go shared library bindings for CycleTLS using CFFI."""
+"""Go shared library bindings for CycleTLS using CFFI.
+
+This module provides two FFI modes:
+1. Zero-copy mode (default): Uses raw bytes with explicit length (faster)
+2. Base64 mode (fallback): Uses base64 encoding for compatibility
+
+Zero-copy mode eliminates the ~33% size overhead and CPU cycles of base64.
+"""
 
 from __future__ import annotations
 
@@ -21,17 +28,23 @@ logger = logging.getLogger(__name__)
 _ffi = FFI()
 _ffi.cdef(
     """
+    // Legacy base64-encoded API (for compatibility)
     char* getRequest(char* data);
     unsigned long submitRequestAsync(char* data);
     char* checkRequestAsync(unsigned long handle);
     char* sendBatchRequest(char* data);
     void freeString(char* ptr);
+
+    // Zero-copy API (raw bytes with explicit length)
+    // Returns: pointer to result buffer, sets *outLen to result length
+    char* getRequestZeroCopy(char* data, int dataLen, int* outLen);
+    char* sendBatchRequestZeroCopy(char* data, int dataLen, int* outLen);
     """
 )
 
 _lib = None
 _lib_lock = threading.Lock()
-# _send_lock removed: Go backend is thread-safe (singleton client with sync.RWMutex on pool)
+_use_zerocopy = None  # None = auto-detect, True/False = forced
 
 
 def _get_library_filenames() -> list[str]:
@@ -110,8 +123,61 @@ def _load_library():
         raise RuntimeError(error_msg)
 
 
-def send_request(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute a request against the Go runtime via the shared library (synchronous)."""
+def _has_zerocopy_support() -> bool:
+    """Check if the loaded library supports zero-copy API."""
+    global _use_zerocopy
+    if _use_zerocopy is not None:
+        return _use_zerocopy
+
+    lib = _load_library()
+    try:
+        # Check if getRequestZeroCopy exists
+        _ = lib.getRequestZeroCopy
+        _use_zerocopy = True
+        logger.debug("Zero-copy FFI mode enabled")
+    except AttributeError:
+        _use_zerocopy = False
+        logger.debug("Zero-copy FFI not available, using base64 mode")
+    return _use_zerocopy
+
+
+def _send_request_zerocopy(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute request using zero-copy mode (no base64 encoding)."""
+    lib = _load_library()
+
+    # Serialize payload to msgpack (raw bytes)
+    msgpack_data = msgpack.packb(payload, use_bin_type=False)
+
+    # Create buffer from raw bytes - CFFI's from_buffer creates a view, not a copy
+    buf = _ffi.from_buffer(msgpack_data)
+
+    # Prepare output length pointer
+    out_len = _ffi.new("int*")
+
+    logger.debug(f"Calling getRequestZeroCopy (input: {len(msgpack_data)} bytes)")
+
+    # Call zero-copy function
+    response_ptr = lib.getRequestZeroCopy(buf, len(msgpack_data), out_len)
+
+    if response_ptr == _ffi.NULL:
+        error_msg = "CycleTLS shared library returned NULL response"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+
+    try:
+        # Read exact number of bytes (no null termination issues)
+        response_len = out_len[0]
+        raw_response = _ffi.buffer(response_ptr, response_len)[:]
+        logger.debug(f"Received zero-copy response ({response_len} bytes)")
+    finally:
+        lib.freeString(response_ptr)
+
+    # Unpack msgpack directly (no base64 decode needed)
+    return msgpack.unpackb(raw_response, raw=False)
+
+
+def _send_request_base64(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute request using base64 mode (compatibility fallback)."""
     lib = _load_library()
 
     # Use msgpack for binary serialization (3-5x faster than JSON)
@@ -121,7 +187,7 @@ def send_request(payload: Dict[str, Any]) -> Dict[str, Any]:
     b64_data = base64.b64encode(msgpack_data)
     buf = _ffi.new("char[]", b64_data)
 
-    logger.debug("Calling Go shared library getRequest()")
+    logger.debug("Calling Go shared library getRequest() [base64 mode]")
 
     # No lock needed: Go backend is thread-safe
     response_ptr = lib.getRequest(buf)
@@ -140,6 +206,16 @@ def send_request(payload: Dict[str, Any]) -> Dict[str, Any]:
     # Decode base64 then unpack msgpack
     raw = base64.b64decode(raw_b64)
     return msgpack.unpackb(raw, raw=False)
+
+
+def send_request(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute a request against the Go runtime via the shared library (synchronous).
+
+    Automatically uses zero-copy mode if available, falls back to base64.
+    """
+    if _has_zerocopy_support():
+        return _send_request_zerocopy(payload)
+    return _send_request_base64(payload)
 
 
 def submit_request_async(payload: Dict[str, Any]) -> int:
@@ -287,29 +363,42 @@ async def send_requests_batch(
     )
 
 
-def send_batch_request(payloads: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
-    """Send multiple requests in a single FFI call.
+def _send_batch_request_zerocopy(payloads: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    """Send batch request using zero-copy mode."""
+    lib = _load_library()
 
-    This is more efficient than individual requests because it amortizes
-    FFI call overhead across all requests. Requests are executed in parallel
-    on the Go side using goroutines.
+    # Wrap payloads in batch structure
+    batch_data = {"requests": payloads}
+    msgpack_data = msgpack.packb(batch_data, use_bin_type=False)
 
-    Args:
-        payloads: List of request payload dictionaries. Each payload should have:
-            - requestId: Unique identifier for the request
-            - options: Request options dict with url, method, headers, body, etc.
+    # Create buffer from raw bytes
+    buf = _ffi.from_buffer(msgpack_data)
 
-    Returns:
-        List of response dictionaries in the same order as input payloads.
-        Each response contains: RequestID, Status, Body, Headers, FinalUrl, Cookies
+    # Prepare output length pointer
+    out_len = _ffi.new("int*")
 
-    Raises:
-        RuntimeError: If the batch request fails
-    """
-    # Handle empty batch case on Python side (avoid FFI call)
-    if not payloads:
-        return []
+    logger.debug(f"Sending batch request [zero-copy] ({len(payloads)} payloads, {len(msgpack_data)} bytes)")
 
+    response_ptr = lib.sendBatchRequestZeroCopy(buf, len(msgpack_data), out_len)
+
+    if response_ptr == _ffi.NULL:
+        error_msg = "CycleTLS batch request returned NULL response"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+
+    try:
+        response_len = out_len[0]
+        raw_response = _ffi.buffer(response_ptr, response_len)[:]
+        logger.debug(f"Received batch response ({response_len} bytes)")
+    finally:
+        lib.freeString(response_ptr)
+
+    result = msgpack.unpackb(raw_response, raw=False)
+    return result.get("responses", [])
+
+
+def _send_batch_request_base64(payloads: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    """Send batch request using base64 mode."""
     lib = _load_library()
 
     # Wrap payloads in batch structure
@@ -318,7 +407,7 @@ def send_batch_request(payloads: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
     b64_data = base64.b64encode(msgpack_data)
     buf = _ffi.new("char[]", b64_data)
 
-    logger.debug(f"Sending batch request with {len(payloads)} payloads")
+    logger.debug(f"Sending batch request [base64] ({len(payloads)} payloads)")
 
     response_ptr = lib.sendBatchRequest(buf)
 
@@ -337,6 +426,36 @@ def send_batch_request(payloads: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
     raw = base64.b64decode(raw_b64)
     result = msgpack.unpackb(raw, raw=False)
     return result.get("responses", [])
+
+
+def send_batch_request(payloads: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    """Send multiple requests in a single FFI call.
+
+    This is more efficient than individual requests because it amortizes
+    FFI call overhead across all requests. Requests are executed in parallel
+    on the Go side using goroutines.
+
+    Automatically uses zero-copy mode if available, falls back to base64.
+
+    Args:
+        payloads: List of request payload dictionaries. Each payload should have:
+            - requestId: Unique identifier for the request
+            - options: Request options dict with url, method, headers, body, etc.
+
+    Returns:
+        List of response dictionaries in the same order as input payloads.
+        Each response contains: RequestID, Status, Body, Headers, FinalUrl, Cookies
+
+    Raises:
+        RuntimeError: If the batch request fails
+    """
+    # Handle empty batch case on Python side (avoid FFI call)
+    if not payloads:
+        return []
+
+    if _has_zerocopy_support():
+        return _send_batch_request_zerocopy(payloads)
+    return _send_batch_request_base64(payloads)
 
 
 __all__ = [
