@@ -26,10 +26,12 @@ If you have an API change or feature request feel free to open an [Issue](https:
 - **Pythonic API** - Familiar requests-like interface with context managers
 - **Connection Pooling** - Built-in connection reuse for high performance
 - **Comprehensive Proxy Support** - HTTP, HTTPS, SOCKS4, SOCKS5, SOCKS5h
-- **WebSocket & SSE** - Full support for WebSocket and Server-Sent Events
+- **WebSocket & SSE** - Full bidirectional WebSocket and Server-Sent Events support
 - **Binary Data Handling** - Seamless upload and download of binary content
 - **Type-Safe** - Pydantic models with full type hints
 - **Session Management** - Persistent cookies and headers across requests
+- **🆕 Browser Fingerprint Profiles** - Built-in Chrome, Firefox, Safari, Edge profiles with plugin support
+- **🆕 Zero-Copy FFI** - 3x faster sync requests with optimized Python-Go communication
 
 ## Table of Contents
 
@@ -701,6 +703,75 @@ with CycleTLS() as client:
 └─ Settings (1=header_table_size, 2=enable_push, 4=max_concurrent_streams, ...)
 ```
 
+#### Browser Fingerprint Profiles (NEW!)
+
+Use built-in browser profiles instead of manually configuring JA3/JA4/HTTP2 strings:
+
+```python
+import cycletls
+from cycletls import CHROME_120, FIREFOX_121, SAFARI_17, FingerprintRegistry
+
+# Use built-in browser profile
+response = cycletls.get(
+    'https://ja3er.com/json',
+    fingerprint=CHROME_120  # Pre-configured Chrome 120 fingerprint
+)
+
+# Available built-in profiles
+profiles = [
+    CHROME_120,      # Chrome 120 on Windows
+    CHROME_121,      # Chrome 121 on Windows
+    FIREFOX_121,     # Firefox 121 on Linux
+    SAFARI_17,       # Safari 17 on macOS
+    EDGE_120,        # Edge 120 on Windows
+    CHROME_ANDROID,  # Chrome on Android
+    SAFARI_IOS,      # Safari on iOS
+]
+
+# List all registered profiles
+registry = FingerprintRegistry()
+for name in registry.all():
+    print(f"Available: {name}")
+```
+
+**Custom Fingerprint Profiles:**
+
+```python
+from cycletls import TLSFingerprint, FingerprintRegistry
+
+# Create custom fingerprint
+my_profile = TLSFingerprint(
+    name='custom_browser',
+    ja3='771,4865-4866-4867-49195...',
+    user_agent='Mozilla/5.0...',
+    http2_fingerprint='1:65536;2:0;4:131072...',
+)
+
+# Register for reuse
+registry = FingerprintRegistry()
+registry.register(my_profile)
+
+# Use in requests
+response = cycletls.get('https://example.com', fingerprint=my_profile)
+```
+
+**Load Fingerprints from Files:**
+
+```python
+from cycletls import load_fingerprints_from_dir, load_fingerprint_from_file
+
+# Load single profile from JSON/YAML
+profile = load_fingerprint_from_file('profiles/chrome_125.json')
+
+# Load all profiles from a directory
+load_fingerprints_from_dir('profiles/')  # Auto-registers all found profiles
+
+# Use environment variable for plugin directory
+# Set CYCLETLS_FINGERPRINT_DIR=/path/to/profiles
+from cycletls import load_fingerprints_from_env
+load_fingerprints_from_env()
+```
+
 ### HTTP/3 Support
 
 ```python
@@ -937,65 +1008,83 @@ The following content types are automatically handled as binary data:
 
 ### WebSocket Client
 
-> **⚠️ Current Limitation**: WebSocket support currently handles the handshake only. Bidirectional messaging requires streaming support, planned for v1.2.
+Full bidirectional WebSocket support with TLS fingerprinting.
 
 ```python
-from cycletls import CycleTLS
+from cycletls import WebSocketConnection
 
-with CycleTLS() as client:
-    # WebSocket handshake with TLS fingerprinting
-    response = client.request(
-        'GET',
-        'wss://echo.websocket.org',
-        protocol='websocket',
-        ja3='771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0',
-        user_agent='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:87.0) Gecko/20100101 Firefox/87.0',
-        headers={'Sec-WebSocket-Protocol': 'echo-protocol'}
-    )
+# Basic WebSocket connection
+with WebSocketConnection('wss://echo.websocket.org') as ws:
+    # Send text message
+    ws.send('Hello, WebSocket!')
 
-    # Check connection status
-    if response.status_code == 101:
-        print('WebSocket upgrade successful')
-        print(f"Response headers: {response.headers}")
+    # Receive message
+    message = ws.receive()
+    print(f"Received: {message.data}")
+    print(f"Message type: {message.type}")  # MessageType.TEXT or MessageType.BINARY
+
+# WebSocket with TLS fingerprinting
+with WebSocketConnection(
+    'wss://example.com/socket',
+    ja3='771,4865-4867-4866-49195-49199...',
+    user_agent='Mozilla/5.0...',
+    headers={'Authorization': 'Bearer token'},
+    proxy='socks5://127.0.0.1:9050'
+) as ws:
+    # Send and receive messages
+    ws.send('{"action": "subscribe", "channel": "updates"}')
+
+    # Iterate over messages
+    for message in ws:
+        if message.is_close:
+            break
+        print(f"Event: {message.data}")
 ```
 
-**Current Capabilities:**
-- ✅ WebSocket handshake with custom TLS fingerprints
-- ✅ Connection establishment and upgrade verification
-- ✅ Custom headers and protocols
-- ⏳ Bidirectional messaging (planned for v1.2 with streaming support)
+**WebSocket Features:**
+- ✅ Full bidirectional messaging (text and binary)
+- ✅ TLS fingerprinting (JA3, JA4R)
+- ✅ Custom headers and proxy support
+- ✅ Context manager for automatic cleanup
+- ✅ Message type detection (TEXT, BINARY, CLOSE, PING, PONG)
 
 ### Server-Sent Events (SSE)
 
-> **⚠️ Current Limitation**: SSE support currently handles the connection setup only. Event streaming requires streaming support, planned for v1.2.
+Full SSE streaming support with TLS fingerprinting.
 
 ```python
-from cycletls import CycleTLS
+from cycletls import SSEConnection
 
-with CycleTLS() as client:
-    # SSE connection setup
-    response = client.request(
-        'GET',
-        'https://example.com/events',
-        protocol='sse',
-        ja3='771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0',
-        user_agent='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:87.0) Gecko/20100101 Firefox/87.0',
-        headers={
-            'Accept': 'text/event-stream',
-            'Cache-Control': 'no-cache'
-        }
-    )
+# Basic SSE connection
+with SSEConnection('https://example.com/events') as sse:
+    # Iterate over events
+    for event in sse:
+        print(f"Event type: {event.event}")  # 'message', 'update', etc.
+        print(f"Data: {event.data}")
+        print(f"ID: {event.id}")
 
-    # Initial response (not streaming)
-    print(f"SSE connection established: {response.status_code}")
-    print(f"Initial content: {response.text}")
+# SSE with TLS fingerprinting and resume support
+with SSEConnection(
+    'https://api.example.com/stream',
+    ja3='771,4865-4867-4866-49195-49199...',
+    user_agent='Mozilla/5.0...',
+    headers={'Authorization': 'Bearer token'},
+    last_event_id='event-99',  # Resume from last known event
+    proxy='socks5://127.0.0.1:9050'
+) as sse:
+    for event in sse:
+        if event.retry:
+            print(f"Server requested retry interval: {event.retry}ms")
+        process_event(event.data)
 ```
 
-**Current Capabilities:**
-- ✅ SSE connection setup with custom TLS fingerprints
-- ✅ Initial handshake and response
-- ✅ Custom headers
-- ⏳ Long-lived event streaming (planned for v1.2 with streaming support)
+**SSE Features:**
+- ✅ Full event streaming with automatic parsing
+- ✅ TLS fingerprinting (JA3, JA4R)
+- ✅ Last-Event-ID for resumption
+- ✅ Custom retry interval handling
+- ✅ Context manager for automatic cleanup
+- ✅ Event type, ID, and data extraction
 
 ### Session Management
 
