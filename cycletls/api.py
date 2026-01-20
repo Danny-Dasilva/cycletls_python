@@ -15,6 +15,7 @@ from typing import Any, Dict, Iterable, Literal, Optional, Tuple, Union
 
 from ._ffi import send_request as ffi_send_request, send_batch_request as ffi_send_batch_request
 from .exceptions import CycleTLSError
+from .fingerprints import TLSFingerprint, FingerprintRegistry
 from .schema import Request, Response, _dict_to_response
 
 # Setup module logger
@@ -208,6 +209,7 @@ class CycleTLS:
         data: Optional[Union[Dict[str, Any], str, bytes]] = None,
         json_data: Optional[Dict[str, Any]] = None,
         files: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
         **kwargs: Any,
     ) -> Response:
         """
@@ -220,13 +222,31 @@ class CycleTLS:
             data: Form data or raw body
             json_data: JSON data (auto-serialized)
             files: File uploads (not yet supported)
+            fingerprint: TLS fingerprint profile name or TLSFingerprint instance.
+                        If a string, looks up the profile in FingerprintRegistry.
+                        Applies the profile's ja3, user_agent, header_order, etc.
             **kwargs: Additional CycleTLS options (headers, cookies, proxy, etc.)
 
         Returns:
             Response: Response object with status, headers, body, cookies, etc.
+
+        Example:
+            >>> # Use a built-in fingerprint profile
+            >>> response = client.get("https://example.com", fingerprint="chrome_120")
+            >>>
+            >>> # Or use a custom TLSFingerprint instance
+            >>> from cycletls.fingerprints import TLSFingerprint
+            >>> custom = TLSFingerprint(name="custom", ja3="...", user_agent="Custom/1.0")
+            >>> response = client.get("https://example.com", fingerprint=custom)
         """
         if self._closed:
             raise CycleTLSError("CycleTLS client is closed")
+
+        # Apply fingerprint profile if provided
+        if fingerprint is not None:
+            if isinstance(fingerprint, str):
+                fingerprint = FingerprintRegistry.get(fingerprint)
+            kwargs = fingerprint.apply_to_kwargs(kwargs)
 
         # Handle deprecated body/body_bytes parameters
         if "body" in kwargs:
@@ -340,33 +360,33 @@ class CycleTLS:
             logger.error(f"Failed to parse response: {exc}")
             raise CycleTLSError(f"Failed to parse CycleTLS response: {exc}") from exc
 
-    def get(self, url, params=None, **kwargs) -> Response:
+    def get(self, url, params=None, fingerprint=None, **kwargs) -> Response:
         """Sends a GET request."""
-        return self.request("get", url, params=params, **kwargs)
+        return self.request("get", url, params=params, fingerprint=fingerprint, **kwargs)
 
-    def options(self, url, params=None, **kwargs) -> Response:
+    def options(self, url, params=None, fingerprint=None, **kwargs) -> Response:
         """Sends an OPTIONS request."""
-        return self.request("options", url, params=params, **kwargs)
+        return self.request("options", url, params=params, fingerprint=fingerprint, **kwargs)
 
-    def head(self, url, params=None, **kwargs) -> Response:
+    def head(self, url, params=None, fingerprint=None, **kwargs) -> Response:
         """Sends a HEAD request."""
-        return self.request("head", url, params=params, **kwargs)
+        return self.request("head", url, params=params, fingerprint=fingerprint, **kwargs)
 
-    def post(self, url, params=None, data=None, json_data=None, **kwargs) -> Response:
+    def post(self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs) -> Response:
         """Sends a POST request."""
-        return self.request("post", url, params=params, data=data, json_data=json_data, **kwargs)
+        return self.request("post", url, params=params, data=data, json_data=json_data, fingerprint=fingerprint, **kwargs)
 
-    def put(self, url, params=None, data=None, json_data=None, **kwargs) -> Response:
+    def put(self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs) -> Response:
         """Sends a PUT request."""
-        return self.request("put", url, params=params, data=data, json_data=json_data, **kwargs)
+        return self.request("put", url, params=params, data=data, json_data=json_data, fingerprint=fingerprint, **kwargs)
 
-    def patch(self, url, params=None, data=None, json_data=None, **kwargs) -> Response:
+    def patch(self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs) -> Response:
         """Sends a PATCH request."""
-        return self.request("patch", url, params=params, data=data, json_data=json_data, **kwargs)
+        return self.request("patch", url, params=params, data=data, json_data=json_data, fingerprint=fingerprint, **kwargs)
 
-    def delete(self, url, params=None, **kwargs) -> Response:
+    def delete(self, url, params=None, fingerprint=None, **kwargs) -> Response:
         """Sends a DELETE request."""
-        return self.request("delete", url, params=params, **kwargs)
+        return self.request("delete", url, params=params, fingerprint=fingerprint, **kwargs)
 
     def batch(self, requests: list[dict]) -> list[Response]:
         """Send multiple requests in a single batch.

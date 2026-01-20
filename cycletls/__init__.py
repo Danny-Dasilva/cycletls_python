@@ -36,6 +36,26 @@ from .api import CycleTLS
 from .async_api import AsyncCycleTLS, async_get, async_post, async_put, async_delete
 from .sessions import Session
 from .schema import *
+
+# Import fingerprint plugin system
+from .fingerprints import (
+    TLSFingerprint,
+    FingerprintRegistry,
+    CHROME_120,
+    CHROME_121,
+    FIREFOX_121,
+    SAFARI_17,
+    EDGE_120,
+    CHROME_ANDROID,
+    SAFARI_IOS,
+)
+from .plugins import (
+    load_fingerprints_from_dir,
+    load_fingerprints_from_env,
+    load_fingerprint_from_file,
+    create_fingerprint_template,
+)
+
 from .exceptions import (
     CycleTLSError,
     RequestException,
@@ -358,6 +378,20 @@ __all__ = [
     "CycleTLS",
     "AsyncCycleTLS",
     "Session",
+    # Fingerprint plugin system
+    "TLSFingerprint",
+    "FingerprintRegistry",
+    "CHROME_120",
+    "CHROME_121",
+    "FIREFOX_121",
+    "SAFARI_17",
+    "EDGE_120",
+    "CHROME_ANDROID",
+    "SAFARI_IOS",
+    "load_fingerprints_from_dir",
+    "load_fingerprints_from_env",
+    "load_fingerprint_from_file",
+    "create_fingerprint_template",
     # Convenience functions (sync)
     "request",
     "get",
