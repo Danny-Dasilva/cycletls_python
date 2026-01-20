@@ -24,15 +24,14 @@ from typing import Optional
 class CycleTLSDemo:
     """Comprehensive demonstration of CycleTLS features."""
 
-    def __init__(self, port: int = 9112):
+    def __init__(self):
         """Initialize the demo with a CycleTLS client."""
         self.client: Optional[cycletls.CycleTLS] = None
-        self.port = port
 
     def __enter__(self):
         """Context manager entry - initialize client."""
         print("Initializing CycleTLS client...")
-        self.client = cycletls.CycleTLS(port=self.port)
+        self.client = cycletls.CycleTLS()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

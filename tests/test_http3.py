@@ -17,9 +17,8 @@ from cycletls import CycleTLS
 @pytest.fixture(scope="module")
 def cycle_client():
     """Create a single CycleTLS client for all tests in this module"""
-    client = CycleTLS(port=9130)
-    yield client
-    client.close()
+    with CycleTLS() as client:
+        yield client
 
 
 def skip_in_ci():

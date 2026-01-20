@@ -1,0 +1,7 @@
+name,elapsed_seconds,requests_count,errors,requests_per_second
+cycletls_sync_session,0.5389,3000,0,5567.06
+cycletls_sync_global,0.3865,3000,0,7761.92
+cycletls_async_sequential,0.6339,3000,0,4732.35
+cycletls_async_concurrent,0.1918,3000,0,15637.50
+requests_session,1.8445,3000,0,1626.47
+requests_no_session,3.4900,3000,0,859.59

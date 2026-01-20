@@ -130,6 +130,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "live: marks tests that run against live tlsfingerprint.com (deselect with '-m \"not live\"')",
 ]
 
 [tool.mypy]

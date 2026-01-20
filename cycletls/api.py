@@ -166,14 +166,8 @@ def _encode_multipart_formdata(
 class CycleTLS:
     """CycleTLS client for making HTTP requests with advanced TLS fingerprinting."""
 
-    def __init__(self, port: int = 9112) -> None:
-        """
-        Initialize CycleTLS client.
-
-        Args:
-            port: Retained for backward compatibility; no longer used.
-        """
-        self.port = port
+    def __init__(self) -> None:
+        """Initialize CycleTLS client."""
         self._closed = False
 
     def __enter__(self) -> "CycleTLS":
@@ -248,8 +242,6 @@ class CycleTLS:
                 data = kwargs.pop("body_bytes")
 
         headers = kwargs.get("headers") or {}
-        if headers is None:
-            headers = {}
 
         # Attach params to URL before building the request
         url = _merge_url_params(url, params)

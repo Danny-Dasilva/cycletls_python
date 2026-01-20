@@ -6,17 +6,15 @@ import time
 @pytest.fixture
 def cycle_with_reuse():
     """Create a CycleTLS instance with connection reuse enabled"""
-    client = CycleTLS(port=9116)
-    yield client
-    client.close()
+    with CycleTLS() as client:
+        yield client
 
 
 @pytest.fixture
 def cycle_without_reuse():
     """Create a CycleTLS instance with connection reuse disabled"""
-    client = CycleTLS(port=9117)
-    yield client
-    client.close()
+    with CycleTLS() as client:
+        yield client
 
 
 class TestConnectionReuse:

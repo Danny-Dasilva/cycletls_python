@@ -10,6 +10,12 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Union
 
+try:
+    import orjson
+    _json_loads = orjson.loads
+except ImportError:
+    _json_loads = json.loads
+
 from .structures import CaseInsensitiveDict, CookieJar
 
 
@@ -159,7 +165,7 @@ class SSEEvent:
     retry: Optional[int] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class Response:
     """Enhanced response model with binary data and cookies."""
 
@@ -170,11 +176,9 @@ class Response:
     body_bytes: Optional[bytes] = None
     raw_cookies: Optional[List[Cookie]] = None
     final_url: Optional[str] = None
-
-    def __post_init__(self):
-        """Initialize cached properties."""
-        self._headers_dict: Optional[CaseInsensitiveDict] = None
-        self._cookie_jar: Optional[CookieJar] = None
+    # Cached properties (not part of constructor)
+    _headers_dict: Optional[CaseInsensitiveDict] = field(default=None, init=False, repr=False)
+    _cookie_jar: Optional[CookieJar] = field(default=None, init=False, repr=False)
 
     @property
     def text(self) -> str:
@@ -329,7 +333,7 @@ class Response:
 
     def json(self) -> dict:
         """Parse response body as JSON."""
-        return json.loads(self.body)
+        return _json_loads(self.body.encode())
 
     def __repr__(self) -> str:
         """Return detailed string representation of the Response."""

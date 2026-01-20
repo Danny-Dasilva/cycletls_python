@@ -41,7 +41,6 @@ _CONFIGURABLE_ATTRS = {
     "default_user_agent",
     "default_proxy",
     "default_timeout",
-    "default_port",
     "default_enable_connection_reuse",
     "default_insecure_skip_verify",
     "default_server_name",
@@ -58,7 +57,6 @@ def _validate_config(name: str, value: Any) -> None:
     """Validate configuration values."""
     validators = {
         "default_timeout": lambda v: isinstance(v, (int, float)) and v > 0,
-        "default_port": lambda v: isinstance(v, int) and 1 <= v <= 65535,
         "default_enable_connection_reuse": lambda v: isinstance(v, bool),
         "default_insecure_skip_verify": lambda v: isinstance(v, bool),
         "default_force_http1": lambda v: isinstance(v, bool),
@@ -141,7 +139,6 @@ def set_default(**kwargs) -> None:
         user_agent: Default User-Agent string
         proxy: Default proxy URL
         timeout: Default timeout in seconds
-        port: Default WebSocket port for subprocess
         enable_connection_reuse: Default connection reuse setting
         insecure_skip_verify: Default TLS verification setting
         server_name: Default SNI override

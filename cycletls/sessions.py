@@ -5,10 +5,19 @@ This module provides a Session class that maintains persistent cookies
 and headers across multiple requests, similar to requests.Session.
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from .api import CycleTLS, ParamsType
 from .structures import CookieJar, CaseInsensitiveDict
 from .schema import Response, Cookie
+
+
+def _merge_cookie(merged_cookies: List[Cookie], new_cookie: Cookie) -> None:
+    """Merge a cookie into the list, replacing by name if exists."""
+    for i, existing in enumerate(merged_cookies):
+        if existing.name == new_cookie.name:
+            merged_cookies[i] = new_cookie
+            return
+    merged_cookies.append(new_cookie)
 
 
 class Session(CycleTLS):
@@ -35,14 +44,9 @@ class Session(CycleTLS):
         ...     assert 'session_id' in response.cookies
     """
 
-    def __init__(self, port=9112):
-        """
-        Initialize a Session.
-
-        Args:
-            port (int): WebSocket port for the CycleTLS backend (default: 9112)
-        """
-        super().__init__(port)
+    def __init__(self):
+        """Initialize a Session."""
+        super().__init__()
         self.cookies = CookieJar([])
         self.headers = CaseInsensitiveDict({})
 
@@ -89,61 +93,20 @@ class Session(CycleTLS):
         kwargs["headers"] = dict(merged_headers)
 
         # Merge session cookies with request cookies
-        merged_cookies = []
+        merged_cookies = list(self.cookies.get_cookies())
 
-        # Add session cookies
-        for cookie in self.cookies.get_cookies():
-            merged_cookies.append(cookie)
-
-        # Add request-specific cookies
-        if "cookies" in kwargs and kwargs["cookies"]:
-            request_cookies = kwargs["cookies"]
-
-            # Handle dict cookies
+        # Add request-specific cookies (overriding session cookies by name)
+        request_cookies = kwargs.get("cookies")
+        if request_cookies:
             if isinstance(request_cookies, dict):
                 for name, value in request_cookies.items():
-                    # Override session cookie if same name
-                    existing = None
-                    for i, cookie in enumerate(merged_cookies):
-                        if cookie.name == name:
-                            existing = i
-                            break
-
-                    new_cookie = Cookie(name=name, value=value)
-                    if existing is not None:
-                        merged_cookies[existing] = new_cookie
-                    else:
-                        merged_cookies.append(new_cookie)
-
-            # Handle CookieJar
+                    _merge_cookie(merged_cookies, Cookie(name=name, value=value))
             elif hasattr(request_cookies, "get_cookies"):
                 for cookie in request_cookies.get_cookies():
-                    # Override session cookie if same name
-                    existing = None
-                    for i, existing_cookie in enumerate(merged_cookies):
-                        if existing_cookie.name == cookie.name:
-                            existing = i
-                            break
-
-                    if existing is not None:
-                        merged_cookies[existing] = cookie
-                    else:
-                        merged_cookies.append(cookie)
-
-            # Handle list of Cookie objects
+                    _merge_cookie(merged_cookies, cookie)
             elif isinstance(request_cookies, list):
                 for cookie in request_cookies:
-                    # Override session cookie if same name
-                    existing = None
-                    for i, existing_cookie in enumerate(merged_cookies):
-                        if existing_cookie.name == cookie.name:
-                            existing = i
-                            break
-
-                    if existing is not None:
-                        merged_cookies[existing] = cookie
-                    else:
-                        merged_cookies.append(cookie)
+                    _merge_cookie(merged_cookies, cookie)
 
         kwargs["cookies"] = merged_cookies if merged_cookies else None
 

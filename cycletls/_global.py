@@ -51,12 +51,7 @@ def get_global_session():
         with _global_lock:  # Double-checked locking
             if _global_session is None:
                 _import_cycletls()
-
-                # Import config at runtime
-                from ._config import _config
-
-                port = _config.get("default_port", 9112)
-                _global_session = _CycleTLS(port=port)
+                _global_session = _CycleTLS()
 
                 # Register cleanup ONCE
                 if not _cleanup_registered:
@@ -94,9 +89,6 @@ def close_global_session():
         >>> import cycletls
         >>> response = cycletls.get('https://example.com')
         >>> cycletls.close_global_session()  # Explicit cleanup
-        >>>
-        >>> # Change port and create new session
-        >>> cycletls.set_default(port=9113)
         >>> response = cycletls.get('https://example.com')  # New session
     """
     global _global_session

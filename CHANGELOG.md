@@ -169,7 +169,6 @@ print(response)  # Now shows: <Response [200]>
 - [ ] Zero-copy binary data transfer
 - [ ] Full WebSocket bidirectional messaging
 - [ ] Full SSE event streaming
-- [ ] Remove deprecated `port` parameter (breaking change)
 - [ ] Plugin architecture for custom fingerprints
 
 ### Contributors

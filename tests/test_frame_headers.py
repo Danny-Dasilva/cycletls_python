@@ -22,7 +22,7 @@ class TestChromeFrameHeaders:
     @pytest.mark.skip(reason="Frame header details may not be exposed in Python API")
     def test_chrome_settings_frame(self):
         """Test Chrome's SETTINGS frame configuration."""
-        client = CycleTLS(port=9011)
+        client = CycleTLS()
 
         chrome_ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
         chrome_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
@@ -89,7 +89,7 @@ class TestChromeFrameHeaders:
     @pytest.mark.skip(reason="Frame header details may not be exposed in Python API")
     def test_chrome_frame_sequence(self):
         """Test the sequence of Chrome's HTTP/2 frames."""
-        client = CycleTLS(port=9031)
+        client = CycleTLS()
 
         chrome_ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
 
@@ -128,7 +128,7 @@ class TestFirefoxFrameHeaders:
     @pytest.mark.skip(reason="Frame header details may not be exposed in Python API")
     def test_firefox_settings_frame(self):
         """Test Firefox's SETTINGS frame configuration."""
-        client = CycleTLS(port=9012)
+        client = CycleTLS()
 
         firefox_ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0"
         firefox_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:101.0) Gecko/20100101 Firefox/101.0"
@@ -188,8 +188,8 @@ class TestFirefoxFrameHeaders:
     @pytest.mark.skip(reason="Frame header details may not be exposed in Python API")
     def test_firefox_frame_differences(self):
         """Test differences between Firefox and Chrome frames."""
-        chrome_client = CycleTLS(port=9032)
-        firefox_client = CycleTLS(port=9033)
+        chrome_client = CycleTLS()
+        firefox_client = CycleTLS()
 
         chrome_ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
         firefox_ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0"
@@ -243,7 +243,7 @@ class TestFrameTypes:
     @pytest.mark.skip(reason="Frame details may not be exposed in Python API")
     def test_settings_frame_structure(self):
         """Test SETTINGS frame structure."""
-        client = CycleTLS(port=9034)
+        client = CycleTLS()
 
         try:
             response = client.get(
@@ -272,7 +272,7 @@ class TestFrameTypes:
     @pytest.mark.skip(reason="Frame details may not be exposed in Python API")
     def test_window_update_frame_structure(self):
         """Test WINDOW_UPDATE frame structure."""
-        client = CycleTLS(port=9035)
+        client = CycleTLS()
 
         try:
             response = client.get("https://tls.peet.ws/api/all")
@@ -298,7 +298,7 @@ class TestFrameTypes:
     @pytest.mark.skip(reason="Frame details may not be exposed in Python API")
     def test_headers_frame_presence(self):
         """Test that HEADERS frame is sent for requests."""
-        client = CycleTLS(port=9036)
+        client = CycleTLS()
 
         try:
             response = client.get("https://tls.peet.ws/api/all")
@@ -357,7 +357,7 @@ class TestHTTP2Fingerprinting:
 
     def test_http2_request_succeeds(self):
         """Test basic HTTP/2 request succeeds."""
-        client = CycleTLS(port=9037)
+        client = CycleTLS()
 
         try:
             # Don't force HTTP/1, allow HTTP/2
@@ -374,7 +374,7 @@ class TestHTTP2Fingerprinting:
 
     def test_http2_vs_http1_comparison(self, httpbin_url):
         """Test difference between HTTP/2 and HTTP/1 requests."""
-        client = CycleTLS(port=9038)
+        client = CycleTLS()
 
         try:
             # HTTP/2 request (default)
@@ -399,7 +399,7 @@ class TestHTTP2Fingerprinting:
     @pytest.mark.skip(reason="HTTP/2 fingerprint may not be exposed in Python response")
     def test_http2_fingerprint_in_response(self):
         """Test that HTTP/2 fingerprint is available in response."""
-        client = CycleTLS(port=9039)
+        client = CycleTLS()
 
         try:
             response = client.get("https://tls.peet.ws/api/all")
@@ -423,7 +423,7 @@ class TestBrowserSpecificFingerprints:
     @pytest.mark.skip(reason="Frame details may not be exposed in Python API")
     def test_chrome_http2_fingerprint(self):
         """Test Chrome-specific HTTP/2 fingerprint."""
-        client = CycleTLS(port=9040)
+        client = CycleTLS()
 
         chrome_ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
 
@@ -455,7 +455,7 @@ class TestBrowserSpecificFingerprints:
     @pytest.mark.skip(reason="Frame details may not be exposed in Python API")
     def test_firefox_http2_fingerprint(self):
         """Test Firefox-specific HTTP/2 fingerprint."""
-        client = CycleTLS(port=9041)
+        client = CycleTLS()
 
         firefox_ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0"
 
@@ -490,7 +490,7 @@ class TestFrameHeaderValidation:
 
     def test_valid_http2_connection(self):
         """Test that valid HTTP/2 connections work."""
-        client = CycleTLS(port=9042)
+        client = CycleTLS()
 
         try:
             # Make a request to an HTTP/2 capable server
@@ -503,7 +503,7 @@ class TestFrameHeaderValidation:
 
     def test_http2_to_http1_fallback(self):
         """Test fallback from HTTP/2 to HTTP/1 if needed."""
-        client = CycleTLS(port=9043)
+        client = CycleTLS()
 
         try:
             # Some servers may not support HTTP/2

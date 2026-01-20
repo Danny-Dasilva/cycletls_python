@@ -501,7 +501,6 @@ response3 = cycletls.get('https://api.example.com/endpoint3', timeout=30)
 | `user_agent` | str | User-Agent header |
 | `proxy` | str | Proxy URL (http/https/socks4/socks5) |
 | `timeout` | int | Request timeout in seconds |
-| `port` | int | WebSocket port for subprocess (default: 9112) |
 | `enable_connection_reuse` | bool | Enable connection pooling |
 | `insecure_skip_verify` | bool | Skip TLS certificate verification |
 | `server_name` | str | Custom SNI (Server Name Indication) |
@@ -1321,13 +1320,8 @@ cycletls.close_global_session()
 
 ```python
 class CycleTLS:
-    def __init__(self, port: int = 9112):
-        """
-        Initialize CycleTLS client.
-
-        Args:
-            port: WebSocket port for the Go backend (default: 9112)
-        """
+    def __init__(self):
+        """Initialize CycleTLS client."""
 
     def request(
         self,
@@ -1532,7 +1526,7 @@ class Session(CycleTLS):
     cookies: CookieJar              # Persistent cookie jar
     headers: CaseInsensitiveDict    # Persistent headers
 
-    def __init__(self, port: int = 9112):
+    def __init__(self):
         """Initialize a Session with persistent cookies/headers."""
 ```
 

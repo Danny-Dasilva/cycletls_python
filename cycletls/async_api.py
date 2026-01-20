@@ -12,11 +12,10 @@ from .api import (
     _encode_multipart_formdata,
     _merge_url_params,
     _next_request_id,
-    _dict_to_response,
     ParamsType,
 )
 from .exceptions import CycleTLSError
-from .schema import Request, Cookie, Response
+from .schema import Request, Cookie, Response, _dict_to_response
 from . import _ffi
 
 logger = logging.getLogger(__name__)
@@ -103,8 +102,6 @@ class AsyncCycleTLS:
                 data = kwargs.pop("body_bytes")
 
         headers = kwargs.get("headers") or {}
-        if headers is None:
-            headers = {}
 
         # Attach params to URL before building the request
         url = _merge_url_params(url, params)

@@ -35,12 +35,13 @@ def main():
 
     # Initialize CycleTLS client
     print("Initializing CycleTLS client...")
-    try:
-        client = CycleTLS(port=9112)
+    with CycleTLS() as client:
         print("Client initialized successfully!\n")
-    except Exception as e:
-        print(f"Error initializing client: {e}")
-        sys.exit(1)
+        run_examples(client)
+
+
+def run_examples(client):
+    """Run all HTTP/2 fingerprinting examples with the given client"""
 
     # Example 1: Firefox HTTP/2 Fingerprint
     print("=" * 70)
@@ -395,12 +396,7 @@ def main():
     print("- Pseudo-header ordering is a key differentiator")
     print("- Custom settings allow fine-tuned control for specific use cases")
 
-    # Clean up
-    try:
-        client.close()
-        print("\nClient closed successfully.")
-    except Exception as e:
-        print(f"\nError closing client: {e}")
+    print("\nExamples completed!")
 
 
 if __name__ == "__main__":

@@ -27,12 +27,13 @@ def main():
 
     # Initialize CycleTLS client
     print("Initializing CycleTLS client...")
-    try:
-        client = CycleTLS(port=9112)
+    with CycleTLS() as client:
         print("Client initialized successfully!\n")
-    except Exception as e:
-        print(f"Error initializing client: {e}")
-        sys.exit(1)
+        run_examples(client)
+
+
+def run_examples(client):
+    """Run all HTTP/3 examples with the given client"""
 
     # Example 1: Basic HTTP/3 Request
     print("=" * 70)
@@ -386,12 +387,7 @@ def main():
     print("- Can be combined with TLS fingerprinting")
     print("- Consider fallback strategies for compatibility")
 
-    # Clean up
-    try:
-        client.close()
-        print("\nClient closed successfully.")
-    except Exception as e:
-        print(f"\nError closing client: {e}")
+    print("\nExamples completed!")
 
 
 if __name__ == "__main__":

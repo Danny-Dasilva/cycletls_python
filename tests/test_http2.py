@@ -5,9 +5,8 @@ from cycletls import CycleTLS
 @pytest.fixture
 def cycle():
     """Create a CycleTLS instance for testing"""
-    client = CycleTLS(port=9115)
-    yield client
-    client.close()
+    with CycleTLS() as client:
+        yield client
 
 
 class TestHTTP2:
