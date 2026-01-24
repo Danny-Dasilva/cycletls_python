@@ -50,6 +50,12 @@ _ffi.cdef(
     unsigned long sseConnect(char* data);
     char* sseNextEvent(unsigned long handle);
     void sseClose(unsigned long handle);
+
+    // Callback-based async API (pipe notification instead of polling)
+    // Returns handle, writes 1 byte to notifyFD when complete
+    uintptr_t submitRequestAsyncWithNotify(char* data, int dataLen, int notifyFD);
+    // Retrieves result after notification (guaranteed ready)
+    char* getAsyncResult(uintptr_t handle, int* outLen);
     """
 )
 
@@ -374,6 +380,96 @@ async def send_requests_batch(
     )
 
 
+# ============================================================================
+# Callback-Based Async (Zero Polling)
+# ============================================================================
+# Uses pipe notification instead of polling, reducing FFI calls from 10-200
+# per request to exactly 2 (submit + get result).
+
+
+async def send_request_async_callback(
+    payload: Dict[str, Any], timeout: float = 30.0
+) -> Dict[str, Any]:
+    """Execute a request asynchronously using pipe notification (no polling).
+
+    This is more efficient than send_request_async() because it uses OS-level
+    pipe notification instead of polling. FFI calls are reduced from 10-200
+    per request to exactly 2 (submit + get result).
+
+    Args:
+        payload: Request payload dictionary with requestId and options
+        timeout: Maximum wait time in seconds (default: 30s)
+
+    Returns:
+        Response dictionary with Status, Body, Headers, FinalUrl, Cookies
+
+    Raises:
+        RuntimeError: If request submission or retrieval fails
+        asyncio.TimeoutError: If timeout is exceeded
+    """
+    lib = _load_library()
+
+    # Create pipe for notification
+    read_fd, write_fd = os.pipe()
+
+    try:
+        # Serialize payload to msgpack (zero-copy style)
+        msgpack_data = ormsgpack.packb(payload)
+
+        # Create buffer from raw bytes
+        buf = _ffi.from_buffer(msgpack_data)
+
+        logger.debug(f"Submitting async request with callback notification (fd={write_fd})")
+
+        # Submit request with notification FD
+        handle = lib.submitRequestAsyncWithNotify(buf, len(msgpack_data), write_fd)
+
+        if handle == 0:
+            error_msg = "Failed to submit async request (invalid payload or null handle)"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        logger.debug(f"Async request submitted with handle: {handle}")
+
+        # Wait for notification (Go will write 1 byte when complete)
+        loop = asyncio.get_event_loop()
+        try:
+            await asyncio.wait_for(
+                loop.run_in_executor(None, os.read, read_fd, 1),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Async request {handle} timed out after {timeout}s")
+            raise asyncio.TimeoutError(f"Request timed out after {timeout} seconds")
+
+        logger.debug(f"Received notification for handle: {handle}")
+
+        # Get result (guaranteed ready since pipe was written)
+        out_len = _ffi.new("int*")
+        result_ptr = lib.getAsyncResult(handle, out_len)
+
+        if result_ptr == _ffi.NULL:
+            error_msg = "Failed to get async result (null pointer returned)"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        try:
+            # Read exact number of bytes
+            response_len = out_len[0]
+            raw_response = _ffi.buffer(result_ptr, response_len)[:]
+            logger.debug(f"Received async result ({response_len} bytes)")
+        finally:
+            lib.freeString(result_ptr)
+
+        # Unpack msgpack response
+        return ormsgpack.unpackb(raw_response)
+
+    finally:
+        # Clean up pipe file descriptors
+        os.close(read_fd)
+        os.close(write_fd)
+
+
 def _send_batch_request_zerocopy(payloads: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
     """Send batch request using zero-copy mode."""
     lib = _load_library()
@@ -474,6 +570,7 @@ __all__ = [
     "submit_request_async",
     "check_request_async",
     "send_request_async",
+    "send_request_async_callback",
     "send_requests_batch",
     "send_batch_request",
 ]

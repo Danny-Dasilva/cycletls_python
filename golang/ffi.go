@@ -3,6 +3,7 @@ package main
 /*
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>
 */
 import "C"
 
@@ -321,6 +322,125 @@ func checkRequestAsync(handlePtr C.uintptr_t) *C.char {
         // Not ready yet
         return nil
     }
+}
+
+// ============================================================================
+// Callback-Based Async FFI Functions (Zero Polling)
+// ============================================================================
+// These functions use pipe notification instead of polling, reducing FFI calls
+// from 10-200 per request to exactly 2 (submit + get result).
+
+// asyncResultWithNotify stores both the result and notification state
+type asyncResultWithNotify struct {
+    result    []byte // Raw msgpack bytes
+    requestID string
+    ready     bool
+    mu        sync.Mutex
+}
+
+// asyncNotifyResults stores results for callback-based async requests
+var asyncNotifyResults sync.Map // map[uintptr]*asyncResultWithNotify
+
+//export submitRequestAsyncWithNotify
+func submitRequestAsyncWithNotify(data *C.char, dataLen C.int, notifyFD C.int) C.uintptr_t {
+    if data == nil || dataLen <= 0 {
+        return 0
+    }
+
+    // Convert C bytes to Go slice (zero-copy style)
+    msgpackData := C.GoBytes(unsafe.Pointer(data), dataLen)
+
+    request := cycleTLSRequest{}
+    if err := msgpack.Unmarshal(msgpackData, &request); err != nil {
+        return 0
+    }
+
+    if request.RequestID == "" {
+        request.RequestID = "cycleTLSRequest"
+    }
+
+    request.Options.Method = normalizeMethod(request.Options.Method)
+
+    // Create result storage
+    resultStore := &asyncResultWithNotify{
+        requestID: request.RequestID,
+        ready:     false,
+    }
+
+    // Create handle using cgo.Handle
+    handle := cgo.NewHandle(resultStore)
+    handleID := uintptr(handle)
+    asyncNotifyResults.Store(handleID, resultStore)
+
+    // Spawn goroutine to execute request
+    go func() {
+        client := getFFIClient()
+
+        var payload map[string]interface{}
+        resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
+        if err != nil {
+            payload = buildErrorPayload(request.RequestID, err.Error())
+        } else {
+            payload = buildResponsePayload(request.RequestID, resp)
+        }
+
+        // Marshal result to msgpack
+        resultBytes, marshalErr := msgpack.Marshal(payload)
+        if marshalErr != nil {
+            // Fallback error response
+            fallback := buildErrorPayload(request.RequestID, "failed to marshal response")
+            resultBytes, _ = msgpack.Marshal(fallback)
+        }
+
+        // Store result
+        resultStore.mu.Lock()
+        resultStore.result = resultBytes
+        resultStore.ready = true
+        resultStore.mu.Unlock()
+
+        // Notify Python by writing to pipe
+        // Write a single byte to signal completion
+        var notifyByte [1]byte
+        notifyByte[0] = 1
+        C.write(notifyFD, unsafe.Pointer(&notifyByte[0]), 1)
+    }()
+
+    return C.uintptr_t(handleID)
+}
+
+//export getAsyncResult
+func getAsyncResult(handlePtr C.uintptr_t, outLen *C.int) *C.char {
+    if handlePtr == 0 {
+        return nil
+    }
+
+    handleID := uintptr(handlePtr)
+
+    // Retrieve result from store
+    val, ok := asyncNotifyResults.Load(handleID)
+    if !ok {
+        return nil
+    }
+
+    resultStore := val.(*asyncResultWithNotify)
+
+    // Check if ready (should always be true if pipe was written)
+    resultStore.mu.Lock()
+    if !resultStore.ready {
+        resultStore.mu.Unlock()
+        return nil
+    }
+    resultBytes := resultStore.result
+    resultStore.mu.Unlock()
+
+    // Cleanup
+    asyncNotifyResults.Delete(handleID)
+    handle := cgo.Handle(handlePtr)
+    handle.Delete()
+
+    // Return result (caller must free with freeString)
+    *outLen = C.int(len(resultBytes))
+    return C.CString(string(resultBytes))
 }
 
 //export freeString
