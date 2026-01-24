@@ -43,6 +43,7 @@ class SSEEvent:
         id: Optional event ID for reconnection
         retry: Optional retry time in milliseconds
     """
+
     data: str
     event: str = "message"
     id: Optional[str] = None
@@ -55,6 +56,7 @@ class SSEEvent:
 
 class SSEError(Exception):
     """Raised when an SSE operation fails."""
+
     pass
 
 
@@ -131,7 +133,7 @@ class SSEConnection:
         lib = _load_library()
 
         # Check if sseConnect is available
-        if not hasattr(lib, 'sseConnect'):
+        if not hasattr(lib, "sseConnect"):
             raise SSEError(
                 "SSE support requires rebuilding the Go library with SSE exports. "
                 "The current library does not have sseConnect exported."
@@ -185,7 +187,7 @@ class SSEConnection:
 
         lib = _load_library()
 
-        if not hasattr(lib, 'sseNextEvent'):
+        if not hasattr(lib, "sseNextEvent"):
             raise SSEError("SSE next_event not supported in this library build")
 
         response_ptr = lib.sseNextEvent(self._handle)
@@ -237,7 +239,7 @@ class SSEConnection:
 
         lib = _load_library()
 
-        if hasattr(lib, 'sseClose'):
+        if hasattr(lib, "sseClose"):
             logger.debug("Closing SSE connection")
             lib.sseClose(self._handle)
 

@@ -300,7 +300,7 @@ class TestJA4vsJA3Comparison:
 
         # Test with JA3
         response_ja3 = cycle_client.get(
-            'https://ja3er.com/json',
+            'https://tls.peet.ws/api/clean',
             ja3=chrome_ja3,
             user_agent=user_agent
         )

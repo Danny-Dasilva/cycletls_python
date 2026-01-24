@@ -282,9 +282,11 @@ class TestAsyncResponseProperties:
     @pytest.mark.asyncio
     async def test_async_response_headers(self, httpbin_url):
         """Test async response headers."""
+        from collections.abc import Mapping
         response = await cycletls.aget(f"{httpbin_url}/get")
         assert response.headers is not None
-        assert isinstance(response.headers, dict)
+        # Headers are a case-insensitive dict-like object
+        assert isinstance(response.headers, Mapping)
         assert len(response.headers) > 0
 
     @pytest.mark.asyncio

@@ -12,6 +12,7 @@ from typing import List, Optional, Union
 
 try:
     import orjson
+
     _json_loads = orjson.loads
 except ImportError:
     _json_loads = json.loads
@@ -386,13 +387,19 @@ def _dict_to_cookie(data: dict) -> Cookie:
 
 def _dict_to_response(data: dict) -> Response:
     """Convert dictionary to Response object."""
-    # Decode base64 body_bytes if present
+    # Handle body_bytes - msgpack returns raw bytes directly
     body_bytes = None
     if "BodyBytes" in data and data["BodyBytes"]:
-        try:
-            body_bytes = base64.b64decode(data["BodyBytes"])
-        except Exception:
-            pass
+        raw_data = data["BodyBytes"]
+        if isinstance(raw_data, bytes):
+            # Msgpack returns raw bytes directly (zero-copy mode)
+            body_bytes = raw_data
+        elif isinstance(raw_data, str):
+            # Legacy base64 mode - decode from string
+            try:
+                body_bytes = base64.b64decode(raw_data)
+            except Exception:
+                pass
 
     # Convert cookies
     raw_cookies = None

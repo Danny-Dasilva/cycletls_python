@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 class MessageType(IntEnum):
     """WebSocket message types."""
+
     TEXT = 1
     BINARY = 2
     CLOSE = 8
@@ -53,6 +54,7 @@ class WebSocketMessage:
         type: Message type (TEXT=1, BINARY=2, CLOSE=8, PING=9, PONG=10)
         data: Message data (str for text, bytes for binary)
     """
+
     type: MessageType
     data: Union[str, bytes]
 
@@ -74,6 +76,7 @@ class WebSocketMessage:
 
 class WebSocketError(Exception):
     """Raised when a WebSocket operation fails."""
+
     pass
 
 
@@ -147,7 +150,7 @@ class WebSocketConnection:
         lib = _load_library()
 
         # Check if wsConnect is available
-        if not hasattr(lib, 'wsConnect'):
+        if not hasattr(lib, "wsConnect"):
             raise WebSocketError(
                 "WebSocket support requires rebuilding the Go library with WebSocket exports. "
                 "The current library does not have wsConnect exported."
@@ -196,7 +199,7 @@ class WebSocketConnection:
 
         lib = _load_library()
 
-        if not hasattr(lib, 'wsSend'):
+        if not hasattr(lib, "wsSend"):
             raise WebSocketError("WebSocket send not supported in this library build")
 
         # Determine message type
@@ -204,7 +207,7 @@ class WebSocketConnection:
 
         # Encode data
         if isinstance(data, str):
-            data_bytes = data.encode('utf-8')
+            data_bytes = data.encode("utf-8")
         else:
             data_bytes = data
 
@@ -235,7 +238,7 @@ class WebSocketConnection:
 
         lib = _load_library()
 
-        if not hasattr(lib, 'wsReceive'):
+        if not hasattr(lib, "wsReceive"):
             raise WebSocketError("WebSocket receive not supported in this library build")
 
         logger.debug("Waiting for WebSocket message...")
@@ -275,7 +278,7 @@ class WebSocketConnection:
 
         lib = _load_library()
 
-        if hasattr(lib, 'wsClose'):
+        if hasattr(lib, "wsClose"):
             logger.debug(f"Closing WebSocket connection: code={code}")
             lib.wsClose(self._handle)
 

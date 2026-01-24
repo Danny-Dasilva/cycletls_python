@@ -17,6 +17,7 @@ import (
     "strings"
     "sync"
     "time"
+    "unicode/utf8"
     "unsafe"
 
     fhttp "github.com/Danny-Dasilva/fhttp"
@@ -144,10 +145,17 @@ func buildResponsePayload(requestID string, resp Response) map[string]interface{
         headers = map[string]string{}
     }
 
+    // Check if body is valid UTF-8 for msgpack string compatibility
+    // If not valid UTF-8 (binary data), use empty string and rely on BodyBytes
+    bodyStr := resp.Body
+    if !utf8.ValidString(bodyStr) {
+        bodyStr = "" // Binary data - Python should use BodyBytes instead
+    }
+
     payload := map[string]interface{}{
         "RequestID": requestID,
         "Status":    resp.Status,
-        "Body":      resp.Body,
+        "Body":      bodyStr,
         "Headers":   headers,
         "FinalUrl":  resp.FinalUrl,
     }

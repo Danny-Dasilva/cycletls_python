@@ -21,7 +21,7 @@ class TestAsyncJA3Fingerprints:
         """Test async request with Chrome JA3 fingerprint."""
         async with AsyncCycleTLS() as client:
             response = await client.get(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
@@ -37,7 +37,7 @@ class TestAsyncJA3Fingerprints:
         """Test async request with Firefox JA3 fingerprint."""
         async with AsyncCycleTLS() as client:
             response = await client.get(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=firefox_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
             )
@@ -51,7 +51,7 @@ class TestAsyncJA3Fingerprints:
         """Test async request with Safari JA3 fingerprint."""
         async with AsyncCycleTLS() as client:
             response = await client.get(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=safari_ja3,
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
             )
@@ -64,7 +64,7 @@ class TestAsyncJA3Fingerprints:
     async def test_async_module_function_with_ja3(self, chrome_ja3):
         """Test module-level async function with JA3."""
         response = await cycletls.aget(
-            "https://ja3er.com/json",
+            "https://tls.peet.ws/api/clean",
             ja3=chrome_ja3,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
@@ -84,17 +84,17 @@ class TestAsyncConcurrentJA3:
 
         tasks = [
             cycletls.aget(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             ),
             cycletls.aget(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=firefox_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
             ),
             cycletls.aget(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=safari_ja3,
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
             ),
@@ -118,7 +118,7 @@ class TestAsyncConcurrentJA3:
         num_requests = 5
         tasks = [
             cycletls.aget(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
@@ -220,7 +220,7 @@ class TestAsyncBrowserProfiles:
         """Test async request with complete Chrome profile."""
         async with AsyncCycleTLS() as client:
             response = await client.get(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 headers={
@@ -245,7 +245,7 @@ class TestAsyncBrowserProfiles:
         """Test async request with complete Firefox profile."""
         async with AsyncCycleTLS() as client:
             response = await client.get(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=firefox_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
                 headers={
@@ -272,13 +272,13 @@ class TestAsyncFingerprintPersistence:
         async with AsyncCycleTLS() as client:
             # Multiple requests with same fingerprint
             response1 = await client.get(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
 
             response2 = await client.get(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
@@ -292,14 +292,14 @@ class TestAsyncFingerprintPersistence:
         async with AsyncCycleTLS() as client:
             # Request with Chrome fingerprint
             response1 = await client.get(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
 
             # Switch to Firefox fingerprint
             response2 = await client.get(
-                "https://ja3er.com/json",
+                "https://tls.peet.ws/api/clean",
                 ja3=firefox_ja3,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
             )

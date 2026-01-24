@@ -82,24 +82,24 @@ type Time struct {
 //
 // See https://tools.ietf.org/html/rfc6265 for details.
 type Cookie struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name  string `json:"name" msgpack:"name"`
+	Value string `json:"value" msgpack:"value"`
 
-	Path        string `json:"path"`   // optional
-	Domain      string `json:"domain"` // optional
+	Path        string `json:"path" msgpack:"path"`     // optional
+	Domain      string `json:"domain" msgpack:"domain"` // optional
 	Expires     time.Time
-	JSONExpires Time   `json:"expires"`    // optional
-	RawExpires  string `json:"rawExpires"` // for reading cookies only
+	JSONExpires Time   `json:"expires" msgpack:"expires"`       // optional
+	RawExpires  string `json:"rawExpires" msgpack:"rawExpires"` // for reading cookies only
 
 	// MaxAge=0 means no 'Max-Age' attribute specified.
 	// MaxAge<0 means delete cookie now, equivalently 'Max-Age: 0'
 	// MaxAge>0 means Max-Age attribute present and given in seconds
-	MaxAge   int            `json:"maxAge"`
-	Secure   bool           `json:"secure"`
-	HTTPOnly bool           `json:"httpOnly"`
-	SameSite nhttp.SameSite `json:"sameSite"`
+	MaxAge   int            `json:"maxAge" msgpack:"maxAge"`
+	Secure   bool           `json:"secure" msgpack:"secure"`
+	HTTPOnly bool           `json:"httpOnly" msgpack:"httpOnly"`
+	SameSite nhttp.SameSite `json:"sameSite" msgpack:"sameSite"`
 	Raw      string
-	Unparsed []string `json:"unparsed"` // Raw text of unparsed attribute-value pairs
+	Unparsed []string `json:"unparsed" msgpack:"unparsed"` // Raw text of unparsed attribute-value pairs
 }
 
 // Options sets CycleTLS client options

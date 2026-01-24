@@ -29,21 +29,21 @@ class TestConnectionReuse:
         start_time = time.time()
 
         response1 = cycle_with_reuse.get(
-            "https://ja3er.com/json",
+            "https://tls.peet.ws/api/clean",
             ja3=ja3,
             user_agent=user_agent,
             enable_connection_reuse=True
         )
 
         response2 = cycle_with_reuse.get(
-            "https://ja3er.com/json",
+            "https://tls.peet.ws/api/clean",
             ja3=ja3,
             user_agent=user_agent,
             enable_connection_reuse=True
         )
 
         response3 = cycle_with_reuse.get(
-            "https://ja3er.com/json",
+            "https://tls.peet.ws/api/clean",
             ja3=ja3,
             user_agent=user_agent,
             enable_connection_reuse=True
@@ -252,21 +252,21 @@ class TestConnectionReuse:
 
         # Request with reuse enabled
         response1 = cycle_with_reuse.get(
-            "https://ja3er.com/json",
+            "https://tls.peet.ws/api/clean",
             ja3=ja3,
             enable_connection_reuse=True
         )
 
         # Request with reuse disabled
         response2 = cycle_with_reuse.get(
-            "https://ja3er.com/json",
+            "https://tls.peet.ws/api/clean",
             ja3=ja3,
             enable_connection_reuse=False
         )
 
         # Request with reuse enabled again
         response3 = cycle_with_reuse.get(
-            "https://ja3er.com/json",
+            "https://tls.peet.ws/api/clean",
             ja3=ja3,
             enable_connection_reuse=True
         )

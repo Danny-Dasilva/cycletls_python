@@ -364,17 +364,47 @@ class CycleTLS:
         """Sends a HEAD request."""
         return self.request("head", url, params=params, fingerprint=fingerprint, **kwargs)
 
-    def post(self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs) -> Response:
+    def post(
+        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+    ) -> Response:
         """Sends a POST request."""
-        return self.request("post", url, params=params, data=data, json_data=json_data, fingerprint=fingerprint, **kwargs)
+        return self.request(
+            "post",
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            fingerprint=fingerprint,
+            **kwargs,
+        )
 
-    def put(self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs) -> Response:
+    def put(
+        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+    ) -> Response:
         """Sends a PUT request."""
-        return self.request("put", url, params=params, data=data, json_data=json_data, fingerprint=fingerprint, **kwargs)
+        return self.request(
+            "put",
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            fingerprint=fingerprint,
+            **kwargs,
+        )
 
-    def patch(self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs) -> Response:
+    def patch(
+        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+    ) -> Response:
         """Sends a PATCH request."""
-        return self.request("patch", url, params=params, data=data, json_data=json_data, fingerprint=fingerprint, **kwargs)
+        return self.request(
+            "patch",
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            fingerprint=fingerprint,
+            **kwargs,
+        )
 
     def delete(self, url, params=None, fingerprint=None, **kwargs) -> Response:
         """Sends a DELETE request."""
@@ -492,8 +522,14 @@ class CycleTLS:
             "method": method,
             "headers": headers,
             "body": body_value or "",
-            "ja3": req.get("ja3", "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0"),
-            "userAgent": req.get("user_agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:87.0) Gecko/20100101 Firefox/87.0"),
+            "ja3": req.get(
+                "ja3",
+                "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0",
+            ),
+            "userAgent": req.get(
+                "user_agent",
+                "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:87.0) Gecko/20100101 Firefox/87.0",
+            ),
             "timeout": req.get("timeout", 30),
             "proxy": req.get("proxy", ""),
             "disableRedirect": req.get("disable_redirect", False),

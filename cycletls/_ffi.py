@@ -434,10 +434,7 @@ async def send_request_async_callback(
         # Wait for notification (Go will write 1 byte when complete)
         loop = asyncio.get_event_loop()
         try:
-            await asyncio.wait_for(
-                loop.run_in_executor(None, os.read, read_fd, 1),
-                timeout=timeout
-            )
+            await asyncio.wait_for(loop.run_in_executor(None, os.read, read_fd, 1), timeout=timeout)
         except asyncio.TimeoutError:
             logger.error(f"Async request {handle} timed out after {timeout}s")
             raise asyncio.TimeoutError(f"Request timed out after {timeout} seconds")
@@ -484,7 +481,9 @@ def _send_batch_request_zerocopy(payloads: list[Dict[str, Any]]) -> list[Dict[st
     # Prepare output length pointer
     out_len = _ffi.new("int*")
 
-    logger.debug(f"Sending batch request [zero-copy] ({len(payloads)} payloads, {len(msgpack_data)} bytes)")
+    logger.debug(
+        f"Sending batch request [zero-copy] ({len(payloads)} payloads, {len(msgpack_data)} bytes)"
+    )
 
     response_ptr = lib.sendBatchRequestZeroCopy(buf, len(msgpack_data), out_len)
 

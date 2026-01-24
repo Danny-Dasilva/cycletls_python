@@ -37,7 +37,13 @@ def cycletls_client_function():
 @pytest.fixture
 def test_url():
     """Base test URL for most tests."""
-    return "https://ja3er.com/json"
+    return "https://tls.peet.ws/api/clean"
+
+
+@pytest.fixture
+def ja3_test_url():
+    """TLS fingerprint test URL (replacement for defunct ja3er.com)."""
+    return "https://tls.peet.ws/api/clean"
 
 
 @pytest.fixture
