@@ -20,6 +20,15 @@ import (
 	utls "github.com/refraction-networking/utls"
 )
 
+// responseBufferPool provides a pool of 8KB buffers for reading response bodies
+// This reduces GC pressure by reusing buffers across requests
+var responseBufferPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, 8192)
+		return &buf
+	},
+}
+
 // safeChannelWriter wraps a channel to provide thread-safe writes with closed state tracking
 type safeChannelWriter struct {
 	ch     chan []byte
@@ -801,8 +810,10 @@ func dispatcherAsync(res fullRequest, chanWrite *safeChannelWriter) {
 	}
 
 	{
-		bufferSize := 8192
-		chunkBuffer := make([]byte, bufferSize)
+		// Get buffer from pool to reduce GC pressure
+		chunkBufferPtr := responseBufferPool.Get().(*[]byte)
+		chunkBuffer := *chunkBufferPtr
+		defer responseBufferPool.Put(chunkBufferPtr)
 
 	loop:
 		for {
