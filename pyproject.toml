@@ -40,7 +40,7 @@ requires-python = ">=3.8"
 dependencies = [
     "cffi>=1.15.0",
     "orjson>=3.9.0",
-    "msgpack>=1.0.0",
+    "ormsgpack>=1.5.0",  # Rust-based msgpack, 10-30% faster
     "websockets>=10.0",
     "pydantic>=2.0.0",
     "websocket-client>=1.0.0",

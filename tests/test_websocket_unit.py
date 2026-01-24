@@ -4,7 +4,7 @@ import base64
 import pytest
 from unittest.mock import MagicMock, patch
 
-import msgpack
+import ormsgpack  # Drop-in replacement for msgpack, 10-30% faster (Rust-based)
 
 from cycletls.websocket import (
     MessageType,
