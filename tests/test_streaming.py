@@ -43,16 +43,21 @@ class TestStreamingResponses:
             assert isinstance(data, dict)
 
     def test_large_response_handling(self, cycletls_client, httpbin_url):
-        """Test handling of large responses."""
-        # Request 5MB of data
+        """Test handling of large responses.
+
+        Note: httpbin.org limits /bytes/ endpoint to 100KB (102400 bytes).
+        We request more but only get the max allowed.
+        """
+        # Request data (httpbin.org limits to ~100KB max)
         response = cycletls_client.get(
-            f"{httpbin_url}/bytes/5242880",
+            f"{httpbin_url}/bytes/102400",
             timeout=30
         )
 
         assert response.status_code == 200
-        # Should receive approximately 5MB
-        assert len(response.body) >= 5000000
+        # Should receive the requested amount (httpbin limit is 100KB)
+        # Use response.content for binary data (body is empty for non-UTF8 responses)
+        assert len(response.content) >= 100000
 
     def test_chunked_transfer_encoding(self, cycletls_client, httpbin_url):
         """Test handling of chunked transfer encoding."""
@@ -180,19 +185,26 @@ class TestErrorHandling:
 
     def test_timeout_during_streaming(self, cycletls_client, httpbin_url):
         """Should handle timeout during streaming."""
-        with pytest.raises(Exception):
+        from cycletls.exceptions import Timeout
+        with pytest.raises(Timeout):
             cycletls_client.get(
                 f"{httpbin_url}/delay/10",
                 timeout=2
             )
 
     def test_network_error_during_stream(self, cycletls_client):
-        """Should handle network errors during streaming."""
-        with pytest.raises(Exception):
+        """Should handle network errors during streaming.
+
+        CycleTLS raises ConnectionError for DNS lookup failures.
+        """
+        from cycletls.exceptions import ConnectionError
+        with pytest.raises(ConnectionError) as exc_info:
             cycletls_client.get(
                 "https://this-domain-does-not-exist-12345.com/stream",
                 timeout=5
             )
+        # Verify the error message contains DNS-related information
+        assert "no such host" in str(exc_info.value).lower()
 
 
 class TestPartialResponses:
@@ -204,7 +216,8 @@ class TestPartialResponses:
 
         assert response.status_code == 200
         # Should receive the full content
-        assert len(response.body) >= 1024
+        # Use response.content for binary data (body is empty for non-UTF8 responses)
+        assert len(response.content) >= 1024
 
     def test_response_without_content_length(self, cycletls_client, httpbin_url):
         """Test response without Content-Length header (chunked)."""
@@ -228,20 +241,29 @@ class TestLargeDataStreaming:
     """Test streaming of large data sets."""
 
     def test_very_large_response(self, cycletls_client, httpbin_url):
-        """Test handling of very large responses."""
-        # Request 10MB of data
+        """Test handling of very large responses.
+
+        Note: httpbin.org limits /bytes/ endpoint to 100KB (102400 bytes).
+        This test verifies we can handle the maximum allowed by httpbin.
+        """
+        # Request max data (httpbin.org limits to ~100KB)
         response = cycletls_client.get(
-            f"{httpbin_url}/bytes/10485760",
+            f"{httpbin_url}/bytes/102400",
             timeout=60
         )
 
         assert response.status_code == 200
-        # Should receive approximately 10MB
-        assert len(response.body) >= 10000000
+        # Should receive the max allowed by httpbin (100KB)
+        # Use response.content for binary data (body is empty for non-UTF8 responses)
+        assert len(response.content) >= 100000
 
     def test_multiple_large_requests(self, cycletls_client, httpbin_url):
-        """Test multiple large requests in sequence."""
-        sizes = [1048576, 2097152, 1048576]  # 1MB, 2MB, 1MB
+        """Test multiple large requests in sequence.
+
+        Note: httpbin.org limits /bytes/ endpoint to 100KB (102400 bytes).
+        """
+        # httpbin.org has a 100KB limit, so use sizes within that limit
+        sizes = [50000, 80000, 102400]  # 50KB, 80KB, 100KB (max)
 
         for size in sizes:
             response = cycletls_client.get(
@@ -250,7 +272,8 @@ class TestLargeDataStreaming:
             )
 
             assert response.status_code == 200
-            assert len(response.body) >= size * 0.9  # Allow some margin
+            # Use response.content for binary data (body is empty for non-UTF8 responses)
+            assert len(response.content) >= size * 0.9  # Allow some margin
 
     @pytest.mark.skip(reason="Stream cancellation may not be supported")
     def test_stream_cancellation(self, cycletls_client, httpbin_url):
@@ -285,41 +308,51 @@ class TestStreamingFormats:
         response = cycletls_client.get(f"{httpbin_url}/stream-bytes/1024")
 
         assert response.status_code == 200
-        assert len(response.body) >= 1024
+        # Use response.content for binary data (body is empty for non-UTF8 responses)
+        assert len(response.content) >= 1024
 
     def test_binary_streaming(self, cycletls_client, httpbin_url):
         """Test binary data streaming."""
         response = cycletls_client.get(f"{httpbin_url}/bytes/2048")
 
         assert response.status_code == 200
-        assert len(response.body) >= 2048
+        # Use response.content for binary data (body is empty for non-UTF8 responses)
+        assert len(response.content) >= 2048
 
 
 class TestMemoryEfficiency:
     """Test memory efficiency of streaming."""
 
     def test_memory_with_large_stream(self, cycletls_client, httpbin_url):
-        """Test that large streams don't cause memory issues."""
-        # Request 5MB
+        """Test that large streams don't cause memory issues.
+
+        Note: httpbin.org limits /bytes/ endpoint to 100KB (102400 bytes).
+        """
+        # Request max data (httpbin.org limits to ~100KB)
         response = cycletls_client.get(
-            f"{httpbin_url}/bytes/5242880",
+            f"{httpbin_url}/bytes/102400",
             timeout=30
         )
 
         assert response.status_code == 200
-        assert len(response.body) >= 5000000
+        # Use response.content for binary data (body is empty for non-UTF8 responses)
+        assert len(response.content) >= 100000
 
         # If we get here without memory error, test passes
 
     def test_sequential_large_streams(self, cycletls_client, httpbin_url):
-        """Test sequential large streams for memory leaks."""
+        """Test sequential large streams for memory leaks.
+
+        Note: httpbin.org limits /bytes/ endpoint to 100KB (102400 bytes).
+        """
         for _ in range(3):
             response = cycletls_client.get(
-                f"{httpbin_url}/bytes/1048576",
+                f"{httpbin_url}/bytes/102400",
                 timeout=30
             )
 
             assert response.status_code == 200
-            assert len(response.body) >= 1000000
+            # Use response.content for binary data (body is empty for non-UTF8 responses)
+            assert len(response.content) >= 100000
 
         # If we get here without memory error, test passes

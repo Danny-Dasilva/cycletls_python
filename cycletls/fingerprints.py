@@ -21,7 +21,7 @@ Example:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Optional
 
@@ -258,9 +258,15 @@ class FingerprintRegistry:
 # Chrome 120 on Windows 10
 CHROME_120 = TLSFingerprint(
     name="chrome_120",
-    ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
+    ),
     http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
     header_order=[
         "host",
         "connection",
@@ -284,9 +290,15 @@ CHROME_120 = TLSFingerprint(
 # Chrome 121 on Windows 10
 CHROME_121 = TLSFingerprint(
     name="chrome_121",
-    ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0"
+    ),
     http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    ),
     header_order=[
         "host",
         "connection",
@@ -310,8 +322,14 @@ CHROME_121 = TLSFingerprint(
 # Firefox 121 on Windows 10
 FIREFOX_121 = TLSFingerprint(
     name="firefox_121",
-    ja3="771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-34-51-43-13-45-28-21,29-23-24-25-256-257,0",
-    http2_fingerprint="1:65536,4:131072,5:16384|12517377|3:0:0:201,5:0:0:1,7:0:0:1,9:0:7:1,11:0:3:1,13:0:0:241|m,p,a,s",
+    ja3=(
+        "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-"
+        "156-157-47-53,0-23-65281-10-11-35-16-5-34-51-43-13-45-28-21,29-23-24-25-256-257,0"
+    ),
+    http2_fingerprint=(
+        "1:65536,4:131072,5:16384|12517377|"
+        "3:0:0:201,5:0:0:1,7:0:0:1,9:0:7:1,11:0:3:1,13:0:0:241|m,p,a,s"
+    ),
     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
     header_order=[
         "host",
@@ -332,9 +350,15 @@ FIREFOX_121 = TLSFingerprint(
 # Safari 17 on macOS
 SAFARI_17 = TLSFingerprint(
     name="safari_17",
-    ja3="771,4865-4866-4867-49196-49195-52393-49200-49199-52392-49162-49161-49172-49171-157-156-53-47-49160-49170-10,0-23-65281-10-11-16-5-13-18-51-45-43-27,29-23-24-25,0",
+    ja3=(
+        "771,4865-4866-4867-49196-49195-52393-49200-49199-52392-49162-49161-49172-49171-"
+        "157-156-53-47-49160-49170-10,0-23-65281-10-11-16-5-13-18-51-45-43-27,29-23-24-25,0"
+    ),
     http2_fingerprint="4:4194304,3:100|10485760|0|m,s,p,a",
-    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+    user_agent=(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/17.2 Safari/605.1.15"
+    ),
     header_order=[
         "host",
         "accept",
@@ -352,9 +376,15 @@ SAFARI_17 = TLSFingerprint(
 # Edge 120 on Windows 10
 EDGE_120 = TLSFingerprint(
     name="edge_120",
-    ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
+    ),
     http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
+    ),
     header_order=[
         "host",
         "connection",
@@ -378,9 +408,15 @@ EDGE_120 = TLSFingerprint(
 # Mobile Chrome on Android
 CHROME_ANDROID = TLSFingerprint(
     name="chrome_android",
-    ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
+    ),
     http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
-    user_agent="Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36",
+    user_agent=(
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36"
+    ),
     header_order=[
         "host",
         "connection",
@@ -403,9 +439,15 @@ CHROME_ANDROID = TLSFingerprint(
 # Mobile Safari on iOS
 SAFARI_IOS = TLSFingerprint(
     name="safari_ios",
-    ja3="771,4865-4866-4867-49196-49195-52393-49200-49199-52392-49162-49161-49172-49171-157-156-53-47-49160-49170-10,0-23-65281-10-11-16-5-13-18-51-45-43-27,29-23-24-25,0",
+    ja3=(
+        "771,4865-4866-4867-49196-49195-52393-49200-49199-52392-49162-49161-49172-49171-"
+        "157-156-53-47-49160-49170-10,0-23-65281-10-11-16-5-13-18-51-45-43-27,29-23-24-25,0"
+    ),
     http2_fingerprint="4:4194304,3:100|10485760|0|m,s,p,a",
-    user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+    user_agent=(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
+    ),
     header_order=[
         "host",
         "accept",

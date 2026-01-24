@@ -187,9 +187,15 @@ class TestAsyncRedirects:
 
     @pytest.mark.asyncio
     async def test_async_absolute_redirect(self, httpbin_url):
-        """Test async absolute redirect."""
-        response = await cycletls.aget(f"{httpbin_url}/absolute-redirect/2")
+        """Test async absolute redirect.
+
+        Note: httpbin's /absolute-redirect/N returns http:// URLs which cause issues
+        with HTTP/2. Using redirect-to with an absolute HTTPS URL instead.
+        """
+        target_url = f"{httpbin_url}/get"
+        response = await cycletls.aget(f"{httpbin_url}/redirect-to?url={target_url}")
         assert response.status_code == 200
+        assert response.final_url == target_url
 
     @pytest.mark.asyncio
     async def test_async_redirect_to_get(self, httpbin_url):

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Union
 from .api import CycleTLS, ParamsType
 from .structures import CookieJar, CaseInsensitiveDict
 from .schema import Response, Cookie
+from .fingerprints import TLSFingerprint
 
 
 def _merge_cookie(merged_cookies: List[Cookie], new_cookie: Cookie) -> None:
@@ -58,6 +59,7 @@ class Session(CycleTLS):
         data: Optional[Union[Dict[str, Any], str, bytes]] = None,
         json_data: Optional[Dict[str, Any]] = None,
         files: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
         **kwargs: Any,
     ) -> Response:
         """
@@ -111,7 +113,7 @@ class Session(CycleTLS):
         kwargs["cookies"] = merged_cookies if merged_cookies else None
 
         # Make the request using parent class
-        response = super().request(method, url, params, data, json_data, files, **kwargs)
+        response = super().request(method, url, params, data, json_data, files, fingerprint, **kwargs)
 
         # Update session cookies from response
         if response.cookies and len(response.cookies) > 0:

@@ -82,21 +82,25 @@ class TestAsyncConcurrentJA3:
         """Test concurrent requests with different browser fingerprints."""
         import asyncio
 
+        # Different JA3 fingerprints require separate connections
         tasks = [
             cycletls.aget(
                 "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                enable_connection_reuse=False,
             ),
             cycletls.aget(
                 "https://tls.peet.ws/api/clean",
                 ja3=firefox_ja3,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+                enable_connection_reuse=False,
             ),
             cycletls.aget(
                 "https://tls.peet.ws/api/clean",
                 ja3=safari_ja3,
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+                enable_connection_reuse=False,
             ),
         ]
 
@@ -116,11 +120,13 @@ class TestAsyncConcurrentJA3:
         import asyncio
 
         num_requests = 5
+        # Same JA3 fingerprint - connection reuse should work but disable for test isolation
         tasks = [
             cycletls.aget(
                 "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                enable_connection_reuse=False,
             )
             for _ in range(num_requests)
         ]
@@ -157,7 +163,8 @@ class TestAsyncJA4Fingerprints:
         response = await cycletls.aget(
             "https://tls.peet.ws/api/all",
             ja4r=ja4r,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            enable_connection_reuse=False,
         )
 
         assert response.status_code == 200
@@ -167,21 +174,18 @@ class TestAsyncHTTP2Fingerprint:
     """Test async requests with HTTP/2 fingerprints."""
 
     @pytest.mark.asyncio
-    async def test_async_http2_settings(self):
-        """Test async request with HTTP/2 settings fingerprint."""
+    async def test_async_http2_fingerprint(self):
+        """Test async request with HTTP/2 fingerprint string."""
         async with AsyncCycleTLS() as client:
-            # Chrome HTTP/2 settings
-            http2_settings = {
-                "HEADER_TABLE_SIZE": 65536,
-                "MAX_CONCURRENT_STREAMS": 1000,
-                "INITIAL_WINDOW_SIZE": 6291456,
-                "MAX_HEADER_LIST_SIZE": 262144,
-            }
+            # Chrome HTTP/2 fingerprint string format:
+            # SETTINGS|WINDOW_UPDATE|PRIORITY|Header Order
+            http2_fingerprint = "1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p"
 
             response = await client.get(
                 "https://www.google.com",
-                http2_settings=http2_settings,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                http2_fingerprint=http2_fingerprint,
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                enable_connection_reuse=False,
             )
 
             assert response.status_code == 200
@@ -191,17 +195,15 @@ class TestAsyncHTTP2Fingerprint:
         """Test concurrent async requests with HTTP/2 fingerprints."""
         import asyncio
 
-        http2_settings = {
-            "HEADER_TABLE_SIZE": 65536,
-            "MAX_CONCURRENT_STREAMS": 1000,
-            "INITIAL_WINDOW_SIZE": 6291456,
-        }
+        # Chrome HTTP/2 fingerprint string
+        http2_fingerprint = "1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p"
 
         tasks = [
             cycletls.aget(
                 "https://www.google.com",
-                http2_settings=http2_settings,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                http2_fingerprint=http2_fingerprint,
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                enable_connection_reuse=False,
             )
             for _ in range(3)
         ]
@@ -235,7 +237,8 @@ class TestAsyncBrowserProfiles:
                     "Sec-Fetch-Site": "none",
                     "Sec-Fetch-User": "?1",
                     "Upgrade-Insecure-Requests": "1",
-                }
+                },
+                enable_connection_reuse=False,
             )
 
             assert response.status_code == 200
@@ -257,7 +260,8 @@ class TestAsyncBrowserProfiles:
                     "Sec-Fetch-Site": "none",
                     "Sec-Fetch-User": "?1",
                     "Upgrade-Insecure-Requests": "1",
-                }
+                },
+                enable_connection_reuse=False,
             )
 
             assert response.status_code == 200
@@ -270,17 +274,19 @@ class TestAsyncFingerprintPersistence:
     async def test_async_fingerprint_reuse(self, chrome_ja3):
         """Test using same fingerprint for multiple async requests."""
         async with AsyncCycleTLS() as client:
-            # Multiple requests with same fingerprint
+            # Multiple requests with same fingerprint - connection reuse disabled for test isolation
             response1 = await client.get(
                 "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                enable_connection_reuse=False,
             )
 
             response2 = await client.get(
                 "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                enable_connection_reuse=False,
             )
 
             assert response1.status_code == 200
@@ -290,18 +296,20 @@ class TestAsyncFingerprintPersistence:
     async def test_async_fingerprint_switch(self, chrome_ja3, firefox_ja3):
         """Test switching fingerprints between async requests."""
         async with AsyncCycleTLS() as client:
-            # Request with Chrome fingerprint
+            # Request with Chrome fingerprint - switching fingerprints requires new connections
             response1 = await client.get(
                 "https://tls.peet.ws/api/clean",
                 ja3=chrome_ja3,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                enable_connection_reuse=False,
             )
 
             # Switch to Firefox fingerprint
             response2 = await client.get(
                 "https://tls.peet.ws/api/clean",
                 ja3=firefox_ja3,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+                enable_connection_reuse=False,
             )
 
             assert response1.status_code == 200

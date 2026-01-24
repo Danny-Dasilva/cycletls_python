@@ -36,8 +36,9 @@ class TestBasicRequests:
         assert 'origin' in data, "Response should contain 'origin' field with IP address"
 
     def test_get_with_ja3er(self, cycletls_client):
-        """Test GET request to ja3er.com to verify JA3 fingerprinting."""
-        response = cycletls_client.get("https://ja3er.com/json")
+        """Test GET request to TLS fingerprint service to verify JA3 fingerprinting."""
+        # Use tls.peet.ws instead of ja3er.com which is unreliable
+        response = cycletls_client.get("https://tls.peet.ws/api/clean", timeout=30)
         assert_valid_response(response, expected_status=200)
 
         # Verify JA3 data is present
@@ -86,13 +87,15 @@ class TestUserAgent:
             f"User-agent should be '{custom_ua}', got '{data.get('user-agent')}'"
 
     def test_user_agent_with_ja3(self, cycletls_client, firefox_ja3):
-        """Test user-agent with JA3 fingerprint on ja3er.com."""
+        """Test user-agent with JA3 fingerprint on TLS fingerprint service."""
         custom_ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.97 Safari/537.36'
 
+        # Use tls.peet.ws instead of ja3er.com which is unreliable
         response = cycletls_client.get(
-            "https://ja3er.com/json",
+            "https://tls.peet.ws/api/clean",
             user_agent=custom_ua,
-            ja3=firefox_ja3
+            ja3=firefox_ja3,
+            timeout=30
         )
         assert_valid_response(response, expected_status=200)
 
@@ -215,7 +218,7 @@ class TestHeaders:
 
         # Verify response headers exist
         assert hasattr(response, 'headers'), "Response should have headers attribute"
-        assert isinstance(response.headers, dict), "Headers should be a dictionary"
+        assert hasattr(response.headers, '__getitem__'), "Headers should be dict-like"
 
         # Common headers that should be present
         headers_lower = {k.lower(): v for k, v in response.headers.items()}
@@ -330,9 +333,10 @@ class TestComplexScenarios:
         assert 'headers' in data, "Response should contain headers"
         assert 'Authorization' in data['headers'], "Authorization header should be present"
 
-        # Verify cookies
-        assert 'cookies' in data, "Response should contain cookies"
-        assert 'session' in data['cookies'], "Session cookie should be present"
+        # Verify cookies - httpbin shows cookies in the headers as 'Cookie' header
+        # not as a separate 'cookies' field in POST response
+        assert 'Cookie' in data['headers'], "Cookie header should be present"
+        assert 'session=abc123' in data['headers']['Cookie'], "Session cookie should be in Cookie header"
 
     def test_all_methods_return_200(self, cycletls_client, httpbin_url, firefox_ja3):
         """
@@ -340,15 +344,6 @@ class TestComplexScenarios:
         Tests all major features: GET, POST, PUT, PATCH, DELETE, headers, cookies, etc.
         """
         test_requests = [
-            # User-agent with JA3
-            {
-                'method': 'get',
-                'url': 'https://ja3er.com/json',
-                'params': {
-                    'ja3': firefox_ja3,
-                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.97 Safari/537.36'
-                }
-            },
             # POST
             {
                 'method': 'post',

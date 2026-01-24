@@ -43,16 +43,22 @@ class TestCookies:
         assert data["cookies"]["test_cookie"] == "test_value"
 
     def test_receive_cookies_from_response(self, cycletls_client, httpbin_url):
-        """Test receiving cookies set by the server"""
+        """Test receiving cookies set by the server via Set-Cookie header.
+
+        The httpbin /cookies/set endpoint returns a 302 redirect with Set-Cookie headers.
+        We disable redirect to capture those headers directly.
+        """
         response = cycletls_client.get(
-            f"{httpbin_url}/cookies/set?test_cookie=test_value&another=value2"
+            f"{httpbin_url}/cookies/set?test_cookie=test_value&another=value2",
+            disable_redirect=True
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 302
         assert response.cookies is not None
 
-        # Check that cookies were set
-        cookie_names = [cookie.name for cookie in response.cookies]
+        # Check that cookies were set via Set-Cookie header
+        # CookieJar iterates over cookie names (strings), not Cookie objects
+        cookie_names = list(response.cookies)
         assert "test_cookie" in cookie_names or "another" in cookie_names
 
     def test_cookie_with_domain_attribute(self, cycletls_client, httpbin_url):

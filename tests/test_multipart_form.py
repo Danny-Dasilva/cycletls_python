@@ -26,8 +26,7 @@ class TestMultipartFormData:
 
     def test_basic_multipart_form_data(self, cycletls_client, httpbin_url):
         """Test basic multipart form data with key-value pairs."""
-        # Note: Python CycleTLS should support multipart form data
-        # This test assumes the library has form_data or similar parameter
+        # Use data= parameter with dict for form-urlencoded data
         form_data = {
             "key1": "value1",
             "key2": "value2"
@@ -35,7 +34,7 @@ class TestMultipartFormData:
 
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            form_data=form_data
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -59,7 +58,7 @@ class TestMultipartFormData:
 
         response = cycletls_client.post(
             f"{httpbin_url}/post",
-            form_data=form_data
+            data=form_data
         )
 
         assert_valid_response(response, expected_status=200)
@@ -118,12 +117,12 @@ class TestFileUpload:
             temp_file_path = f.name
 
         try:
-            # Upload file with form fields
+            # Upload file with form fields - data is passed alongside files
             with open(temp_file_path, 'rb') as f:
                 files = {
                     'file': ('document.txt', f, 'text/plain')
                 }
-                form_data = {
+                form_fields = {
                     'title': 'Test Document',
                     'description': 'A test file upload',
                     'category': 'testing'
@@ -132,7 +131,7 @@ class TestFileUpload:
                 response = cycletls_client.post(
                     f"{httpbin_url}/post",
                     files=files,
-                    form_data=form_data
+                    data=form_fields
                 )
 
             assert_valid_response(response, expected_status=200)
@@ -414,7 +413,7 @@ class TestMultipartEdgeCases:
                     'document': ('doc1.txt', f1, 'text/plain'),
                     'attachment': ('doc2.txt', f2, 'text/plain')
                 }
-                form_data = {
+                form_fields = {
                     'author': 'Test User',
                     'version': '1.0',
                     'category': 'documentation',
@@ -424,7 +423,7 @@ class TestMultipartEdgeCases:
                 response = cycletls_client.post(
                     f"{httpbin_url}/post",
                     files=files,
-                    form_data=form_data
+                    data=form_fields
                 )
 
             assert_valid_response(response, expected_status=200)

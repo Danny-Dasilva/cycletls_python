@@ -43,8 +43,10 @@ class TestResponseJsonMethod:
         with pytest.raises(Exception) as exc_info:
             response.json()
 
-        # Should raise a JSON decode error
-        assert "json" in str(exc_info.value).lower() or "decode" in str(exc_info.value).lower()
+        # Should raise a JSON decode error - accept various error message formats
+        # orjson/ormsgpack uses "unexpected character" while json uses "JSONDecodeError"
+        error_msg = str(exc_info.value).lower()
+        assert any(x in error_msg for x in ["json", "decode", "unexpected", "parse", "invalid"])
 
     def test_should_be_callable_multiple_times(self, cycletls_client, httpbin_url, firefox_ja3):
         """Should be callable multiple times and return the same data."""
@@ -147,8 +149,8 @@ class TestResponseBinaryData:
 
         assert response.status_code == 200
 
-        # Check body length
-        assert len(response.body) >= 1024
+        # Check content (binary data) length - use .content for bytes
+        assert len(response.content) >= 1024
 
     def test_should_work_with_different_byte_sizes(self, cycletls_client, httpbin_url, firefox_ja3):
         """Should work with different byte sizes."""
@@ -157,7 +159,8 @@ class TestResponseBinaryData:
             ja3=firefox_ja3
         )
 
-        assert len(response.body) >= 512
+        # Use .content for binary data
+        assert len(response.content) >= 512
 
     def test_binary_data_is_consistent(self, cycletls_client, httpbin_url, firefox_ja3):
         """Binary data should be consistent on multiple accesses."""
@@ -180,7 +183,7 @@ class TestResponseHeaders:
         response = cycletls_client.get(f"{httpbin_url}/get")
 
         assert response.status_code == 200
-        assert isinstance(response.headers, dict)
+        assert hasattr(response.headers, '__getitem__')
         assert len(response.headers) > 0
 
     def test_specific_headers_present(self, cycletls_client, httpbin_url):
@@ -243,7 +246,7 @@ class TestMethodCompatibility:
         assert hasattr(response, 'request_id')
 
         assert response.status_code == 200
-        assert isinstance(response.headers, dict)
+        assert hasattr(response.headers, '__getitem__')
         assert isinstance(response.body, str)
 
 
@@ -265,11 +268,16 @@ class TestCrossMethodConsistency:
 
     def test_status_code_is_consistent(self, cycletls_client, httpbin_url):
         """Status code should be consistent and correct."""
-        test_codes = [200, 201, 204, 301, 400, 404, 500]
+        # Test non-redirect status codes (redirects are followed by default)
+        test_codes = [200, 201, 204, 400, 404, 500]
 
         for code in test_codes:
             response = cycletls_client.get(f"{httpbin_url}/status/{code}")
             assert response.status_code == code
+
+        # Test redirect status code with redirect disabled
+        response = cycletls_client.get(f"{httpbin_url}/status/301", disable_redirect=True)
+        assert response.status_code == 301
 
     def test_response_with_redirects(self, cycletls_client, httpbin_url):
         """Test response properties after redirects."""
@@ -313,8 +321,8 @@ class TestResponseContentTypes:
         response = cycletls_client.get(f"{httpbin_url}/image/png")
 
         assert response.status_code == 200
-        # Should receive binary image data
-        assert len(response.body) > 0
+        # Should receive binary image data - use .content for binary
+        assert len(response.content) > 0
 
 
 class TestResponseEncoding:

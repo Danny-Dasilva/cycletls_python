@@ -24,7 +24,7 @@ import base64
 import logging
 import threading
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Dict, Iterator, Optional
+from typing import AsyncIterator, Dict, Iterator, Optional
 
 import ormsgpack  # Drop-in replacement for msgpack, 10-30% faster
 
@@ -140,13 +140,17 @@ class SSEConnection:
             )
 
         # Build connection options
-        options = {
+        headers_dict = {
+            "Accept": "text/event-stream",
+            "Cache-Control": "no-cache",
+            **self.headers,
+        }
+        if self.last_event_id:
+            headers_dict["Last-Event-ID"] = self.last_event_id
+
+        options: Dict[str, Any] = {
             "url": self.url,
-            "headers": {
-                "Accept": "text/event-stream",
-                "Cache-Control": "no-cache",
-                **self.headers,
-            },
+            "headers": headers_dict,
             "timeout": self.timeout,
         }
         if self.ja3:
@@ -155,8 +159,6 @@ class SSEConnection:
             options["userAgent"] = self.user_agent
         if self.proxy:
             options["proxy"] = self.proxy
-        if self.last_event_id:
-            options["headers"]["Last-Event-ID"] = self.last_event_id
 
         # Serialize and send
         msgpack_data = ormsgpack.packb(options)

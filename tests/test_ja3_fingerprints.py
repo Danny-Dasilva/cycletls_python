@@ -128,7 +128,8 @@ class TestJA3Fingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,  # Different JA3 fingerprints require new connections
         )
 
         # Verify successful response
@@ -155,7 +156,8 @@ class TestChromeFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -168,7 +170,8 @@ class TestChromeFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -181,7 +184,8 @@ class TestChromeFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -194,7 +198,8 @@ class TestChromeFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -207,7 +212,8 @@ class TestChromeFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -224,7 +230,8 @@ class TestFirefoxFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -237,7 +244,8 @@ class TestFirefoxFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -250,7 +258,8 @@ class TestFirefoxFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -263,7 +272,8 @@ class TestFirefoxFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -280,7 +290,8 @@ class TestSafariFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -293,7 +304,8 @@ class TestSafariFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -306,7 +318,8 @@ class TestSafariFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -319,7 +332,8 @@ class TestSafariFingerprints:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
         assert response.status_code == 200
         data = response.json()
@@ -337,7 +351,8 @@ class TestJA3StringValidation:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
 
         assert response.status_code == 200
@@ -356,7 +371,8 @@ class TestJA3StringValidation:
         response = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=custom_ja3,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.106 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.106 Safari/537.36",
+            enable_connection_reuse=False,
         )
 
         assert response.status_code == 200
@@ -368,17 +384,19 @@ class TestJA3StringValidation:
         """Test that same JA3 string produces same hash across multiple requests"""
         fingerprint = JA3_FINGERPRINTS[0]
 
-        # Make two requests with the same JA3
+        # Make two requests with the same JA3 - here connection reuse is OK since same fingerprint
         response1 = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,  # Still disable for test isolation
         )
 
         response2 = cycle_client.get(
             "https://tls.peet.ws/api/clean",
             ja3=fingerprint["ja3"],
-            user_agent=fingerprint["user_agent"]
+            user_agent=fingerprint["user_agent"],
+            enable_connection_reuse=False,
         )
 
         assert response1.status_code == 200

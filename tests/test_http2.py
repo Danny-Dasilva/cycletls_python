@@ -27,18 +27,21 @@ class TestHTTP2:
 
     def test_http2_vs_http1_comparison(self, cycle):
         """Compare HTTP/2 and HTTP/1.1 protocol usage"""
+        # Use tls.peet.ws as it's more reliable than ja3er.com
         # Test HTTP/2 (default)
         response_http2 = cycle.get(
-            "https://ja3er.com/json",
+            "https://tls.peet.ws/api/all",
             force_http1=False,
-            ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0"
+            ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0",
+            timeout=30
         )
 
         # Test HTTP/1.1 (forced)
         response_http1 = cycle.get(
-            "https://ja3er.com/json",
+            "https://tls.peet.ws/api/all",
             force_http1=True,
-            ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0"
+            ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0",
+            timeout=30
         )
 
         # Both should succeed
@@ -49,8 +52,9 @@ class TestHTTP2:
         data_http2 = response_http2.json()
         data_http1 = response_http1.json()
 
-        assert "ja3_hash" in data_http2
-        assert "ja3_hash" in data_http1
+        # tls.peet.ws returns TLS info including ja3_hash
+        assert "tls" in data_http2 or "ja3_hash" in data_http2
+        assert "tls" in data_http1 or "ja3_hash" in data_http1
 
     def test_force_http1_protocol(self, cycle):
         """Test forcing HTTP/1.1 protocol"""

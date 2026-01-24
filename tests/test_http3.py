@@ -276,22 +276,34 @@ class TestForceHTTP3FlagValidation:
 
         Should gracefully fall back or return appropriate error.
         """
-        # httpbin.org may not support HTTP/3
-        response = cycle_client.get(
-            "https://httpbin.org/get",
-            force_http3=True,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        )
+        from cycletls.exceptions import Timeout, ConnectionError, CycleTLSError
 
-        # Should either succeed with fallback or fail gracefully
-        # Not all sites support HTTP/3, so this might fail
-        if response.status_code == 200:
-            # Site supports HTTP/3 or fell back successfully
-            assert response.text is not None
-        else:
-            # Site doesn't support HTTP/3 - this is acceptable
-            assert response.status_code in [400, 502, 503, 504], \
-                f"Unexpected status code {response.status_code} for non-HTTP/3 site"
+        # httpbin.org may not support HTTP/3
+        try:
+            response = cycle_client.get(
+                "https://httpbin.org/get",
+                force_http3=True,
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            )
+
+            # Should either succeed with fallback or fail gracefully
+            # Not all sites support HTTP/3, so this might fail
+            if response.status_code == 200:
+                # Site supports HTTP/3 or fell back successfully
+                assert response.text is not None
+            else:
+                # Site doesn't support HTTP/3 - this is acceptable
+                # 408 = timeout (QUIC connection couldn't be established)
+                # 400 = bad request
+                # 502, 503, 504 = gateway errors
+                assert response.status_code in [400, 408, 502, 503, 504], \
+                    f"Unexpected status code {response.status_code} for non-HTTP/3 site"
+
+        except (Timeout, ConnectionError, CycleTLSError) as e:
+            # Timeout or connection error is expected when HTTP/3 is not supported
+            # QUIC connection will fail when the server doesn't advertise HTTP/3
+            assert "timeout" in str(e).lower() or "quic" in str(e).lower() or "deadline" in str(e).lower(), \
+                f"Unexpected exception message: {str(e)}"
 
     def test_conflicting_protocol_flags(self, cycle_client):
         """

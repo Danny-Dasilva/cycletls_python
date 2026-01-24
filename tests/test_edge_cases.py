@@ -121,11 +121,12 @@ class TestEdgeCases:
 
     def test_large_response_body(self, cycletls_client, httpbin_url):
         """Test handling of large response body."""
-        # Request 1MB of random bytes
-        response = cycletls_client.get(f"{httpbin_url}/bytes/1048576")
+        # Request 100KB of random bytes (httpbin caps at ~100KB)
+        response = cycletls_client.get(f"{httpbin_url}/bytes/102400")
 
         assert response.status_code == 200
-        assert len(response.body) > 1000000  # Should be close to 1MB
+        # Binary data is in content (body_bytes), not body (which is empty for non-UTF-8)
+        assert len(response.content) >= 100000  # Should be close to 100KB
 
     def test_special_characters_in_headers(self, cycletls_client, httpbin_url):
         """Test handling of special characters in headers."""
@@ -174,7 +175,8 @@ class TestEdgeCases:
         response = cycletls_client.get(f"{httpbin_url}/bytes/256")
 
         assert response.status_code == 200
-        assert len(response.body) > 0
+        # Binary data is in content (body_bytes), not body (which is empty for non-UTF-8)
+        assert len(response.content) > 0
 
     def test_json_parse_error_handling(self, cycletls_client, httpbin_url):
         """Test json() method with non-JSON response."""

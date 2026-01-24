@@ -40,7 +40,7 @@ class TestBinaryUpload:
             body_bytes=problematic_data,
             headers={
                 'Content-Type': 'application/octet-stream',
-                'Content-Length': str(len(problematic_data))
+                # Note: Do NOT set Content-Length manually - Go/TLS layer handles this
             }
         )
 
@@ -91,7 +91,7 @@ class TestBinaryUpload:
             body_bytes=large_data,
             headers={
                 'Content-Type': 'application/octet-stream',
-                'Content-Length': str(len(large_data))
+                # Note: Do NOT set Content-Length manually - Go/TLS layer handles this
             }
         )
 

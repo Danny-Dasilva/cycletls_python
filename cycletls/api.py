@@ -263,6 +263,15 @@ class CycleTLS:
 
         headers = kwargs.get("headers") or {}
 
+        # If User-Agent is in headers dict, it should override the user_agent parameter
+        # Check case-insensitively
+        for key, value in list(headers.items()):
+            if key.lower() == "user-agent":
+                kwargs["user_agent"] = value
+                # Remove from headers since it's handled separately by the Go library
+                del headers[key]
+                break
+
         # Attach params to URL before building the request
         url = _merge_url_params(url, params)
 
@@ -306,13 +315,38 @@ class CycleTLS:
         if headers:
             kwargs["headers"] = headers
 
-        # Simplify cookie input - handle dict or CookieJar
+        # Simplify cookie input - handle dict, list of dicts, or CookieJar
         if "cookies" in kwargs and kwargs["cookies"] is not None:
             cookies = kwargs["cookies"]
             if isinstance(cookies, dict):
                 from .schema import Cookie
 
                 kwargs["cookies"] = [Cookie(name=str(k), value=str(v)) for k, v in cookies.items()]
+            elif isinstance(cookies, list):
+                from .schema import Cookie
+
+                # Convert list of dicts to list of Cookie objects
+                converted = []
+                for c in cookies:
+                    if isinstance(c, dict):
+                        # Handle dict format: {"name": "...", "value": "...", ...}
+                        converted.append(
+                            Cookie(
+                                name=c.get("name", ""),
+                                value=c.get("value", ""),
+                                path=c.get("path"),
+                                domain=c.get("domain"),
+                                expires=None,  # Would need datetime parsing if provided
+                                max_age=c.get("max_age") or c.get("maxAge"),
+                                secure=c.get("secure", False),
+                                http_only=c.get("http_only") or c.get("httpOnly", False),
+                                same_site=c.get("same_site") or c.get("sameSite"),
+                            )
+                        )
+                    else:
+                        # Already a Cookie object
+                        converted.append(c)
+                kwargs["cookies"] = converted
             elif hasattr(cookies, "_cookies"):
                 kwargs["cookies"] = list(cookies._cookies.values())
 
@@ -348,6 +382,9 @@ class CycleTLS:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(f"Response headers: {dict(response.headers)}")
             return response
+        except CycleTLSError:
+            # Re-raise our custom exceptions (includes exceptions from schema.py error handling)
+            raise
         except Exception as exc:  # pragma: no cover - validation error
             logger.error(f"Failed to parse response: {exc}")
             raise CycleTLSError(f"Failed to parse CycleTLS response: {exc}") from exc
@@ -524,7 +561,11 @@ class CycleTLS:
             "body": body_value or "",
             "ja3": req.get(
                 "ja3",
-                "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0",
+                (
+                    "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-"
+                    "49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,"
+                    "29-23-24-25-256-257,0"
+                ),
             ),
             "userAgent": req.get(
                 "user_agent",

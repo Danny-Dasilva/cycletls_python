@@ -27,7 +27,7 @@ import logging
 import threading
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, AsyncIterator, Dict, Iterator, Optional, Union
+from typing import AsyncIterator, Dict, Iterator, Optional, Union
 
 import ormsgpack  # Drop-in replacement for msgpack, 10-30% faster
 

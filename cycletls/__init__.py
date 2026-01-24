@@ -75,15 +75,19 @@ from .structures import CaseInsensitiveDict, CookieJar
 # Import WebSocket and SSE support
 from .websocket import (
     MessageType,
-    WebSocketMessage,
+    WebSocketMessage as WSMessage,
     WebSocketError,
     WebSocketConnection,
 )
 from .sse import (
-    SSEEvent,
+    SSEEvent as SSEEventClass,
     SSEError,
     SSEConnection,
 )
+
+# Re-export with proper names
+WebSocketMessage = WSMessage
+SSEEvent = SSEEventClass
 
 # Import global session management
 from ._global import (

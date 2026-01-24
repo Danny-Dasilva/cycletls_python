@@ -58,13 +58,9 @@ class TestHeaders:
 
     def test_content_type_header(self, cycletls_client, httpbin_url):
         """Test Content-Type header on POST request"""
-        headers = {
-            "Content-Type": "application/json",
-        }
-
+        # Use /post endpoint instead of /headers (which doesn't accept POST)
         response = cycletls_client.post(
-            f"{httpbin_url}/headers",
-            headers=headers,
+            f"{httpbin_url}/post",
             json_data={'test': 'data'}
         )
 

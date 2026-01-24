@@ -86,7 +86,7 @@ class Request:
     user_agent: str = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:87.0) Gecko/20100101 Firefox/87.0"
     proxy: str = ""
     cookies: Optional[List[Cookie]] = None
-    timeout: int = 6
+    timeout: Union[int, float] = 6  # Timeout in seconds (floats are rounded up to nearest integer)
     disable_redirect: bool = False
     enable_connection_reuse: bool = True
 
@@ -105,13 +105,19 @@ class Request:
 
     def to_dict(self) -> dict:
         """Convert Request to dictionary for serialization (optimized)."""
+        # Convert timeout to integer (Go expects int, not float)
+        # Round up to ensure we don't timeout prematurely
+        # Minimum timeout is 1 second (Go defaults 0 to 15 seconds)
+        import math
+
+        timeout_int = max(1, math.ceil(self.timeout)) if self.timeout > 0 else 0
+
         # Build dict with required fields (batch assignment is faster)
         result = {
             "url": self.url,
             "method": self.method,
             "body": self.body,
             "headers": self.headers,
-            "ja3": self.ja3,
             "disableGrease": self.disable_grease,
             "insecureSkipVerify": self.insecure_skip_verify,
             "tls13AutoRetry": self.tls13_auto_retry,
@@ -119,10 +125,25 @@ class Request:
             "forceHTTP3": self.force_http3,
             "userAgent": self.user_agent,
             "proxy": self.proxy,
-            "timeout": self.timeout,
+            "timeout": timeout_int,
             "disableRedirect": self.disable_redirect,
             "enableConnectionReuse": self.enable_connection_reuse,
         }
+
+        # Handle TLS fingerprint options: only use ja3 if no other fingerprint option is set
+        # This matches the TypeScript reference behavior where ja4r takes precedence over default ja3
+        has_other_fingerprint = (
+            self.ja4r is not None
+            or self.http2_fingerprint is not None
+            or self.quic_fingerprint is not None
+        )
+        if has_other_fingerprint:
+            # When another fingerprint option is set, only include ja3 if explicitly non-default
+            # Use empty string to let Go know not to use ja3
+            result["ja3"] = ""
+        else:
+            # No other fingerprint option, use ja3 (default or user-provided)
+            result["ja3"] = self.ja3
 
         # Add optional fields only if set (minimize conditionals)
         if self.body_bytes is not None:
@@ -345,8 +366,41 @@ class Response:
         return f"<Response [{self.status_code}]>"
 
 
-def _cookie_to_dict(cookie: Cookie) -> dict:
-    """Convert Cookie to dictionary for serialization."""
+def _cookie_to_dict(cookie: Union[Cookie, dict]) -> dict:
+    """Convert Cookie or dict to dictionary for serialization.
+
+    Accepts both Cookie dataclass instances and plain dictionaries for flexibility.
+    """
+    # Handle dict input (e.g., from test code passing raw dicts)
+    if isinstance(cookie, dict):
+        result = {
+            "name": cookie.get("name", ""),
+            "value": cookie.get("value", ""),
+            "secure": cookie.get("secure", False),
+            "httpOnly": cookie.get("httpOnly", cookie.get("http_only", False)),
+        }
+        if "path" in cookie and cookie["path"] is not None:
+            result["path"] = cookie["path"]
+        if "domain" in cookie and cookie["domain"] is not None:
+            result["domain"] = cookie["domain"]
+        if "expires" in cookie and cookie["expires"] is not None:
+            # Use rawExpires field which accepts a string in various formats
+            exp = cookie["expires"]
+            if hasattr(exp, "strftime"):
+                result["rawExpires"] = exp.strftime("%a, %d %b %Y %H:%M:%S GMT")
+            else:
+                result["rawExpires"] = str(exp)
+        if "maxAge" in cookie and cookie["maxAge"] is not None:
+            result["maxAge"] = cookie["maxAge"]
+        if "max_age" in cookie and cookie["max_age"] is not None:
+            result["maxAge"] = cookie["max_age"]
+        if "sameSite" in cookie and cookie["sameSite"] is not None:
+            result["sameSite"] = _convert_same_site(cookie["sameSite"])
+        if "same_site" in cookie and cookie["same_site"] is not None:
+            result["sameSite"] = _convert_same_site(cookie["same_site"])
+        return result
+
+    # Handle Cookie dataclass instance
     result = {
         "name": cookie.name,
         "value": cookie.value,
@@ -358,12 +412,39 @@ def _cookie_to_dict(cookie: Cookie) -> dict:
     if cookie.domain is not None:
         result["domain"] = cookie.domain
     if cookie.expires is not None:
-        result["expires"] = cookie.expires.isoformat()
+        # Use rawExpires field which accepts a string in various formats
+        # Go's Cookie struct has: rawExpires string `msgpack:"rawExpires"`
+        # This avoids the msgpack time.Time binary format issue
+        result["rawExpires"] = cookie.expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
     if cookie.max_age is not None:
         result["maxAge"] = cookie.max_age
     if cookie.same_site is not None:
-        result["sameSite"] = cookie.same_site
+        result["sameSite"] = _convert_same_site(cookie.same_site)
     return result
+
+
+def _convert_same_site(value: Union[str, int, None]) -> int:
+    """Convert SameSite value to Go's nhttp.SameSite int type.
+
+    Go's net/http SameSite constants:
+      SameSiteDefaultMode = 1
+      SameSiteLaxMode = 2
+      SameSiteStrictMode = 3
+      SameSiteNoneMode = 4
+    """
+    if value is None:
+        return 0
+    if isinstance(value, int):
+        return value
+
+    # Map string values to Go constants
+    same_site_map = {
+        "default": 1,
+        "lax": 2,
+        "strict": 3,
+        "none": 4,
+    }
+    return same_site_map.get(str(value).lower(), 0)
 
 
 def _dict_to_cookie(data: dict) -> Cookie:
@@ -385,8 +466,181 @@ def _dict_to_cookie(data: dict) -> Cookie:
     )
 
 
-def _dict_to_response(data: dict) -> Response:
-    """Convert dictionary to Response object."""
+def _raise_for_error_response(data: dict) -> None:
+    """Check if response indicates an error and raise appropriate exception.
+
+    Go backend returns various status codes for different errors:
+    - Status 0: Generic error
+    - Status 408: Timeout errors
+    - Status 421: DNS errors
+    - Status 495: TLS/certificate errors
+    - Status 401: Syscall errors
+    - Status 405: Address errors
+    - Status 502: Connection refused
+
+    When Body contains "Request returned a Syscall Error:" or similar error
+    markers, it's an error response even with non-zero status codes.
+
+    Args:
+        data: Response dictionary from Go backend
+
+    Raises:
+        Timeout: For timeout errors
+        ConnectionError: For DNS failures, connection refused
+        InvalidURL: For invalid URL errors
+        TLSError: For certificate errors
+        CycleTLSError: For other errors
+    """
+    # Import exceptions here to avoid circular import
+    from .exceptions import (
+        CycleTLSError,
+        ConnectionError,
+        Timeout,
+        InvalidURL,
+        TLSError,
+    )
+
+    status = data.get("Status", 0)
+    error_msg = data.get("Body", "")
+
+    # Check if this is an error response from Go
+    # Go returns "Request returned a Syscall Error:" prefix for errors
+    is_error_response = (
+        status == 0
+        or "request returned a syscall error:" in error_msg.lower()
+        or "syscall error:" in error_msg.lower()
+        or (status in (401, 405, 408, 421, 495, 502) and "->" in error_msg)
+    )
+
+    if not is_error_response:
+        return  # Not an error, don't raise
+
+    error_lower = error_msg.lower()
+
+    # Timeout errors (status 408 or timeout patterns)
+    if status == 408 or any(
+        pattern in error_lower
+        for pattern in [
+            "timeout",
+            "deadline exceeded",
+            "request canceled",
+            "context canceled",
+            "context done",
+            "i/o timeout",
+        ]
+    ):
+        raise Timeout(f"Request timed out: {error_msg}")
+
+    # DNS/lookup failure (status 421 or DNS patterns)
+    if status == 421 or any(
+        pattern in error_lower
+        for pattern in [
+            "no such host",
+            "lookup",
+            "dnserror",
+            "getaddrinfo",
+            "could not resolve",
+            "dns",
+        ]
+    ):
+        raise ConnectionError(f"DNS lookup failed: {error_msg}")
+
+    # Connection errors (general) - check BEFORE TLS status code to handle EOF, etc.
+    # that might come with TLS-related status codes due to connection issues during handshake
+    if any(
+        pattern in error_lower
+        for pattern in [
+            "connection reset",
+            "connection closed",
+            "closed network connection",
+            "eof",
+            "broken pipe",
+            "network is unreachable",
+        ]
+    ):
+        raise ConnectionError(f"Connection error: {error_msg}")
+
+    # TLS/certificate errors (status 495)
+    # Only match if there are actual certificate-related keywords in the error
+    if status == 495 and any(
+        pattern in error_lower
+        for pattern in [
+            "certificate",
+            "x509:",
+            "tls: failed to verify",
+            "handshake",
+        ]
+    ):
+        raise TLSError(f"TLS error: {error_msg}")
+
+    # Also check for TLS patterns without specific status code
+    if any(
+        pattern in error_lower
+        for pattern in [
+            "certificate",
+            "x509:",
+            "tls: failed to verify",
+            "ssl",
+        ]
+    ):
+        raise TLSError(f"TLS error: {error_msg}")
+
+    # Connection refused (status 502 or connection refused patterns)
+    if status == 502 or any(
+        pattern in error_lower
+        for pattern in [
+            "connection refused",
+            "refused",
+            "no connection could be made",
+        ]
+    ):
+        raise ConnectionError(f"Connection refused: {error_msg}")
+
+    # Address errors (status 405)
+    if status == 405 and "addr" in error_lower:
+        raise ConnectionError(f"Address error: {error_msg}")
+
+    # Invalid URL patterns
+    if any(
+        pattern in error_lower
+        for pattern in [
+            "invalid url",
+            "unsupported protocol",
+            "missing protocol scheme",
+            "invalid character",
+            "parse",
+            "first path segment in url cannot contain colon",
+            "unsupported scheme",
+        ]
+    ):
+        raise InvalidURL(f"Invalid URL: {error_msg}")
+
+    # Syscall errors (status 401 from Go)
+    if status == 401 and "syscall" in error_lower:
+        raise ConnectionError(f"Syscall error: {error_msg}")
+
+    # Generic error for unrecognized patterns with status 0
+    if status == 0:
+        raise CycleTLSError(f"Request failed: {error_msg}")
+
+
+def _dict_to_response(data: dict, raise_on_error: bool = True) -> Response:
+    """Convert dictionary to Response object.
+
+    Args:
+        data: Response dictionary from Go backend
+        raise_on_error: If True (default), raise exception for error responses (Status=0)
+
+    Returns:
+        Response object
+
+    Raises:
+        Various exceptions if raise_on_error=True and response indicates an error
+    """
+    # Check for error response first
+    if raise_on_error:
+        _raise_for_error_response(data)
+
     # Handle body_bytes - msgpack returns raw bytes directly
     body_bytes = None
     if "BodyBytes" in data and data["BodyBytes"]:

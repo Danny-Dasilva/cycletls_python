@@ -190,8 +190,9 @@ class TestAsyncRedirectErrors:
     @pytest.mark.asyncio
     async def test_async_redirect_chain(self, httpbin_url):
         """Test async handling of redirect chains."""
-        # Multiple redirects
-        response = await cycletls.aget(f"{httpbin_url}/absolute-redirect/5")
+        # Multiple redirects using relative redirect (stays on HTTPS)
+        # Note: absolute-redirect uses HTTP URLs which don't work with HTTP/2
+        response = await cycletls.aget(f"{httpbin_url}/redirect/5")
         assert response.status_code == 200
 
 

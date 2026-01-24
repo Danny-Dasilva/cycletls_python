@@ -50,15 +50,20 @@ class TestRedirectFollowing:
         assert "get" in response.final_url.lower()
 
     def test_follow_absolute_redirect(self, cycletls_client_function, firefox_ja3, firefox_user_agent):
-        """Test following absolute redirects."""
+        """Test following absolute redirects.
+
+        Note: httpbin's /absolute-redirect/N returns http:// URLs which cause issues
+        with HTTP/2. Using redirect-to with an absolute HTTPS URL instead.
+        """
+        target_url = "https://httpbin.org/get"
         response = cycletls_client_function.get(
-            "https://httpbin.org/absolute-redirect/1",
+            f"https://httpbin.org/redirect-to?url={target_url}",
             ja3=firefox_ja3,
             user_agent=firefox_user_agent
         )
 
         assert response.status_code == 200
-        assert "get" in response.final_url.lower()
+        assert response.final_url == target_url
 
     def test_redirect_to_specific_url(self, cycletls_client_function, firefox_ja3, firefox_user_agent):
         """Test redirect to a specific URL."""
@@ -216,15 +221,20 @@ class TestRedirectWithDifferentMethods:
     """Tests redirect handling with different HTTP methods."""
 
     def test_post_redirect(self, cycletls_client_function, firefox_ja3, firefox_user_agent):
-        """Test POST request redirect handling."""
+        """Test POST request redirect handling.
+
+        Note: Per HTTP spec (RFC 7231), 302 redirects change POST to GET.
+        So we redirect to /get endpoint which accepts GET requests.
+        """
         response = cycletls_client_function.post(
-            "https://httpbin.org/redirect-to?url=https://httpbin.org/post",
+            "https://httpbin.org/redirect-to?url=https://httpbin.org/get",
             ja3=firefox_ja3,
             user_agent=firefox_user_agent,
             json_data={"test": "data"}
         )
 
         assert response.status_code == 200
+        assert "get" in response.final_url.lower()
 
     def test_post_redirect_disabled(self, cycletls_client_function, firefox_ja3, firefox_user_agent):
         """Test POST request with redirects disabled."""

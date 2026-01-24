@@ -262,7 +262,8 @@ class TestJA4RawFormatParsing:
         response = cycle_client.get(
             'https://tls.peet.ws/api/all',
             ja4r=tls13_ja4r,
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            enable_connection_reuse=False  # Disable connection reuse when switching fingerprints
         )
 
         assert response.status_code == 200
@@ -275,7 +276,8 @@ class TestJA4RawFormatParsing:
         response = cycle_client.get(
             'https://tls.peet.ws/api/all',
             ja4r=tls12_ja4r,
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            enable_connection_reuse=False  # Disable connection reuse when switching fingerprints
         )
 
         assert response.status_code == 200
@@ -338,7 +340,8 @@ class TestJA4vsJA3Comparison:
         response = cycle_client.get(
             'https://tls.peet.ws/api/all',
             ja4r=chrome_ja4r,
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            enable_connection_reuse=False  # Disable connection reuse to avoid stale connections
         )
 
         assert response.status_code == 200
@@ -383,20 +386,22 @@ class TestCustomJA4RParameter:
         """Test JA4_r with GREASE disabled"""
         firefox_ja4r = "t13d1717h2_002f,0035,009c,009d,1301,1302,1303,c009,c00a,c013,c014,c02b,c02c,c02f,c030,cca8,cca9_0005,000a,000b,000d,0012,0017,001b,001c,0022,0023,002b,002d,0033,fe0d,ff01_0403,0503,0603,0804,0805,0806,0401,0501,0601,0203,0201"
 
-        # Test with GREASE disabled
+        # Test with GREASE disabled - disable connection reuse when switching fingerprints
         response_no_grease = cycle_client.get(
             'https://tls.peet.ws/api/all',
             ja4r=firefox_ja4r,
             disable_grease=True,
-            user_agent='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0'
+            user_agent='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0',
+            enable_connection_reuse=False  # Disable connection reuse when switching fingerprints
         )
 
-        # Test with GREASE enabled
+        # Test with GREASE enabled - disable connection reuse when switching fingerprints
         response_with_grease = cycle_client.get(
             'https://tls.peet.ws/api/all',
             ja4r=firefox_ja4r,
             disable_grease=False,
-            user_agent='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0'
+            user_agent='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0',
+            enable_connection_reuse=False  # Disable connection reuse when switching fingerprints
         )
 
         # Both should succeed
@@ -417,16 +422,19 @@ class TestCustomJA4RParameter:
         chrome_ja4r = "t13d1516h2_002f,0035,009c,009d,1301,1302,1303,c013,c014,c02b,c02c,c02f,c030,cca8,cca9_0005,000a,000b,000d,0012,0017,001b,0023,002b,002d,0033,44cd,fe0d,ff01_0403,0804,0401,0503,0805,0501,0806,0601"
 
         # Make multiple requests with the same JA4_r
+        # Disable connection reuse to avoid stale connections from previous tests
         response1 = cycle_client.get(
             'https://tls.peet.ws/api/all',
             ja4r=chrome_ja4r,
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            enable_connection_reuse=False
         )
 
         response2 = cycle_client.get(
             'https://tls.peet.ws/api/all',
             ja4r=chrome_ja4r,
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            enable_connection_reuse=False
         )
 
         assert response1.status_code == 200
