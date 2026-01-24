@@ -5,7 +5,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOLANG_DIR="${ROOT_DIR}/golang"
-DIST_DIR="${ROOT_DIR}/dist"
+DIST_DIR="${ROOT_DIR}/cycletls/dist"
 
 if ! command -v go >/dev/null 2>&1; then
     echo "error: Go toolchain not found. Please install Go before running this script." >&2

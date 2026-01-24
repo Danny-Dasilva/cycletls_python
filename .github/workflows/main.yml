@@ -206,9 +206,9 @@ jobs:
           CC: aarch64-linux-gnu-gcc
           CXX: aarch64-linux-gnu-g++
         run: |
-          mkdir -p dist
+          mkdir -p cycletls/dist
           cd golang
-          go build -buildmode=c-shared -o ../dist/libcycletls-linux-arm64.so .
+          go build -buildmode=c-shared -o ../cycletls/dist/libcycletls-linux-arm64.so .
 
       - name: Build shared library (Native)
         if: "!(matrix.platform == 'linux' && matrix.arch == 'arm64')"
@@ -226,10 +226,9 @@ jobs:
         run: |
           pip install --upgrade pip build wheel setuptools
 
-      - name: Copy library to package dist
+      - name: Verify library exists
         run: |
-          mkdir -p cycletls/dist
-          cp dist/* cycletls/dist/
+          ls -la cycletls/dist/
         shell: bash
 
       - name: Build wheel
