@@ -157,7 +157,7 @@ def _send_request_zerocopy(payload: Dict[str, Any]) -> Dict[str, Any]:
     lib = _load_library()
 
     # Serialize payload to msgpack (raw bytes)
-    msgpack_data = ormsgpack.packb(payload, use_bin_type=False)
+    msgpack_data = ormsgpack.packb(payload)
 
     # Create buffer from raw bytes - CFFI's from_buffer creates a view, not a copy
     buf = _ffi.from_buffer(msgpack_data)
@@ -184,7 +184,7 @@ def _send_request_zerocopy(payload: Dict[str, Any]) -> Dict[str, Any]:
         lib.freeString(response_ptr)
 
     # Unpack msgpack directly (no base64 decode needed)
-    return ormsgpack.unpackb(raw_response, raw=False)
+    return ormsgpack.unpackb(raw_response)
 
 
 def _send_request_base64(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -194,7 +194,7 @@ def _send_request_base64(payload: Dict[str, Any]) -> Dict[str, Any]:
     # Use msgpack for binary serialization (3-5x faster than JSON)
     # Then base64 encode to avoid null bytes in C string transfer
     # use_bin_type=False to keep strings as strings for Go compatibility
-    msgpack_data = ormsgpack.packb(payload, use_bin_type=False)
+    msgpack_data = ormsgpack.packb(payload)
     b64_data = base64.b64encode(msgpack_data)
     buf = _ffi.new("char[]", b64_data)
 
@@ -216,7 +216,7 @@ def _send_request_base64(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # Decode base64 then unpack msgpack
     raw = base64.b64decode(raw_b64)
-    return ormsgpack.unpackb(raw, raw=False)
+    return ormsgpack.unpackb(raw)
 
 
 def send_request(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -244,7 +244,7 @@ def submit_request_async(payload: Dict[str, Any]) -> int:
     lib = _load_library()
 
     # Serialize payload
-    msgpack_data = ormsgpack.packb(payload, use_bin_type=False)
+    msgpack_data = ormsgpack.packb(payload)
     b64_data = base64.b64encode(msgpack_data)
     buf = _ffi.new("char[]", b64_data)
 
@@ -295,7 +295,7 @@ def check_request_async(handle: int) -> Optional[Dict[str, Any]]:
 
     # Decode base64 then unpack msgpack
     raw = base64.b64decode(raw_b64)
-    return ormsgpack.unpackb(raw, raw=False)
+    return ormsgpack.unpackb(raw)
 
 
 async def send_request_async(
@@ -380,7 +380,7 @@ def _send_batch_request_zerocopy(payloads: list[Dict[str, Any]]) -> list[Dict[st
 
     # Wrap payloads in batch structure
     batch_data = {"requests": payloads}
-    msgpack_data = ormsgpack.packb(batch_data, use_bin_type=False)
+    msgpack_data = ormsgpack.packb(batch_data)
 
     # Create buffer from raw bytes
     buf = _ffi.from_buffer(msgpack_data)
@@ -404,7 +404,7 @@ def _send_batch_request_zerocopy(payloads: list[Dict[str, Any]]) -> list[Dict[st
     finally:
         lib.freeString(response_ptr)
 
-    result = ormsgpack.unpackb(raw_response, raw=False)
+    result = ormsgpack.unpackb(raw_response)
     return result.get("responses", [])
 
 
@@ -414,7 +414,7 @@ def _send_batch_request_base64(payloads: list[Dict[str, Any]]) -> list[Dict[str,
 
     # Wrap payloads in batch structure
     batch_data = {"requests": payloads}
-    msgpack_data = ormsgpack.packb(batch_data, use_bin_type=False)
+    msgpack_data = ormsgpack.packb(batch_data)
     b64_data = base64.b64encode(msgpack_data)
     buf = _ffi.new("char[]", b64_data)
 
@@ -435,7 +435,7 @@ def _send_batch_request_base64(payloads: list[Dict[str, Any]]) -> list[Dict[str,
 
     # Decode base64 then unpack msgpack
     raw = base64.b64decode(raw_b64)
-    result = ormsgpack.unpackb(raw, raw=False)
+    result = ormsgpack.unpackb(raw)
     return result.get("responses", [])
 
 

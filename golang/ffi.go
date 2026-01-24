@@ -18,6 +18,7 @@ import (
     "time"
     "unsafe"
 
+    fhttp "github.com/Danny-Dasilva/fhttp"
     "github.com/gorilla/websocket"
     "github.com/vmihailenco/msgpack/v5"
 )
@@ -434,8 +435,8 @@ func wsConnect(data *C.char) C.uintptr_t {
     }
 
     // Create WebSocket client with TLS fingerprinting
-    client := getFFIClient()
-    wsClient := NewWebSocketClient(client.tlsConfig, headers)
+    // Note: TLS config is nil - WebSocket uses standard TLS for now
+    wsClient := NewWebSocketClient(nil, headers)
 
     // Connect
     conn, _, err := wsClient.Connect(options.URL)
@@ -586,8 +587,8 @@ func sseConnect(data *C.char) C.uintptr_t {
         return 0
     }
 
-    // Build HTTP headers
-    headers := nhttp.Header{}
+    // Build HTTP headers (use fhttp.Header for SSE compatibility)
+    headers := fhttp.Header{}
     for k, v := range options.Headers {
         headers.Set(k, v)
     }
@@ -595,11 +596,8 @@ func sseConnect(data *C.char) C.uintptr_t {
         headers.Set("User-Agent", options.UserAgent)
     }
 
-    // Get HTTP client from CycleTLS
-    client := getFFIClient()
-
-    // Create SSE client
-    sseClient := NewSSEClient(client.httpClient, headers)
+    // Create SSE client (nil client uses fhttp.DefaultClient)
+    sseClient := NewSSEClient(nil, headers)
 
     // Connect with timeout context
     timeout := time.Duration(options.Timeout) * time.Second

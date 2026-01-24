@@ -167,7 +167,7 @@ class WebSocketConnection:
             options["proxy"] = self.proxy
 
         # Serialize and send
-        msgpack_data = ormsgpack.packb(options, use_bin_type=False)
+        msgpack_data = ormsgpack.packb(options)
         b64_data = base64.b64encode(msgpack_data)
         buf = _ffi.new("char[]", b64_data)
 
@@ -251,7 +251,7 @@ class WebSocketConnection:
 
         # Decode response
         raw = base64.b64decode(raw_b64)
-        result = ormsgpack.unpackb(raw, raw=False)
+        result = ormsgpack.unpackb(raw)
 
         msg_type = MessageType(result.get("type", MessageType.TEXT))
         data = result.get("data", "")
