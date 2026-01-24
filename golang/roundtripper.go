@@ -171,9 +171,14 @@ func (rt *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 func (rt *roundTripper) getTransport(req *http.Request, addr string) error {
 	switch strings.ToLower(req.URL.Scheme) {
 	case "http":
-		// Allow connection reuse by removing DisableKeepAlives
+		// Allow connection reuse with optimized connection pooling
 		rt.cachedTransports[addr] = &http.Transport{
-			DialContext: rt.dialer.DialContext,
+			DialContext:           rt.dialer.DialContext,
+			MaxIdleConns:          100,
+			MaxConnsPerHost:       100,
+			MaxIdleConnsPerHost:   100, // Go default is 2, which causes 98% of connections to close
+			IdleConnTimeout:       90 * time.Second,
+			DisableKeepAlives:     false,
 		}
 		return nil
 	case "https":
@@ -343,10 +348,14 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 
 		rt.cachedTransports[addr] = &http2Transport
 	default:
-		// HTTP/1.x transport - configure to avoid idle channel errors
+		// HTTP/1.x transport - optimized for connection reuse
 		rt.cachedTransports[addr] = &http.Transport{
-			DialTLSContext:    rt.dialTLS,
-			DisableKeepAlives: true, // Disable keep-alives to prevent idle channel errors
+			DialTLSContext:       rt.dialTLS,
+			MaxIdleConns:         100,
+			MaxConnsPerHost:      100,
+			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
+			IdleConnTimeout:      90 * time.Second,
+			DisableKeepAlives:    false, // Enable keep-alives for connection reuse
 		}
 	}
 
@@ -441,10 +450,14 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 
 		rt.cachedTransports[addr] = &http2Transport
 	default:
-		// HTTP/1.x transport - configure to avoid idle channel errors
+		// HTTP/1.x transport - optimized for connection reuse
 		rt.cachedTransports[addr] = &http.Transport{
-			DialTLSContext:    rt.dialTLS,
-			DisableKeepAlives: true, // Disable keep-alives to prevent idle channel errors
+			DialTLSContext:       rt.dialTLS,
+			MaxIdleConns:         100,
+			MaxConnsPerHost:      100,
+			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
+			IdleConnTimeout:      90 * time.Second,
+			DisableKeepAlives:    false, // Enable keep-alives for connection reuse
 		}
 	}
 
@@ -516,10 +529,14 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 
 		rt.cachedTransports[addr] = &http2Transport
 	default:
-		// HTTP/1.x transport - configure to avoid idle channel errors
+		// HTTP/1.x transport - optimized for connection reuse
 		rt.cachedTransports[addr] = &http.Transport{
-			DialTLSContext:    rt.dialTLS,
-			DisableKeepAlives: true, // Disable keep-alives to prevent idle channel errors
+			DialTLSContext:       rt.dialTLS,
+			MaxIdleConns:         100,
+			MaxConnsPerHost:      100,
+			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
+			IdleConnTimeout:      90 * time.Second,
+			DisableKeepAlives:    false, // Enable keep-alives for connection reuse
 		}
 	}
 
