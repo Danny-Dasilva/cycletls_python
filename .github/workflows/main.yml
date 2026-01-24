@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
         task:
           - name: Test
             run: |
@@ -99,7 +99,7 @@ jobs:
         id: virtualenv-cache
         with:
           path: .venv
-          key: ${{ env.CACHE_PREFIX }}-${{ env.WEEK_NUMBER }}-${{ runner.os }}-${{ env.RUNNER_ARCH }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('dev-requirements.txt') }}
+          key: ${{ env.CACHE_PREFIX }}-${{ env.WEEK_NUMBER }}-${{ runner.os }}-${{ env.RUNNER_ARCH }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('setup.py', 'pyproject.toml') }}
           restore-keys: |
             ${{ env.CACHE_PREFIX }}-${{ env.WEEK_NUMBER }}-${{ runner.os }}-${{ env.RUNNER_ARCH }}-${{ env.PYTHON_VERSION }}-
 
@@ -146,7 +146,7 @@ jobs:
         if: always()
         run: |
           . .venv/bin/activate
-          pip uninstall -y my-package
+          pip uninstall -y cycletls || true
 
   build-wheels:
     name: Build wheels on ${{ matrix.os }} (${{ matrix.arch }})
