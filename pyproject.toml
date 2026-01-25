@@ -50,11 +50,10 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.18.0",
-    "black==24.10.0",  # Pinned for consistent formatting across CI/local
-    "isort>=5.10.0",
-    "mypy>=0.950",
-    "flake8>=6.0.0",
-    "types-requests>=2.31.0",
+    "pytest-xdist>=3.0.0",
+    "pytest-rerunfailures>=14.0",
+    "ruff>=0.8.0",
+    "pyright>=1.1.390",
 ]
 docs = [
     "sphinx>=7.0.0",
@@ -92,36 +91,43 @@ packages = ["cycletls"]
 [tool.hatch.build.targets.wheel.force-include]
 "cycletls/dist" = "cycletls/dist"
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
-include = '\.pyi?$'
-exclude = '''
-(
-      __pycache__
-    | \.git
-    | \.mypy_cache
-    | \.pytest_cache
-    | \.vscode
-    | \.venv
-    | \bdist\b
-    | \bdoc\b
-    | golang
-    | tests
-    | benchmarks
-    | examples
-    | client\.py
-    | benchmarks\.py
-    | benchmarks_async\.py
-    | test_async\.py
-    | test_cache\.py
-)
-'''
+target-version = "py310"
+exclude = [
+    "__pycache__",
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".vscode",
+    ".venv",
+    "dist",
+    "doc",
+    "golang",
+    "benchmarks",
+    "examples",
+]
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 100
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]  # Line length handled by formatter
+
+[tool.ruff.lint.isort]
+known-first-party = ["cycletls"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+exclude = [
+    "build/",
+    "dist/",
+    "golang/",
+    "benchmarks/",
+    "tests/",
+    "examples/",
+    "scripts/",
+]
+reportMissingImports = true
+reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -141,22 +147,3 @@ markers = [
     "blocking: marks tests as CI-blocking - failures will fail the CI pipeline",
 ]
 
-[tool.mypy]
-python_version = "3.9"
-warn_return_any = false
-warn_unused_configs = true
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-check_untyped_defs = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = false
-warn_no_return = true
-strict_optional = true
-exclude = [
-    "(?x)(^build/|^dist/|^golang/|^benchmarks/|^tests/|^examples/|^scripts/|setup\\.py$|client\\.py$|^benchmarks\\.py$|^benchmarks_async\\.py$|^test_async\\.py$|^test_cache\\.py$)"
-]
-
-[[tool.mypy.overrides]]
-module = "psutil.*"
-ignore_missing_imports = true
