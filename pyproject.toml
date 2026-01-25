@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cycletls"
-version = "0.0.2"
+version = "0.0.3"
 description = "Advanced TLS fingerprinting library with JA3, JA4, HTTP/2, HTTP/3, WebSocket, and SSE support - bypass anti-bot detection by impersonating real browsers"
 readme = "README.md"
 authors = [
