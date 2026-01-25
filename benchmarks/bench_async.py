@@ -54,11 +54,6 @@ def import_async_libraries():
     except ImportError as e:
         errors.append(f"rnet: {e}")
 
-    try:
-        import ry
-        libraries['ry'] = ry.HttpClient
-    except ImportError as e:
-        errors.append(f"ry: {e}")
 
     # Try importing cycletls async
     try:

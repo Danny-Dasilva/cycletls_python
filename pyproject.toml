@@ -50,7 +50,7 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.18.0",
-    "black>=22.0.0",
+    "black==24.10.0",  # Pinned for consistent formatting across CI/local
     "isort>=5.10.0",
     "mypy>=0.950",
     "flake8>=6.0.0",
@@ -72,15 +72,12 @@ benchmark = [
     "niquests>=3.0.0",
     "pycurl>=7.45.0",
     "tls-client>=0.2.0",
-    "ry>=0.0.66",
     "rnet>=0.0.1",
     # Visualization and data processing
     "matplotlib>=3.7.0",
     "pandas>=2.0.0",
-    "seaborn>=0.12.0",
     # Performance utilities
     "uvloop>=0.17.0; sys_platform != 'win32'",
-    "typing-extensions>=4.5.0",
 ]
 
 [project.urls]
@@ -141,6 +138,7 @@ markers = [
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
     "live: marks tests that run against live tlsfingerprint.com (deselect with '-m \"not live\"')",
+    "blocking: marks tests as CI-blocking - failures will fail the CI pipeline",
 ]
 
 [tool.mypy]
