@@ -46,8 +46,8 @@ jobs:
 
       - name: Build CycleTLS shared library
         run: |
-          chmod +x build_shared_lib.sh
-          ./build_shared_lib.sh
+          chmod +x scripts/build_shared_lib.sh
+          ./scripts/build_shared_lib.sh
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7

@@ -1963,8 +1963,7 @@ uv sync                    # Install base dependencies
 uv sync --all-extras       # Install with dev/docs/benchmark dependencies
 
 # Build Go binaries
-cd golang
-./build.sh
+./scripts/build.sh
 
 # Run tests
 uv run pytest tests/
@@ -1987,8 +1986,7 @@ cd cycletls_python
 pip install -e ".[dev]"
 
 # Build Go binaries
-cd golang
-./build.sh
+./scripts/build.sh
 
 # Run tests
 pytest tests/
@@ -1996,14 +1994,13 @@ pytest tests/
 
 ### Building for Multiple Platforms
 
-The `build.sh` script builds binaries for:
+The `scripts/build.sh` script builds binaries for:
 - Linux (AMD64, ARM64)
 - macOS (AMD64, ARM64/Apple Silicon)
 - Windows (AMD64)
 
 ```bash
-cd golang
-./build.sh
+./scripts/build.sh
 ```
 
 ## Questions
