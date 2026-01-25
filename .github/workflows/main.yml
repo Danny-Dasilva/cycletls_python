@@ -27,11 +27,21 @@ jobs:
       matrix:
         python: ['3.10', '3.11', '3.12', '3.13', '3.14']
         task:
-          - name: Test
+          - name: Unit Tests
             run: |
-              uv run pytest -v --color=yes -n auto --reruns=2 tests/
+              uv run pytest -v --color=yes -n auto --reruns=2 -m "not live and not blocking" tests/
 
         include:
+          - python: '3.12'
+            task:
+              name: Live Tests
+              run: uv run pytest -v --color=yes --reruns=3 -m "live and not blocking" tests/
+
+          - python: '3.12'
+            task:
+              name: Blocking Tests
+              run: uv run pytest -v --color=yes -m "blocking" tests/
+
           - python: '3.12'
             task:
               name: Lint
@@ -89,10 +99,6 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --locked --all-extras --dev
-
-      - name: Install docs dependencies
-        if: matrix.task.name == 'Docs'
-        run: uv sync --locked --extra docs
 
       - name: Show environment info
         run: |
