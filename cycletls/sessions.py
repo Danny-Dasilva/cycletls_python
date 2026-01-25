@@ -113,7 +113,9 @@ class Session(CycleTLS):
         kwargs["cookies"] = merged_cookies if merged_cookies else None
 
         # Make the request using parent class
-        response = super().request(method, url, params, data, json_data, files, fingerprint, **kwargs)
+        response = super().request(
+            method, url, params, data, json_data, files, fingerprint, **kwargs
+        )
 
         # Update session cookies from response
         if response.cookies and len(response.cookies) > 0:

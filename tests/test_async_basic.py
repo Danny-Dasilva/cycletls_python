@@ -62,8 +62,9 @@ class TestAsyncBasicMethods:
             )
             assert response.status_code == 200
             data = response.json()
-            assert "field1=value1" in data["data"]
-            assert "field2=value2" in data["data"]
+            # Form data goes to 'form' field, not 'data'
+            assert data["form"]["field1"] == "value1"
+            assert data["form"]["field2"] == "value2"
 
     @pytest.mark.asyncio
     async def test_async_put_request(self, httpbin_url):

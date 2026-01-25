@@ -35,7 +35,7 @@ __version__ = "0.0.2"
 from .api import CycleTLS
 from .async_api import AsyncCycleTLS, async_get, async_post, async_put, async_delete
 from .sessions import Session
-from .schema import *
+from .schema import *  # noqa: F403
 
 # Import fingerprint plugin system
 from .fingerprints import (
@@ -85,18 +85,18 @@ from .sse import (
     SSEConnection,
 )
 
-# Re-export with proper names
-WebSocketMessage = WSMessage
-SSEEvent = SSEEventClass
+# Re-export with proper names (override schema.py versions with full implementations)
+WebSocketMessage = WSMessage  # type: ignore[misc,assignment]
+SSEEvent = SSEEventClass  # type: ignore[misc,assignment]
 
 # Import global session management
-from ._global import (
+from ._global import (  # noqa: E402
     get_global_session,
     close_global_session,
 )
 
 # Import configuration management
-from ._config import (
+from ._config import (  # noqa: E402
     _config,
     _CONFIGURABLE_ATTRS,
     _merge_defaults,
@@ -436,6 +436,10 @@ __all__ = [
     "ahead",
     "aoptions",
     "async_request",
+    "async_get",
+    "async_post",
+    "async_put",
+    "async_delete",
     # Configuration
     "set_default",
     "reset_defaults",

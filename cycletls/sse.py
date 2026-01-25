@@ -24,7 +24,7 @@ import base64
 import logging
 import threading
 from dataclasses import dataclass
-from typing import AsyncIterator, Dict, Iterator, Optional
+from typing import Any, AsyncIterator, Dict, Iterator, Optional
 
 import ormsgpack  # Drop-in replacement for msgpack, 10-30% faster
 
