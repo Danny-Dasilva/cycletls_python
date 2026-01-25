@@ -451,7 +451,12 @@ def _dict_to_cookie(data: dict) -> Cookie:
     """Convert dictionary to Cookie object."""
     expires = None
     if "expires" in data and data["expires"]:
-        expires = datetime.fromisoformat(data["expires"])
+        # Python 3.10's fromisoformat() doesn't support 'Z' suffix
+        # Replace with '+00:00' for compatibility
+        expires_str = data["expires"]
+        if expires_str.endswith("Z"):
+            expires_str = expires_str[:-1] + "+00:00"
+        expires = datetime.fromisoformat(expires_str)
 
     return Cookie(
         name=data["name"],
