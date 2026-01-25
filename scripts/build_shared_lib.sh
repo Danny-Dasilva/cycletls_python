@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GOLANG_DIR="${ROOT_DIR}/golang"
 DIST_DIR="${ROOT_DIR}/cycletls/dist"
 
