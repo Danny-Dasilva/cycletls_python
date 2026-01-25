@@ -254,7 +254,9 @@ class TestLargeFileUpload:
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
             f.write(large_content)
             temp_file_path = f.name
-            file_size = os.path.getsize(temp_file_path)
+
+        # Get file size after the file is closed/flushed
+        file_size = os.path.getsize(temp_file_path)
 
         try:
             assert file_size > 50000, \
@@ -297,7 +299,9 @@ class TestLargeFileUpload:
         with tempfile.NamedTemporaryFile(delete=False, suffix='.bin') as f:
             f.write(binary_pattern)
             temp_file_path = f.name
-            file_size = os.path.getsize(temp_file_path)
+
+        # Get file size after the file is closed/flushed
+        file_size = os.path.getsize(temp_file_path)
 
         try:
             assert file_size > 100000, \
