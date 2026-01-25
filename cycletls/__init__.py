@@ -27,62 +27,65 @@ Usage:
         ...     response = client.get('https://example.com')
 """
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 __version__ = "0.0.2"
 
 # Import core classes
 from .api import CycleTLS
-from .async_api import AsyncCycleTLS, async_get, async_post, async_put, async_delete
-from .sessions import Session
-from .schema import *  # noqa: F403
+from .async_api import AsyncCycleTLS, async_delete, async_get, async_post, async_put
+from .exceptions import (
+    ConnectionError,
+    ConnectTimeout,
+    CycleTLSError,
+    HTTPError,
+    InvalidHeader,
+    InvalidURL,
+    ProxyError,
+    ReadTimeout,
+    RequestException,
+    Timeout,
+    TLSError,
+    TooManyRedirects,
+)
 
 # Import fingerprint plugin system
 from .fingerprints import (
-    TLSFingerprint,
-    FingerprintRegistry,
     CHROME_120,
     CHROME_121,
+    CHROME_ANDROID,
+    EDGE_120,
     FIREFOX_121,
     SAFARI_17,
-    EDGE_120,
-    CHROME_ANDROID,
     SAFARI_IOS,
+    FingerprintRegistry,
+    TLSFingerprint,
 )
 from .plugins import (
+    create_fingerprint_template,
+    load_fingerprint_from_file,
     load_fingerprints_from_dir,
     load_fingerprints_from_env,
-    load_fingerprint_from_file,
-    create_fingerprint_template,
 )
-
-from .exceptions import (
-    CycleTLSError,
-    RequestException,
-    HTTPError,
-    ConnectionError,
-    Timeout,
-    TooManyRedirects,
-    InvalidURL,
-    TLSError,
-    ProxyError,
-    InvalidHeader,
-    ConnectTimeout,
-    ReadTimeout,
+from .schema import *  # noqa: F403
+from .sessions import Session
+from .sse import (
+    SSEConnection,
+    SSEError,
+)
+from .sse import (
+    SSEEvent as SSEEventClass,
 )
 from .structures import CaseInsensitiveDict, CookieJar
 
 # Import WebSocket and SSE support
 from .websocket import (
     MessageType,
-    WebSocketMessage as WSMessage,
-    WebSocketError,
     WebSocketConnection,
+    WebSocketError,
 )
-from .sse import (
-    SSEEvent as SSEEventClass,
-    SSEError,
-    SSEConnection,
+from .websocket import (
+    WebSocketMessage as WSMessage,
 )
 
 # Re-export with proper names (override schema.py versions with full implementations)
@@ -90,21 +93,19 @@ WebSocketMessage = WSMessage  # type: ignore[misc,assignment]
 SSEEvent = SSEEventClass  # type: ignore[misc,assignment]
 
 # Import global session management
-from ._global import (  # noqa: E402
-    get_global_session,
-    close_global_session,
-)
-
 # Import configuration management
 from ._config import (  # noqa: E402
-    _config,
     _CONFIGURABLE_ATTRS,
+    _config,
     _merge_defaults,
-    set_default,
-    reset_defaults,
     get_default,
+    reset_defaults,
+    set_default,
 )
-
+from ._global import (  # noqa: E402
+    close_global_session,
+    get_global_session,
+)
 
 # Initialize default configuration on package import
 set_default(enable_connection_reuse=True)

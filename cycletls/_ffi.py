@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import os
 import platform
 import threading
-import logging
 from typing import Any, Dict, Iterator, Optional
 
 import ormsgpack  # Drop-in replacement for msgpack, 10-30% faster (Rust-based)

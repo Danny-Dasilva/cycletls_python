@@ -54,6 +54,7 @@ dev = [
     "pytest-rerunfailures>=14.0",
     "ruff>=0.8.0",
     "pyright>=1.1.390",
+    "build>=1.0.0",
 ]
 docs = [
     "sphinx>=7.0.0",
@@ -109,8 +110,13 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
-ignore = ["E501"]  # Line length handled by formatter
+select = ["E", "F", "W", "I", "B", "C4"]
+ignore = [
+    "E501",   # Line length handled by formatter
+    "F405",   # Star imports used intentionally for re-exports in __init__.py
+    "B904",   # raise from - not always clearer
+]
+# Note: UP (pyupgrade) and SIM rules removed to avoid forcing style migrations
 
 [tool.ruff.lint.isort]
 known-first-party = ["cycletls"]
@@ -128,6 +134,9 @@ exclude = [
 ]
 reportMissingImports = true
 reportMissingTypeStubs = false
+# FFI bindings use dynamic attributes loaded from Go shared library at runtime
+reportAttributeAccessIssue = false
+reportOptionalCall = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

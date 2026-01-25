@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 import io
-import mimetypes
-import urllib.parse
 import json
-import warnings
 import logging
+import mimetypes
 import threading
+import urllib.parse
+import warnings
 from collections.abc import Mapping, Sequence
 from types import TracebackType
 from typing import Any, Dict, Iterable, Literal, Optional, Tuple, Union
 
-from ._ffi import send_request as ffi_send_request, send_batch_request as ffi_send_batch_request
+from ._ffi import send_batch_request as ffi_send_batch_request
+from ._ffi import send_request as ffi_send_request
 from .exceptions import CycleTLSError
-from .fingerprints import TLSFingerprint, FingerprintRegistry
+from .fingerprints import FingerprintRegistry, TLSFingerprint
 from .schema import Request, Response, _dict_to_response
 
 # Setup module logger

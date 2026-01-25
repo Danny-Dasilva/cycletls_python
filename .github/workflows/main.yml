@@ -45,9 +45,7 @@ jobs:
           - python: '3.12'
             task:
               name: Build
-              run: |
-                uv run python setup.py check
-                uv run python setup.py bdist_wheel sdist
+              run: uv run python -m build
 
           - python: '3.12'
             task:

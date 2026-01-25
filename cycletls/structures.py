@@ -6,7 +6,7 @@ in a way that's consistent with the requests library.
 """
 
 from collections.abc import MutableMapping
-from typing import List, Optional, Iterator, Tuple, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from .schema import Cookie

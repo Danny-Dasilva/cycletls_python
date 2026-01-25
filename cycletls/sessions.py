@@ -6,10 +6,11 @@ and headers across multiple requests, similar to requests.Session.
 """
 
 from typing import Any, Dict, List, Optional, Union
+
 from .api import CycleTLS, ParamsType
-from .structures import CookieJar, CaseInsensitiveDict
-from .schema import Response, Cookie
 from .fingerprints import TLSFingerprint
+from .schema import Cookie, Response
+from .structures import CaseInsensitiveDict, CookieJar
 
 
 def _merge_cookie(merged_cookies: List[Cookie], new_cookie: Cookie) -> None:

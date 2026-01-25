@@ -5,7 +5,7 @@ This module provides a hierarchy of exceptions for CycleTLS,
 following the pattern established by the requests library.
 """
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from .schema import Response

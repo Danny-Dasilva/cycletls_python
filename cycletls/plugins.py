@@ -19,7 +19,7 @@ import logging
 import os
 from pathlib import Path
 
-from .fingerprints import TLSFingerprint, FingerprintRegistry
+from .fingerprints import FingerprintRegistry, TLSFingerprint
 
 logger = logging.getLogger(__name__)
 

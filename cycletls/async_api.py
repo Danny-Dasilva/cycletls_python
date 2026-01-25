@@ -8,15 +8,15 @@ import urllib.parse
 import warnings
 from typing import Any, Dict, Optional, Union
 
+from . import _ffi
 from .api import (
+    ParamsType,
     _encode_multipart_formdata,
     _merge_url_params,
     _next_request_id,
-    ParamsType,
 )
 from .exceptions import CycleTLSError
-from .schema import Request, Cookie, Response, _dict_to_response
-from . import _ffi
+from .schema import Cookie, Request, Response, _dict_to_response
 
 logger = logging.getLogger(__name__)
 

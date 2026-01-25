@@ -3,7 +3,7 @@
 import atexit
 import os
 import threading
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from .api import CycleTLS

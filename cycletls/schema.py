@@ -493,10 +493,10 @@ def _raise_for_error_response(data: dict) -> None:
     """
     # Import exceptions here to avoid circular import
     from .exceptions import (
-        CycleTLSError,
         ConnectionError,
-        Timeout,
+        CycleTLSError,
         InvalidURL,
+        Timeout,
         TLSError,
     )
 
