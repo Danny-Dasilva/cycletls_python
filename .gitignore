@@ -14,11 +14,12 @@ pip-wheel-metadata/
 # benchmark results
 results.csv
 results_async.csv
+benchmark_python_results.csv
 BENCHMARK_SUMMARY.md
 
 
 # dev tools
-
+.ruff_cache/
 .envrc
 .python-version
 .idea

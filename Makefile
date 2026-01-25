@@ -1,12 +1,11 @@
 .PHONY : docs
 docs :
 	rm -rf docs/build/
-	sphinx-autobuild -b html --watch my_package/ docs/source/ docs/build/
+	sphinx-autobuild -b html --watch cycletls/ docs/source/ docs/build/
 
 .PHONY : run-checks
 run-checks :
-	isort --check .
-	black --check .
-	flake8 .
-	mypy .
-	CUDA_VISIBLE_DEVICES='' pytest -v --color=yes --doctest-modules tests/ my_package/
+	uv run ruff check cycletls
+	uv run ruff format --check cycletls
+	uv run pyright cycletls
+	uv run pytest -v --color=yes tests/

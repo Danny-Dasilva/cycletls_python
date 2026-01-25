@@ -23,7 +23,7 @@ run_benchmarks() {
     # Start bench_server.go in background
     echo "Starting benchmark server..."
     cd "$PROJECT_DIR"
-    go run bench_server.go &
+    go run benchmarks/bench_server.go &
     BENCH_SERVER_PID=$!
 
     # Wait for server to be ready with retry logic
