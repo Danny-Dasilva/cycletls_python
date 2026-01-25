@@ -4,7 +4,7 @@ Comprehensive benchmarking suite for comparing HTTP client libraries, with a foc
 
 ## Features
 
-- **12 HTTP Libraries Tested**: requests, httpx, aiohttp, curl_cffi, niquests, pycurl, tls_client, ry, rnet, and CycleTLS
+- **12 HTTP Libraries Tested**: cycletls, curl_cffi, tls_client, primp, hrequests, requests, httpx, aiohttp, niquests, pycurl, rnet
 - **Multiple Test Modes**: Synchronous, asynchronous, with/without session reuse
 - **Payload Size Variations**: Test with different response sizes (20KB, 50KB, 200KB)
 - **Professional Visualizations**: Matplotlib-generated comparison charts
@@ -157,25 +157,27 @@ benchmarks/
 
 ## Libraries Tested
 
-### Synchronous Libraries (7)
+### Synchronous Libraries (10)
 
-1. **requests** - The classic HTTP library for Python
-2. **httpx** - Modern HTTP client with sync/async support
-3. **niquests** - High-performance requests alternative
-4. **curl_cffi** - Python bindings to libcurl with cffi
-5. **tls_client** - TLS fingerprinting HTTP client
-6. **rnet** - Rust-based HTTP client
-7. **pycurl** - Python interface to libcurl
-8. **cycletls** - Advanced TLS fingerprinting with JA3/JA4 support
+1. **cycletls** - Advanced TLS fingerprinting with JA3/JA4/HTTP3 support
+2. **curl_cffi** - Python bindings to curl-impersonate with TLS fingerprinting
+3. **tls_client** - Go-based TLS fingerprinting HTTP client
+4. **primp** - Rust-based (rquest) with JA3/JA4 fingerprinting
+5. **hrequests** - TLS fingerprinting with browser automation capability
+6. **requests** - The classic HTTP library for Python
+7. **httpx** - Modern HTTP client with sync/async support
+8. **niquests** - High-performance requests alternative
+9. **rnet** - Rust-based HTTP client
+10. **pycurl** - Python interface to libcurl
 
-### Asynchronous Libraries (5)
+### Asynchronous Libraries (6)
 
-1. **httpx** - Modern async HTTP client
-2. **aiohttp** - Asynchronous HTTP client/server framework
-3. **curl_cffi** - Async-capable curl bindings
-4. **rnet** - Rust-based async HTTP client
-5. **ry** - Fast async HTTP library
-6. **cycletls** - CycleTLS async mode
+1. **cycletls** - CycleTLS async mode (best performance)
+2. **primp** - Rust-based async with JA3/JA4 support
+3. **curl_cffi** - Async-capable curl-impersonate bindings
+4. **httpx** - Modern async HTTP client
+5. **aiohttp** - Asynchronous HTTP client/server framework
+6. **rnet** - Rust-based async HTTP client
 
 ## Examples
 

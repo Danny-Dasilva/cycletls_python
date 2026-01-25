@@ -52,6 +52,18 @@ def import_libraries():
         errors.append(f"tls_client: {e}")
 
     try:
+        import primp
+        libraries['primp'] = primp.Client
+    except ImportError as e:
+        errors.append(f"primp: {e}")
+
+    try:
+        import hrequests
+        libraries['hrequests'] = hrequests.Session
+    except ImportError as e:
+        errors.append(f"hrequests: {e}")
+
+    try:
         import rnet.blocking
         libraries['rnet'] = rnet.blocking.Client
     except ImportError as e:

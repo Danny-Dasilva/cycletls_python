@@ -56,6 +56,7 @@ If you have an API change or feature request feel free to open an [Issue](https:
 * [Comparison with TypeScript Version](#comparison-with-typescript-version)
 * [Examples](#examples)
 * [Testing](#testing)
+* [Benchmarks](#benchmarks)
 * [License](#license)
 
 ## Dependencies
@@ -1797,6 +1798,156 @@ pytest -v tests/
 pytest --cov=cycletls tests/
 ```
 
+## Benchmarks
+
+CycleTLS includes a comprehensive benchmark suite to measure performance across different configurations and compare against other HTTP libraries.
+
+### Quick Benchmark
+
+Run a quick performance test with the CycleTLS-specific benchmark:
+
+```bash
+# Basic benchmark (default: 100 requests)
+python benchmarks/benchmark_python.py --url https://httpbin.org/get
+
+# More requests for accurate results
+python benchmarks/benchmark_python.py --url https://httpbin.org/get -r 1000
+
+# Async mode (concurrent requests)
+python benchmarks/benchmark_python.py --url https://httpbin.org/get -r 1000 --async
+```
+
+### Multi-Library Comparison
+
+Compare CycleTLS against other popular HTTP libraries:
+
+```bash
+# Install benchmark dependencies
+uv sync --extra benchmark
+
+# Sync comparison (cycletls, requests, httpx, urllib3)
+python benchmarks/bench.py --url https://httpbin.org/get -r 1000 --libraries cycletls requests httpx
+
+# Async comparison with sync baseline
+python benchmarks/bench_async.py --url https://httpbin.org/get -r 1000 --include-sync-baseline
+
+# Generate CSV and chart output
+python benchmarks/bench.py --url https://httpbin.org/get -r 1000 -o results.csv -c results.jpg
+```
+
+### Sample Results
+
+Performance comparison against a local Go fasthttp server (500 requests per test):
+
+| Library | µs/req | Requests/sec | vs Requests |
+|---------|--------|-------------|-------------|
+| **cycletls** (async) | 116.4 | 8,589 | 7.1x faster |
+| primp (async) | 124.4 | 8,038 | 6.6x faster |
+| aiohttp (async) | 151.7 | 6,591 | 5.4x faster |
+| primp (sync) | 157.2 | 6,360 | 5.2x faster |
+| pycurl (reuse) | 209.7 | 4,769 | 3.9x faster |
+| curl_cffi (async) | 224.2 | 4,459 | 3.7x faster |
+| curl_cffi (sync) | 298.3 | 3,352 | 2.8x faster |
+| tls_client (sync) | 309.6 | 3,230 | 2.7x faster |
+| **cycletls** (sync) | 346.2 | 2,888 | 2.4x faster |
+| hrequests (sync) | 398.5 | 2,510 | 2.1x faster |
+| urllib3 (pooled) | 402.9 | 2,482 | 2.0x faster |
+| httpx (sync) | 530.1 | 1,887 | 1.6x faster |
+| niquests (session) | 655.6 | 1,525 | 1.3x faster |
+| requests (session) | 824.1 | 1,213 | baseline |
+
+*Note: Results depend on hardware, network conditions, and server response times. Lower µs/req is better. Benchmark server: `go run bench_server.go`*
+
+### TLS Spoofing Libraries Comparison
+
+| Feature | cycletls | curl_cffi | tls_client | primp | hrequests |
+|---------|:--------:|:---------:|:----------:|:-----:|:---------:|
+| **TLS Fingerprinting** |
+| JA3 Fingerprint | ✅ | ✅ | ✅ | ✅ | ✅ |
+| JA4 Fingerprint | ✅ | ❌ | ❌ | ✅ | ❌ |
+| HTTP/2 Fingerprint | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Custom Fingerprints | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Protocol Support** |
+| HTTP/2 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| HTTP/3 (QUIC) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| WebSocket | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Server-Sent Events | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Async Support** |
+| Native async/await | ✅ | ✅ | ❌ | ✅ | ✅ |
+| Concurrent requests | ✅ | ✅ | ❌ | ✅ | ✅ |
+| **Other Features** |
+| Browser Profiles | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Proxy (HTTP/SOCKS5) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Session/Cookies | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Connection Pooling | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Browser Automation | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **Implementation** |
+| Backend | Go (uTLS) | C (curl) | Go | Rust | Go |
+| Python Version | ≥3.8 | ≥3.9 | ≥3.7 | ≥3.8 | ≥3.8 |
+
+**Key Differentiators:**
+- **cycletls**: Only library with JA4 + HTTP/3 + SSE support. Best async performance (7.1x faster than requests).
+- **primp**: Rust-based (rquest). Fastest sync performance (5.2x). JA4 support.
+- **curl_cffi**: Mature curl-impersonate bindings. Good async performance (3.7x).
+- **tls_client**: Simple Go-based client. No async support.
+- **hrequests**: Unique browser automation capability (Firefox/Chrome control).
+
+### Standard HTTP Libraries
+
+For reference, here's how standard (non-TLS-spoofing) libraries compare:
+
+| Library | µs/req | Requests/sec | TLS Spoofing |
+|---------|--------|-------------|:------------:|
+| aiohttp (async) | 151.7 | 6,591 | ❌ |
+| pycurl (reuse) | 209.7 | 4,769 | ❌ |
+| urllib3 (pooled) | 402.9 | 2,482 | ❌ |
+| httpx (sync) | 530.1 | 1,887 | ❌ |
+| niquests (session) | 655.6 | 1,525 | ❌ |
+| requests (session) | 824.1 | 1,213 | ❌ |
+
+*Standard libraries cannot bypass TLS fingerprint detection but are included for performance comparison.*
+
+### Programmatic Benchmarking
+
+Run benchmarks directly in Python:
+
+```python
+import asyncio
+import time
+import cycletls
+
+def benchmark_sync(url: str, count: int = 1000):
+    """Benchmark synchronous requests."""
+    start = time.perf_counter()
+    for _ in range(count):
+        cycletls.get(url)
+    elapsed = time.perf_counter() - start
+    print(f"Sync: {count/elapsed:.2f} req/s")
+
+async def benchmark_async(url: str, count: int = 1000):
+    """Benchmark concurrent async requests."""
+    start = time.perf_counter()
+    await asyncio.gather(*[cycletls.aget(url) for _ in range(count)])
+    elapsed = time.perf_counter() - start
+    print(f"Async concurrent: {count/elapsed:.2f} req/s")
+
+# Run benchmarks
+url = "https://httpbin.org/get"
+benchmark_sync(url, 100)
+asyncio.run(benchmark_async(url, 100))
+```
+
+### Libraries Compared
+
+The benchmark suite can test against:
+- **cycletls** - This library (sync, async, session, global client)
+- **requests** - Popular sync HTTP library
+- **httpx** - Modern sync/async HTTP library
+- **urllib3** - Low-level HTTP library
+- **aiohttp** - Async HTTP library
+
+For detailed benchmark documentation and additional options, see [benchmarks/README.md](benchmarks/README.md).
+
 ## Development Setup
 
 If you want to build from source:
@@ -1819,7 +1970,11 @@ cd golang
 uv run pytest tests/
 
 # Run benchmarks
-uv run python benchmarks/benchmark_python.py
+uv run python benchmarks/benchmark_python.py --url https://httpbin.org/get -r 500
+
+# Full multi-library comparison (requires benchmark extras)
+uv sync --extra benchmark
+uv run python benchmarks/bench.py --url https://httpbin.org/get -r 1000
 ```
 
 **Without uv:**

@@ -54,6 +54,11 @@ def import_async_libraries():
     except ImportError as e:
         errors.append(f"rnet: {e}")
 
+    try:
+        import primp
+        libraries['primp'] = primp.AsyncClient
+    except ImportError as e:
+        errors.append(f"primp: {e}")
 
     # Try importing cycletls async
     try:

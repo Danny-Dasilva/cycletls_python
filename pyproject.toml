@@ -74,6 +74,9 @@ benchmark = [
     "pycurl>=7.45.0",
     "tls-client>=0.2.0",
     "rnet>=0.0.1",
+    # TLS spoofing libraries
+    "primp>=0.6.0",
+    "hrequests>=0.7.0",
     # Visualization and data processing
     "matplotlib>=3.7.0",
     "pandas>=2.0.0",
