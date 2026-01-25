@@ -1,7 +1,7 @@
-name: Checks
+name: Live Tests
 
 concurrency:
-  group: checks-${{ github.ref }}
+  group: live-tests-${{ github.ref }}
   cancel-in-progress: true
 
 on:
@@ -16,28 +16,10 @@ env:
   PYTHON_PATH: ./
 
 jobs:
-  checks:
-    name: ${{ matrix.task.name }}
+  live-tests:
+    name: Live Tests (Python 3.12)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        task:
-          - name: Lint
-            run: uv run ruff check cycletls
-
-          - name: Type check
-            run: uv run pyright cycletls
-
-          - name: Build
-            run: uv run python -m build --wheel
-
-          - name: Style
-            run: uv run ruff format --check cycletls
-
-          - name: Docs
-            run: cd docs && uv run make html
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -72,12 +54,5 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --all-extras --dev
 
-      - name: ${{ matrix.task.name }}
-        run: ${{ matrix.task.run }}
-
-      - name: Upload package distribution files
-        if: matrix.task.name == 'Build'
-        uses: actions/upload-artifact@v4
-        with:
-          name: package
-          path: dist
+      - name: Run live tests
+        run: uv run pytest -v --color=yes --reruns=3 -m "live and not blocking" tests/

@@ -1,7 +1,7 @@
-name: Checks
+name: Unit Tests
 
 concurrency:
-  group: checks-${{ github.ref }}
+  group: unit-tests-${{ github.ref }}
   cancel-in-progress: true
 
 on:
@@ -16,28 +16,14 @@ env:
   PYTHON_PATH: ./
 
 jobs:
-  checks:
-    name: ${{ matrix.task.name }}
+  unit-tests:
+    name: Python ${{ matrix.python }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        task:
-          - name: Lint
-            run: uv run ruff check cycletls
-
-          - name: Type check
-            run: uv run pyright cycletls
-
-          - name: Build
-            run: uv run python -m build --wheel
-
-          - name: Style
-            run: uv run ruff format --check cycletls
-
-          - name: Docs
-            run: cd docs && uv run make html
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
 
     steps:
       - uses: actions/checkout@v4
@@ -66,18 +52,11 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python }}
           enable-cache: true
 
       - name: Install dependencies
         run: uv sync --locked --all-extras --dev
 
-      - name: ${{ matrix.task.name }}
-        run: ${{ matrix.task.run }}
-
-      - name: Upload package distribution files
-        if: matrix.task.name == 'Build'
-        uses: actions/upload-artifact@v4
-        with:
-          name: package
-          path: dist
+      - name: Run unit tests
+        run: uv run pytest -v --color=yes -n auto --reruns=2 -m "not live and not blocking" tests/
