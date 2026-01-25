@@ -92,7 +92,16 @@ jobs:
       name: pypi
       url: https://pypi.org/p/cycletls
     permissions:
-      id-token: write  # For trusted publishing
+      id-token: write  # For OIDC trusted publishing
+      contents: read
+
+    # NOTE: Trusted publishing must be configured on pypi.org:
+    # 1. Go to https://pypi.org/manage/project/cycletls/settings/publishing/
+    # 2. Add a new "pending publisher" with:
+    #    - Owner: <github-username-or-org>
+    #    - Repository: cycletls_python
+    #    - Workflow: release.yml
+    #    - Environment: pypi
 
     steps:
       - name: Download all artifacts
@@ -109,9 +118,7 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          skip-existing: true
+        # No password/token needed - uses OIDC trusted publishing
 
   create-github-release:
     name: Create GitHub Release

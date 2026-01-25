@@ -1,0 +1,34 @@
+name: Setup CycleTLS
+description: Setup Go and build the CycleTLS shared library
+
+inputs:
+  go-version:
+    description: Go version to use
+    required: false
+    default: '1.23'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache-dependency-path: |
+          go.sum
+          golang/go.sum
+
+    - name: Cache Go build
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('golang/**/*.go', 'golang/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-build-
+
+    - name: Build CycleTLS shared library
+      shell: bash
+      run: |
+        chmod +x build_shared_lib.sh
+        ./build_shared_lib.sh
