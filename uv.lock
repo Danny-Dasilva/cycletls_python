@@ -697,6 +697,7 @@ docs = [
     { name = "sphinx-autodoc-typehints", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "sphinx-autodoc-typehints", version = "3.6.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "sphinx-copybutton" },
+    { name = "urllib3" },
 ]
 
 [package.metadata]
@@ -727,6 +728,7 @@ requires-dist = [
     { name = "sphinx-autodoc-typehints", marker = "extra == 'docs'", specifier = ">=1.23.0" },
     { name = "sphinx-copybutton", marker = "extra == 'docs'", specifier = ">=0.5.0" },
     { name = "tls-client", marker = "extra == 'benchmark'", specifier = ">=0.2.0" },
+    { name = "urllib3", marker = "extra == 'docs'", specifier = ">=2.0.0" },
     { name = "uvloop", marker = "sys_platform != 'win32' and extra == 'benchmark'", specifier = ">=0.17.0" },
     { name = "websocket-client", specifier = ">=1.0.0" },
     { name = "websockets", specifier = ">=10.0" },

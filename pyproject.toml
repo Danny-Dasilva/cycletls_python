@@ -62,6 +62,7 @@ docs = [
     "sphinx-autodoc-typehints>=1.23.0",
     "myst-parser>=2.0.0",
     "furo>=2023.0.0",
+    "urllib3>=2.0.0",  # Required by sphinx.builders.linkcheck
 ]
 benchmark = [
     # HTTP client libraries for testing

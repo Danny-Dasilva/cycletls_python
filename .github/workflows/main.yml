@@ -45,7 +45,7 @@ jobs:
           - python: '3.12'
             task:
               name: Build
-              run: uv run python -m build
+              run: uv run python -m build --wheel
 
           - python: '3.12'
             task:
