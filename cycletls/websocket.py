@@ -32,6 +32,7 @@ from typing import AsyncIterator, Dict, Iterator, Optional, Union
 import ormsgpack  # Drop-in replacement for msgpack, 10-30% faster
 
 from ._ffi import _ffi, _load_library
+from .exceptions import CycleTLSError
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ class WebSocketMessage:
         return self.type == MessageType.CLOSE
 
 
-class WebSocketError(Exception):
+class WebSocketError(CycleTLSError):
     """Raised when a WebSocket operation fails."""
 
     pass

@@ -657,8 +657,12 @@ def _dict_to_response(data: dict, raise_on_error: bool = True) -> Response:
             # Legacy base64 mode - decode from string
             try:
                 body_bytes = base64.b64decode(raw_data)
-            except Exception:
-                pass
+            except Exception as exc:
+                from .exceptions import CycleTLSError
+
+                raise CycleTLSError(
+                    f"Failed to decode BodyBytes from base64: {exc}"
+                ) from exc
 
     # Convert cookies
     raw_cookies = None
