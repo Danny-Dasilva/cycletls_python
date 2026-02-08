@@ -246,8 +246,10 @@ class CycleTLS:
         params: Optional[ParamsType] = None,
         data: Optional[Union[Dict[str, Any], str, bytes]] = None,
         json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
         files: Optional[Dict[str, Any]] = None,
         fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Prepare a request payload dict without sending it.
@@ -262,8 +264,10 @@ class CycleTLS:
             params: Query parameters to append to URL
             data: Form data or raw body
             json_data: JSON data (auto-serialized)
+            json: Alias for json_data (matching requests library convention)
             files: File uploads (multipart form data)
             fingerprint: TLS fingerprint profile name or TLSFingerprint instance.
+            auth: (username, password) tuple for HTTP Basic authentication
             **kwargs: Additional CycleTLS options (headers, cookies, proxy, etc.)
 
         Returns:
@@ -272,6 +276,21 @@ class CycleTLS:
         """
         if self._closed:
             raise CycleTLSError("CycleTLS client is closed")
+
+        # Handle json= alias for json_data=
+        if json is not None:
+            if json_data is not None:
+                raise ValueError("Cannot specify both 'json' and 'json_data' parameters")
+            json_data = json
+
+        # Handle auth= parameter for HTTP Basic authentication
+        if auth is not None:
+            import base64 as _b64
+
+            credentials = _b64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
+            headers_dict = kwargs.get("headers") or {}
+            headers_dict["Authorization"] = f"Basic {credentials}"
+            kwargs["headers"] = headers_dict
 
         # Apply fingerprint profile if provided
         if fingerprint is not None:
@@ -447,8 +466,10 @@ class CycleTLS:
         params: Optional[ParamsType] = None,
         data: Optional[Union[Dict[str, Any], str, bytes]] = None,
         json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
         files: Optional[Dict[str, Any]] = None,
         fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
         **kwargs: Any,
     ) -> Response:
         """
@@ -460,10 +481,12 @@ class CycleTLS:
             params: Query parameters to append to URL
             data: Form data or raw body
             json_data: JSON data (auto-serialized)
-            files: File uploads (not yet supported)
+            json: Alias for json_data (matching requests library convention)
+            files: File uploads
             fingerprint: TLS fingerprint profile name or TLSFingerprint instance.
                         If a string, looks up the profile in FingerprintRegistry.
                         Applies the profile's ja3, user_agent, header_order, etc.
+            auth: (username, password) tuple for HTTP Basic authentication
             **kwargs: Additional CycleTLS options (headers, cookies, proxy, etc.)
 
         Returns:
@@ -480,7 +503,7 @@ class CycleTLS:
         """
         payload = self._prepare_request(
             method, url, params=params, data=data, json_data=json_data,
-            files=files, fingerprint=fingerprint, **kwargs,
+            json=json, files=files, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
         try:
@@ -504,45 +527,30 @@ class CycleTLS:
         return self.request("head", url, params=params, fingerprint=fingerprint, **kwargs)
 
     def post(
-        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
     ) -> Response:
         """Sends a POST request."""
         return self.request(
-            "post",
-            url,
-            params=params,
-            data=data,
-            json_data=json_data,
-            fingerprint=fingerprint,
-            **kwargs,
+            "post", url, params=params, data=data, json_data=json_data,
+            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
     def put(
-        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
     ) -> Response:
         """Sends a PUT request."""
         return self.request(
-            "put",
-            url,
-            params=params,
-            data=data,
-            json_data=json_data,
-            fingerprint=fingerprint,
-            **kwargs,
+            "put", url, params=params, data=data, json_data=json_data,
+            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
     def patch(
-        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
     ) -> Response:
         """Sends a PATCH request."""
         return self.request(
-            "patch",
-            url,
-            params=params,
-            data=data,
-            json_data=json_data,
-            fingerprint=fingerprint,
-            **kwargs,
+            "patch", url, params=params, data=data, json_data=json_data,
+            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
     def delete(self, url, params=None, fingerprint=None, **kwargs) -> Response:
@@ -688,8 +696,10 @@ class CycleTLS:
         params: Optional[ParamsType] = None,
         data: Optional[Union[Dict[str, Any], str, bytes]] = None,
         json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
         files: Optional[Dict[str, Any]] = None,
         fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
         poll_interval: float = 0.0,
         timeout: float = 30.0,
         **kwargs: Any,
@@ -705,8 +715,10 @@ class CycleTLS:
             params: Query parameters to append to URL
             data: Form data or raw body
             json_data: JSON data (auto-serialized)
+            json: Alias for json_data (matching requests library convention)
             files: File uploads (multipart form data)
             fingerprint: TLS fingerprint profile name or TLSFingerprint instance.
+            auth: (username, password) tuple for HTTP Basic authentication
             poll_interval: Time between completion checks (default: 0s = adaptive)
             timeout: Maximum wait time for request completion (default: 30s)
             **kwargs: Additional CycleTLS options (headers, cookies, proxy, etc.)
@@ -716,7 +728,7 @@ class CycleTLS:
         """
         payload = self._prepare_request(
             method, url, params=params, data=data, json_data=json_data,
-            files=files, fingerprint=fingerprint, **kwargs,
+            json=json, files=files, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
         try:
@@ -751,30 +763,30 @@ class CycleTLS:
         return await self.arequest("head", url, params=params, fingerprint=fingerprint, **kwargs)
 
     async def apost(
-        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
     ) -> Response:
         """Sends an async POST request."""
         return await self.arequest(
             "post", url, params=params, data=data, json_data=json_data,
-            fingerprint=fingerprint, **kwargs,
+            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
     async def aput(
-        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
     ) -> Response:
         """Sends an async PUT request."""
         return await self.arequest(
             "put", url, params=params, data=data, json_data=json_data,
-            fingerprint=fingerprint, **kwargs,
+            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
     async def apatch(
-        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
     ) -> Response:
         """Sends an async PATCH request."""
         return await self.arequest(
             "patch", url, params=params, data=data, json_data=json_data,
-            fingerprint=fingerprint, **kwargs,
+            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
     async def adelete(self, url, params=None, fingerprint=None, **kwargs) -> Response:

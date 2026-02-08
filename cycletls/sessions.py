@@ -5,7 +5,7 @@ This module provides a Session class that maintains persistent cookies
 and headers across multiple requests, similar to requests.Session.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .api import CycleTLS, ParamsType
 from .fingerprints import TLSFingerprint
@@ -32,6 +32,8 @@ class Session(CycleTLS):
     Attributes:
         cookies (CookieJar): Persistent cookie jar shared across requests
         headers (CaseInsensitiveDict): Persistent headers sent with all requests
+        base_url (Optional[str]): Base URL prepended to relative URLs
+        auth (Optional[Tuple[str, str]]): Default (username, password) for Basic auth
 
     Example:
         >>> with Session() as session:
@@ -46,48 +48,33 @@ class Session(CycleTLS):
         ...     assert 'session_id' in response.cookies
     """
 
-    def __init__(self):
-        """Initialize a Session."""
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        auth: Optional[Tuple[str, str]] = None,
+    ):
+        """Initialize a Session.
+
+        Args:
+            base_url: Base URL prepended to relative URLs (e.g. 'https://api.example.com')
+            auth: Default (username, password) tuple for HTTP Basic authentication
+        """
         super().__init__()
         self.cookies = CookieJar([])
         self.headers = CaseInsensitiveDict({})
+        self.base_url = base_url.rstrip("/") if base_url else None
+        self.auth = auth
 
-    def request(
-        self,
-        method: str,
-        url: str,
-        params: Optional[ParamsType] = None,
-        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
-        json_data: Optional[Dict[str, Any]] = None,
-        files: Optional[Dict[str, Any]] = None,
-        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
-        **kwargs: Any,
-    ) -> Response:
-        """
-        Send an HTTP request with session persistence.
+    def _prepare_url(self, url: str) -> str:
+        """Prepend base_url to relative URLs."""
+        if self.base_url and not url.startswith(("http://", "https://")):
+            return f"{self.base_url}/{url.lstrip('/')}"
+        return url
 
-        Session cookies and headers are automatically merged with request-specific
-        cookies and headers. Request-specific values take precedence over session values.
+    def _merge_session_state(self, kwargs: Dict[str, Any], auth: Optional[Tuple[str, str]] = None) -> Optional[Tuple[str, str]]:
+        """Merge session-level headers, cookies, and auth into request kwargs.
 
-        Args:
-            method (str): HTTP method
-            url (str): Target URL
-            params (Optional[Dict]): Query parameters
-            data (Optional[Any]): Request body data
-            json_data (Optional[Dict]): JSON request body
-            files (Optional[Dict]): File uploads
-            **kwargs: Additional request options
-
-        Returns:
-            Response: Response object with status, headers, body, etc.
-
-        Example:
-            >>> session = Session()
-            >>> session.headers['User-Agent'] = 'CustomBot/1.0'
-            >>> session.cookies.set('pref', 'dark_mode')
-            >>>
-            >>> # Both headers and cookies are sent automatically
-            >>> response = session.get('https://api.example.com/data')
+        Returns the effective auth tuple (request-level overrides session-level).
         """
         # Merge session headers with request headers
         merged_headers = CaseInsensitiveDict(self.headers)
@@ -113,17 +100,112 @@ class Session(CycleTLS):
 
         kwargs["cookies"] = merged_cookies if merged_cookies else None
 
-        # Make the request using parent class
-        response = super().request(
-            method, url, params, data, json_data, files, fingerprint, **kwargs
-        )
+        # Apply session-level auth if no request-level auth provided
+        if auth is None and self.auth is not None:
+            auth = self.auth
+        return auth
 
-        # Update session cookies from response
+    def _update_cookies_from_response(self, response: Response) -> None:
+        """Update session cookies from a response."""
         if response.cookies and len(response.cookies) > 0:
             for name in response.cookies:
                 cookie_value = response.cookies[name]
                 self.cookies.set(name, cookie_value)
 
+    def request(
+        self,
+        method: str,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
+    ) -> Response:
+        """
+        Send an HTTP request with session persistence.
+
+        Session cookies, headers, auth, and base_url are all applied automatically.
+        Request-specific values take precedence over session values.
+
+        Args:
+            method: HTTP method
+            url: Target URL (relative URLs are joined with base_url)
+            params: Query parameters
+            data: Request body data
+            json_data: JSON request body
+            json: Alias for json_data
+            files: File uploads
+            fingerprint: TLS fingerprint profile
+            auth: (username, password) tuple (overrides session.auth)
+            **kwargs: Additional request options
+
+        Returns:
+            Response: Response object with status, headers, body, etc.
+        """
+        url = self._prepare_url(url)
+        effective_auth = self._merge_session_state(kwargs, auth=auth)
+
+        response = super().request(
+            method, url, params=params, data=data, json_data=json_data,
+            json=json, files=files, fingerprint=fingerprint, auth=effective_auth,
+            **kwargs,
+        )
+
+        self._update_cookies_from_response(response)
+        return response
+
+    async def arequest(
+        self,
+        method: str,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        poll_interval: float = 0.0,
+        timeout: float = 30.0,
+        **kwargs: Any,
+    ) -> Response:
+        """
+        Send an async HTTP request with session persistence.
+
+        Async counterpart of :meth:`request`. Session cookies, headers,
+        auth, and base_url are all applied the same way.
+
+        Args:
+            method: HTTP method
+            url: Target URL (relative URLs are joined with base_url)
+            params: Query parameters
+            data: Request body data
+            json_data: JSON request body
+            json: Alias for json_data
+            files: File uploads
+            fingerprint: TLS fingerprint profile
+            auth: (username, password) tuple (overrides session.auth)
+            poll_interval: Time between polls (default: 0 = adaptive)
+            timeout: Maximum wait time in seconds (default: 30s)
+            **kwargs: Additional request options
+
+        Returns:
+            Response: Response object
+        """
+        url = self._prepare_url(url)
+        effective_auth = self._merge_session_state(kwargs, auth=auth)
+
+        response = await super().arequest(
+            method, url, params=params, data=data, json_data=json_data,
+            json=json, files=files, fingerprint=fingerprint, auth=effective_auth,
+            poll_interval=poll_interval, timeout=timeout, **kwargs,
+        )
+
+        self._update_cookies_from_response(response)
         return response
 
     def close(self):
