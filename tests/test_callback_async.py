@@ -215,7 +215,7 @@ class TestPipeNotification:
         read_fd, write_fd = os.pipe()
 
         async def wait_for_notification():
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, os.read, read_fd, 1)
             return True
 

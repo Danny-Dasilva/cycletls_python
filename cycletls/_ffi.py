@@ -62,6 +62,7 @@ _ffi.cdef(
 _lib = None
 _lib_lock = threading.Lock()
 _use_zerocopy = None  # None = auto-detect, True/False = forced
+_use_callback = None  # None = auto-detect, True/False = forced
 
 
 def _get_library_filenames() -> list[str]:
@@ -156,6 +157,24 @@ def _has_zerocopy_support() -> bool:
         _use_zerocopy = False
         logger.debug("Zero-copy FFI not available, using base64 mode")
     return _use_zerocopy
+
+
+def _has_callback_support() -> bool:
+    """Check if the loaded library supports callback-based async API."""
+    global _use_callback
+    if _use_callback is not None:
+        return _use_callback
+
+    lib = _load_library()
+    try:
+        _ = lib.submitRequestAsyncWithNotify
+        _ = lib.getAsyncResult
+        _use_callback = True
+        logger.debug("Callback-based async API enabled")
+    except AttributeError:
+        _use_callback = False
+        logger.debug("Callback-based async API not available, using polling fallback")
+    return _use_callback
 
 
 def _send_request_zerocopy(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -325,7 +344,8 @@ async def send_request_async(
     handle = submit_request_async(payload)
 
     # Poll for completion with adaptive backoff
-    start_time = asyncio.get_event_loop().time()
+    loop = asyncio.get_running_loop()
+    start_time = loop.time()
     check_count = 0
 
     while True:
@@ -335,7 +355,7 @@ async def send_request_async(
             return result
 
         # Check timeout
-        elapsed = asyncio.get_event_loop().time() - start_time
+        elapsed = loop.time() - start_time
         if elapsed > timeout:
             logger.error(f"Async request {handle} timed out after {timeout}s")
             raise asyncio.TimeoutError(f"Request timed out after {timeout} seconds")
@@ -432,7 +452,7 @@ async def send_request_async_callback(
         logger.debug(f"Async request submitted with handle: {handle}")
 
         # Wait for notification (Go will write 1 byte when complete)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             await asyncio.wait_for(loop.run_in_executor(None, os.read, read_fd, 1), timeout=timeout)
         except asyncio.TimeoutError:
@@ -572,4 +592,5 @@ __all__ = [
     "send_request_async_callback",
     "send_requests_batch",
     "send_batch_request",
+    "_has_callback_support",
 ]

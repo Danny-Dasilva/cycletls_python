@@ -288,22 +288,22 @@ class WebSocketConnection:
 
     async def connect_async(self) -> None:
         """Async version of connect()."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self.connect)
 
     async def send_async(self, data: Union[str, bytes], binary: bool = False) -> None:
         """Async version of send()."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self.send, data, binary)
 
     async def receive_async(self, timeout: Optional[float] = None) -> WebSocketMessage:
         """Async version of receive()."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.receive, timeout)
 
     async def close_async(self, code: int = 1000, reason: str = "") -> None:
         """Async version of close()."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self.close, code, reason)
 
     def __enter__(self) -> "WebSocketConnection":
