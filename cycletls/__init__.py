@@ -29,7 +29,7 @@ Usage:
 
 from typing import Any, Dict, Optional
 
-__version__ = "0.0.2"
+from cycletls.__version__ import __version__
 
 # Import core classes
 from .api import CycleTLS

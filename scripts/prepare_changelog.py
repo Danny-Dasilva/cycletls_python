@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from my_package.version import VERSION
+from cycletls.__version__ import __version__ as VERSION
 
 
 def main():
