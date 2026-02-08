@@ -20,6 +20,8 @@ from typing import Any, Dict, Iterator, Optional
 import ormsgpack  # Drop-in replacement for msgpack, 10-30% faster (Rust-based)
 from cffi import FFI
 
+from .exceptions import CycleTLSError
+
 # Setup module logger
 logger = logging.getLogger(__name__)
 
@@ -137,7 +139,7 @@ def _load_library():
             "Go library using 'go build -buildmode=c-shared'."
         )
         logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        raise CycleTLSError(error_msg)
 
 
 def _has_zerocopy_support() -> bool:
@@ -179,7 +181,7 @@ def _send_request_zerocopy(payload: Dict[str, Any]) -> Dict[str, Any]:
     if response_ptr == _ffi.NULL:
         error_msg = "CycleTLS shared library returned NULL response"
         logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        raise CycleTLSError(error_msg)
 
     try:
         # Read exact number of bytes (no null termination issues)
@@ -190,7 +192,10 @@ def _send_request_zerocopy(payload: Dict[str, Any]) -> Dict[str, Any]:
         lib.freeString(response_ptr)
 
     # Unpack msgpack directly (no base64 decode needed)
-    return ormsgpack.unpackb(raw_response)
+    try:
+        return ormsgpack.unpackb(raw_response)
+    except Exception as exc:
+        raise CycleTLSError(f"Failed to decode response data: {exc}") from exc
 
 
 def _send_request_base64(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -212,7 +217,7 @@ def _send_request_base64(payload: Dict[str, Any]) -> Dict[str, Any]:
     if response_ptr == _ffi.NULL:
         error_msg = "CycleTLS shared library returned NULL response"
         logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        raise CycleTLSError(error_msg)
 
     try:
         raw_b64 = _ffi.string(response_ptr)
@@ -222,7 +227,10 @@ def _send_request_base64(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # Decode base64 then unpack msgpack
     raw = base64.b64decode(raw_b64)
-    return ormsgpack.unpackb(raw)
+    try:
+        return ormsgpack.unpackb(raw)
+    except Exception as exc:
+        raise CycleTLSError(f"Failed to decode response data: {exc}") from exc
 
 
 def send_request(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -245,7 +253,7 @@ def submit_request_async(payload: Dict[str, Any]) -> int:
         Handle ID (uintptr) for checking result later
 
     Raises:
-        RuntimeError: If submission fails
+        CycleTLSError: If submission fails
     """
     lib = _load_library()
 
@@ -262,7 +270,7 @@ def submit_request_async(payload: Dict[str, Any]) -> int:
     if handle == 0:
         error_msg = "Failed to submit async request (invalid payload)"
         logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        raise CycleTLSError(error_msg)
 
     logger.debug(f"Async request submitted with handle: {handle}")
     return handle
@@ -278,7 +286,7 @@ def check_request_async(handle: int) -> Optional[Dict[str, Any]]:
         Response dictionary if ready, None if still processing
 
     Raises:
-        RuntimeError: If check fails
+        CycleTLSError: If check fails
     """
     lib = _load_library()
 
@@ -301,7 +309,10 @@ def check_request_async(handle: int) -> Optional[Dict[str, Any]]:
 
     # Decode base64 then unpack msgpack
     raw = base64.b64decode(raw_b64)
-    return ormsgpack.unpackb(raw)
+    try:
+        return ormsgpack.unpackb(raw)
+    except Exception as exc:
+        raise CycleTLSError(f"Failed to decode response data: {exc}") from exc
 
 
 async def send_request_async(
@@ -318,7 +329,7 @@ async def send_request_async(
         Response dictionary
 
     Raises:
-        RuntimeError: If request fails
+        CycleTLSError: If request fails
         asyncio.TimeoutError: If timeout is exceeded
     """
     # Submit request
@@ -372,7 +383,7 @@ async def send_requests_batch(
         List of response dictionaries in the same order as input
 
     Raises:
-        RuntimeError: If any request fails
+        CycleTLSError: If any request fails
         asyncio.TimeoutError: If timeout is exceeded
     """
     return await asyncio.gather(
@@ -404,7 +415,7 @@ async def send_request_async_callback(
         Response dictionary with Status, Body, Headers, FinalUrl, Cookies
 
     Raises:
-        RuntimeError: If request submission or retrieval fails
+        CycleTLSError: If request submission or retrieval fails
         asyncio.TimeoutError: If timeout is exceeded
     """
     lib = _load_library()
@@ -427,7 +438,7 @@ async def send_request_async_callback(
         if handle == 0:
             error_msg = "Failed to submit async request (invalid payload or null handle)"
             logger.error(error_msg)
-            raise RuntimeError(error_msg)
+            raise CycleTLSError(error_msg)
 
         logger.debug(f"Async request submitted with handle: {handle}")
 
@@ -448,7 +459,7 @@ async def send_request_async_callback(
         if result_ptr == _ffi.NULL:
             error_msg = "Failed to get async result (null pointer returned)"
             logger.error(error_msg)
-            raise RuntimeError(error_msg)
+            raise CycleTLSError(error_msg)
 
         try:
             # Read exact number of bytes
@@ -459,7 +470,10 @@ async def send_request_async_callback(
             lib.freeString(result_ptr)
 
         # Unpack msgpack response
-        return ormsgpack.unpackb(raw_response)
+        try:
+            return ormsgpack.unpackb(raw_response)
+        except Exception as exc:
+            raise CycleTLSError(f"Failed to decode response data: {exc}") from exc
 
     finally:
         # Clean up pipe file descriptors
@@ -490,7 +504,7 @@ def _send_batch_request_zerocopy(payloads: list[Dict[str, Any]]) -> list[Dict[st
     if response_ptr == _ffi.NULL:
         error_msg = "CycleTLS batch request returned NULL response"
         logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        raise CycleTLSError(error_msg)
 
     try:
         response_len = out_len[0]
@@ -499,7 +513,10 @@ def _send_batch_request_zerocopy(payloads: list[Dict[str, Any]]) -> list[Dict[st
     finally:
         lib.freeString(response_ptr)
 
-    result = ormsgpack.unpackb(raw_response)
+    try:
+        result = ormsgpack.unpackb(raw_response)
+    except Exception as exc:
+        raise CycleTLSError(f"Failed to decode response data: {exc}") from exc
     return result.get("responses", [])
 
 
@@ -520,7 +537,7 @@ def _send_batch_request_base64(payloads: list[Dict[str, Any]]) -> list[Dict[str,
     if response_ptr == _ffi.NULL:
         error_msg = "CycleTLS batch request returned NULL response"
         logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        raise CycleTLSError(error_msg)
 
     try:
         raw_b64 = _ffi.string(response_ptr)
@@ -530,7 +547,10 @@ def _send_batch_request_base64(payloads: list[Dict[str, Any]]) -> list[Dict[str,
 
     # Decode base64 then unpack msgpack
     raw = base64.b64decode(raw_b64)
-    result = ormsgpack.unpackb(raw)
+    try:
+        result = ormsgpack.unpackb(raw)
+    except Exception as exc:
+        raise CycleTLSError(f"Failed to decode response data: {exc}") from exc
     return result.get("responses", [])
 
 
@@ -553,7 +573,7 @@ def send_batch_request(payloads: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
         Each response contains: RequestID, Status, Body, Headers, FinalUrl, Cookies
 
     Raises:
-        RuntimeError: If the batch request fails
+        CycleTLSError: If the batch request fails
     """
     # Handle empty batch case on Python side (avoid FFI call)
     if not payloads:

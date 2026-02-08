@@ -29,6 +29,7 @@ from typing import Any, AsyncIterator, Dict, Iterator, Optional
 import ormsgpack  # Drop-in replacement for msgpack, 10-30% faster
 
 from ._ffi import _ffi, _load_library
+from .exceptions import CycleTLSError
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ class SSEEvent:
         return f"SSEEvent(event={self.event!r}, data={self.data[:50]!r}...)"
 
 
-class SSEError(Exception):
+class SSEError(CycleTLSError):
     """Raised when an SSE operation fails."""
 
     pass
