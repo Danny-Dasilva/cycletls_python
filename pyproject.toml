@@ -52,9 +52,11 @@ dev = [
     "pytest-asyncio>=0.18.0",
     "pytest-xdist>=3.0.0",
     "pytest-rerunfailures>=14.0",
+    "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
     "pyright>=1.1.390",
     "build>=1.0.0",
+    "pre-commit>=4.0.0",
 ]
 docs = [
     "sphinx>=7.0.0,<9.0.0",  # Pin to 8.x to avoid 9.x issues
@@ -159,4 +161,26 @@ markers = [
     "live: marks tests that run against live tlsfingerprint.com (deselect with '-m \"not live\"')",
     "blocking: marks tests as CI-blocking - failures will fail the CI pipeline",
 ]
+
+[tool.coverage.run]
+source = ["cycletls"]
+omit = [
+    "cycletls/dist/*",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+    "@overload",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
 

@@ -23,31 +23,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        python: ['3.10', '3.11', '3.12', '3.13']
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache-dependency-path: |
-            go.sum
-            golang/go.sum
-
-      - name: Cache Go build
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/go-build
-          key: go-build-${{ runner.os }}-${{ hashFiles('golang/**', 'go.sum') }}
-          restore-keys: |
-            go-build-${{ runner.os }}-
-
-      - name: Build CycleTLS shared library
-        run: |
-          chmod +x scripts/build_shared_lib.sh
-          ./scripts/build_shared_lib.sh
+      - name: Setup CycleTLS (Go build)
+        uses: ./.github/actions/setup-cycletls
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7

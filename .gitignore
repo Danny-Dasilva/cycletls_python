@@ -10,7 +10,7 @@ dist/
 pip-wheel-metadata/
 *.whl
 *.tar.gz
-
+.tldr/
 # benchmark results
 results.csv
 results_async.csv
@@ -54,6 +54,9 @@ __pycache__
 # testing and continuous integration
 
 .coverage
+.coverage.*
+coverage.xml
+htmlcov/
 .pytest_cache/
 .benchmarks
 
