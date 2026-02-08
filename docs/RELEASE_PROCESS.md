@@ -1,8 +1,10 @@
-# GitHub Release Process
+# Release Process
 
 ## Steps
 
-1. Update the version in `my_package/version.py`.
+1. Update the version in `cycletls/__version__.py`.
+
+2. Update the `CHANGELOG.md` with the new version's changes.
 
 3. Run the release script:
 
@@ -10,7 +12,7 @@
     ./scripts/release.sh
     ```
 
-    This will commit the changes to the CHANGELOG and `version.py` files and then create a new tag in git
+    This will commit the changes to the CHANGELOG and `__version__.py` files and then create a new tag in git
     which will trigger a workflow on GitHub Actions that handles the rest.
 
 ## Fixing a failed release
