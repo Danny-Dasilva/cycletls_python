@@ -171,6 +171,7 @@ class Session(CycleTLS):
         auth: Optional[Tuple[str, str]] = None,
         poll_interval: float = 0.0,
         timeout: float = 30.0,
+        use_callback: bool = False,
         **kwargs: Any,
     ) -> Response:
         """
@@ -191,6 +192,7 @@ class Session(CycleTLS):
             auth: (username, password) tuple (overrides session.auth)
             poll_interval: Time between polls (default: 0 = adaptive)
             timeout: Maximum wait time in seconds (default: 30s)
+            use_callback: Use pipe-based notification instead of polling.
             **kwargs: Additional request options
 
         Returns:
@@ -202,7 +204,8 @@ class Session(CycleTLS):
         response = await super().arequest(
             method, url, params=params, data=data, json_data=json_data,
             json=json, files=files, fingerprint=fingerprint, auth=effective_auth,
-            poll_interval=poll_interval, timeout=timeout, **kwargs,
+            poll_interval=poll_interval, timeout=timeout,
+            use_callback=use_callback, **kwargs,
         )
 
         self._update_cookies_from_response(response)

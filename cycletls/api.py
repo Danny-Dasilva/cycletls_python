@@ -514,20 +514,49 @@ class CycleTLS:
 
         return self._parse_response(response_data, url)
 
-    def get(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+    def get(
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
+    ) -> Response:
         """Sends a GET request."""
-        return self.request("get", url, params=params, fingerprint=fingerprint, **kwargs)
+        return self.request("get", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
 
-    def options(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+    def options(
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
+    ) -> Response:
         """Sends an OPTIONS request."""
-        return self.request("options", url, params=params, fingerprint=fingerprint, **kwargs)
+        return self.request("options", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
 
-    def head(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+    def head(
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
+    ) -> Response:
         """Sends a HEAD request."""
-        return self.request("head", url, params=params, fingerprint=fingerprint, **kwargs)
+        return self.request("head", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
 
     def post(
-        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
     ) -> Response:
         """Sends a POST request."""
         return self.request(
@@ -536,7 +565,15 @@ class CycleTLS:
         )
 
     def put(
-        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
     ) -> Response:
         """Sends a PUT request."""
         return self.request(
@@ -545,7 +582,15 @@ class CycleTLS:
         )
 
     def patch(
-        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
     ) -> Response:
         """Sends a PATCH request."""
         return self.request(
@@ -553,9 +598,16 @@ class CycleTLS:
             json=json, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
-    def delete(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+    def delete(
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
+    ) -> Response:
         """Sends a DELETE request."""
-        return self.request("delete", url, params=params, fingerprint=fingerprint, **kwargs)
+        return self.request("delete", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
 
     def batch(self, requests: list[dict]) -> list[Response]:
         """Send multiple requests in a single batch.
@@ -702,6 +754,7 @@ class CycleTLS:
         auth: Optional[Tuple[str, str]] = None,
         poll_interval: float = 0.0,
         timeout: float = 30.0,
+        use_callback: bool = False,
         **kwargs: Any,
     ) -> Response:
         """Send an async HTTP request with enhanced data handling.
@@ -721,6 +774,9 @@ class CycleTLS:
             auth: (username, password) tuple for HTTP Basic authentication
             poll_interval: Time between completion checks (default: 0s = adaptive)
             timeout: Maximum wait time for request completion (default: 30s)
+            use_callback: Use pipe-based notification instead of polling.
+                Reduces FFI calls but creates an OS pipe per request, so it is
+                slower under heavy concurrency.  Default ``False`` (polling).
             **kwargs: Additional CycleTLS options (headers, cookies, proxy, etc.)
 
         Returns:
@@ -732,14 +788,11 @@ class CycleTLS:
         )
 
         try:
-            # Use callback-based async (zero-copy, pipe notification) when available,
-            # fall back to polling-based async otherwise
-            if _has_callback_support():
+            if use_callback and _has_callback_support():
                 try:
                     response_data = await ffi_send_request_async_callback(payload, timeout)
                 except RuntimeError:
-                    # Callback path can fail under heavy concurrent load (Go-side
-                    # race with HTTP/2 stream cancellation). Fall back to polling.
+                    # Callback path can fail under heavy concurrent load.
                     logger.debug("Callback async failed, falling back to polling")
                     response_data = await ffi_send_request_async(payload, poll_interval, timeout)
             else:
@@ -750,20 +803,49 @@ class CycleTLS:
 
         return self._parse_response(response_data, url)
 
-    async def aget(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+    async def aget(
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
+    ) -> Response:
         """Sends an async GET request."""
-        return await self.arequest("get", url, params=params, fingerprint=fingerprint, **kwargs)
+        return await self.arequest("get", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
 
-    async def aoptions(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+    async def aoptions(
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
+    ) -> Response:
         """Sends an async OPTIONS request."""
-        return await self.arequest("options", url, params=params, fingerprint=fingerprint, **kwargs)
+        return await self.arequest("options", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
 
-    async def ahead(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+    async def ahead(
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
+    ) -> Response:
         """Sends an async HEAD request."""
-        return await self.arequest("head", url, params=params, fingerprint=fingerprint, **kwargs)
+        return await self.arequest("head", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
 
     async def apost(
-        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
     ) -> Response:
         """Sends an async POST request."""
         return await self.arequest(
@@ -772,7 +854,15 @@ class CycleTLS:
         )
 
     async def aput(
-        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
     ) -> Response:
         """Sends an async PUT request."""
         return await self.arequest(
@@ -781,7 +871,15 @@ class CycleTLS:
         )
 
     async def apatch(
-        self, url, params=None, data=None, json_data=None, json=None, fingerprint=None, auth=None, **kwargs
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
     ) -> Response:
         """Sends an async PATCH request."""
         return await self.arequest(
@@ -789,9 +887,16 @@ class CycleTLS:
             json=json, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
-    async def adelete(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+    async def adelete(
+        self,
+        url: str,
+        params: Optional[ParamsType] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        **kwargs: Any,
+    ) -> Response:
         """Sends an async DELETE request."""
-        return await self.arequest("delete", url, params=params, fingerprint=fingerprint, **kwargs)
+        return await self.arequest("delete", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
 
     async def abatch(self, requests: list[dict]) -> list[Response]:
         """Send multiple requests concurrently as an async batch.

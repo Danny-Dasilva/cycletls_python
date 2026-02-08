@@ -205,9 +205,8 @@ class TestSessionAsyncCookies:
     """Test that Session.arequest() persists cookies like sync request()."""
 
     @pytest.mark.asyncio
-    @patch("cycletls.api.ffi_send_request_async_callback")
-    @patch("cycletls.api._has_callback_support", return_value=True)
-    async def test_arequest_persists_cookies(self, mock_has_cb, mock_async_ffi):
+    @patch("cycletls.api.ffi_send_request_async")
+    async def test_arequest_persists_cookies(self, mock_async_ffi):
         mock_async_ffi.return_value = {
             "RequestID": "1",
             "Status": 200,
@@ -226,9 +225,8 @@ class TestSessionAsyncCookies:
         assert session.cookies["session_id"] == "abc123"
 
     @pytest.mark.asyncio
-    @patch("cycletls.api.ffi_send_request_async_callback")
-    @patch("cycletls.api._has_callback_support", return_value=True)
-    async def test_arequest_sends_session_cookies(self, mock_has_cb, mock_async_ffi):
+    @patch("cycletls.api.ffi_send_request_async")
+    async def test_arequest_sends_session_cookies(self, mock_async_ffi):
         mock_async_ffi.return_value = {
             "RequestID": "1",
             "Status": 200,
@@ -247,9 +245,8 @@ class TestSessionAsyncCookies:
         assert "token" in cookie_names
 
     @pytest.mark.asyncio
-    @patch("cycletls.api.ffi_send_request_async_callback")
-    @patch("cycletls.api._has_callback_support", return_value=True)
-    async def test_arequest_uses_base_url(self, mock_has_cb, mock_async_ffi):
+    @patch("cycletls.api.ffi_send_request_async")
+    async def test_arequest_uses_base_url(self, mock_async_ffi):
         mock_async_ffi.return_value = {
             "RequestID": "1",
             "Status": 200,

@@ -10,6 +10,57 @@ try:
 except ImportError:
     pycurl = None
 
+try:
+    import urllib3 as _urllib3
+except ImportError:
+    _urllib3 = None
+
+
+class CycleTLSSession:
+    """Wrapper for CycleTLS to provide a requests-like Session interface."""
+
+    def __init__(self):
+        from cycletls import CycleTLS
+        self.client = CycleTLS()
+
+    def get(self, url: str):
+        return self.client.get(url)
+
+    def close(self):
+        self.client.close()
+
+
+class CycleTLSAsyncSession:
+    """Wrapper for CycleTLS async to provide an async Session interface."""
+
+    def __init__(self):
+        from cycletls import CycleTLS
+        self.client = CycleTLS()
+
+    async def get(self, url: str):
+        return await self.client.aget(url)
+
+    async def aclose(self):
+        self.client.close()
+
+    def close(self):
+        self.client.close()
+
+
+class Urllib3Session:
+    """Wrapper for urllib3 to provide a Session-like interface."""
+
+    def __init__(self):
+        if _urllib3 is None:
+            raise ImportError("urllib3 is not installed")
+        self.pool = _urllib3.PoolManager()
+
+    def get(self, url: str):
+        return self.pool.request("GET", url)
+
+    def close(self):
+        self.pool.clear()
+
 
 class PycurlSession:
     """Wrapper for pycurl to provide a Session-like interface."""
