@@ -463,17 +463,230 @@ SAFARI_IOS = TLSFingerprint(
 )
 
 
+# Chrome 122 on Windows 10
+CHROME_122 = TLSFingerprint(
+    name="chrome_122",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0"
+    ),
+    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
+    header_order=CHROME_120.header_order,
+)
+
+# Chrome 123 on Windows 10
+CHROME_123 = TLSFingerprint(
+    name="chrome_123",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0"
+    ),
+    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+    ),
+    header_order=CHROME_120.header_order,
+)
+
+# Chrome 124 on Windows 10
+CHROME_124 = TLSFingerprint(
+    name="chrome_124",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0"
+    ),
+    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    header_order=CHROME_120.header_order,
+)
+
+# Chrome 125 on Windows 11
+CHROME_125 = TLSFingerprint(
+    name="chrome_125",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0"
+    ),
+    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    ),
+    header_order=CHROME_120.header_order,
+)
+
+# Firefox 122 on Windows 10
+FIREFOX_122 = TLSFingerprint(
+    name="firefox_122",
+    ja3=(
+        "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-"
+        "156-157-47-53,0-23-65281-10-11-35-16-5-34-51-43-13-45-28-21,29-23-24-25-256-257,0"
+    ),
+    http2_fingerprint=FIREFOX_121.http2_fingerprint,
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+    header_order=FIREFOX_121.header_order,
+)
+
+# Firefox 123 on Windows 10
+FIREFOX_123 = TLSFingerprint(
+    name="firefox_123",
+    ja3=(
+        "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-"
+        "156-157-47-53,0-23-65281-10-11-35-16-5-34-51-43-13-45-28-21,29-23-24-25-256-257,0"
+    ),
+    http2_fingerprint=FIREFOX_121.http2_fingerprint,
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+    header_order=FIREFOX_121.header_order,
+)
+
+# Firefox 124 on Windows 10
+FIREFOX_124 = TLSFingerprint(
+    name="firefox_124",
+    ja3=(
+        "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-"
+        "156-157-47-53,0-23-65281-10-11-35-16-5-34-51-43-13-45-28-21,29-23-24-25-256-257,0"
+    ),
+    http2_fingerprint=FIREFOX_121.http2_fingerprint,
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+    header_order=FIREFOX_121.header_order,
+)
+
+# Edge 121 on Windows 10
+EDGE_121 = TLSFingerprint(
+    name="edge_121",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0"
+    ),
+    http2_fingerprint=EDGE_120.http2_fingerprint,
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
+    ),
+    header_order=EDGE_120.header_order,
+)
+
+# Edge 122 on Windows 10
+EDGE_122 = TLSFingerprint(
+    name="edge_122",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0"
+    ),
+    http2_fingerprint=EDGE_120.http2_fingerprint,
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0"
+    ),
+    header_order=EDGE_120.header_order,
+)
+
+# Opera 106 on Windows 10
+OPERA_106 = TLSFingerprint(
+    name="opera_106",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
+    ),
+    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0"
+    ),
+    header_order=CHROME_120.header_order,
+)
+
+# Brave 1.63 on Windows 10
+BRAVE_1_63 = TLSFingerprint(
+    name="brave_1_63",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
+    ),
+    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
+    user_agent=(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
+    header_order=CHROME_120.header_order,
+)
+
+# Chrome on Linux
+CHROME_LINUX = TLSFingerprint(
+    name="chrome_linux",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0"
+    ),
+    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
+    user_agent=(
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
+    header_order=CHROME_120.header_order,
+)
+
+# Firefox on Linux
+FIREFOX_LINUX = TLSFingerprint(
+    name="firefox_linux",
+    ja3=(
+        "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-"
+        "156-157-47-53,0-23-65281-10-11-35-16-5-34-51-43-13-45-28-21,29-23-24-25-256-257,0"
+    ),
+    http2_fingerprint=FIREFOX_121.http2_fingerprint,
+    user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0",
+    header_order=FIREFOX_121.header_order,
+)
+
+# Samsung Internet 23 on Android
+SAMSUNG_BROWSER_23 = TLSFingerprint(
+    name="samsung_browser_23",
+    ja3=(
+        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
+        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
+    ),
+    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
+    user_agent=(
+        "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36"
+    ),
+    header_order=CHROME_ANDROID.header_order,
+)
+
+
 # Register all built-in profiles
 def _register_builtin_profiles() -> None:
     """Register all built-in fingerprint profiles."""
     for profile in [
         CHROME_120,
         CHROME_121,
+        CHROME_122,
+        CHROME_123,
+        CHROME_124,
+        CHROME_125,
         FIREFOX_121,
+        FIREFOX_122,
+        FIREFOX_123,
+        FIREFOX_124,
         SAFARI_17,
         EDGE_120,
+        EDGE_121,
+        EDGE_122,
+        OPERA_106,
+        BRAVE_1_63,
         CHROME_ANDROID,
         SAFARI_IOS,
+        CHROME_LINUX,
+        FIREFOX_LINUX,
+        SAMSUNG_BROWSER_23,
     ]:
         FingerprintRegistry.register(profile)
 
@@ -486,9 +699,23 @@ __all__ = [
     "FingerprintRegistry",
     "CHROME_120",
     "CHROME_121",
+    "CHROME_122",
+    "CHROME_123",
+    "CHROME_124",
+    "CHROME_125",
     "FIREFOX_121",
+    "FIREFOX_122",
+    "FIREFOX_123",
+    "FIREFOX_124",
     "SAFARI_17",
     "EDGE_120",
+    "EDGE_121",
+    "EDGE_122",
+    "OPERA_106",
+    "BRAVE_1_63",
     "CHROME_ANDROID",
     "SAFARI_IOS",
+    "CHROME_LINUX",
+    "FIREFOX_LINUX",
+    "SAMSUNG_BROWSER_23",
 ]

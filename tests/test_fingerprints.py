@@ -222,6 +222,34 @@ class TestBuiltinProfiles:
         assert "Android" in CHROME_ANDROID.user_agent
         assert "iPhone" in SAFARI_IOS.user_agent
 
+    def test_total_builtin_count_at_least_20(self):
+        """Should have at least 20 registered profiles."""
+        names = FingerprintRegistry.list()
+        assert len(names) >= 20, f"Expected >= 20 profiles, got {len(names)}"
+
+    @pytest.mark.parametrize("name,ua_substr", [
+        ("chrome_122", "Chrome/122"),
+        ("chrome_123", "Chrome/123"),
+        ("chrome_124", "Chrome/124"),
+        ("chrome_125", "Chrome/125"),
+        ("firefox_122", "Firefox/122"),
+        ("firefox_123", "Firefox/123"),
+        ("firefox_124", "Firefox/124"),
+        ("edge_121", "Edg/121"),
+        ("edge_122", "Edg/122"),
+        ("opera_106", "OPR/106"),
+        ("brave_1_63", "Chrome/122"),
+        ("chrome_linux", "Linux"),
+        ("firefox_linux", "Linux"),
+        ("samsung_browser_23", "SamsungBrowser"),
+    ])
+    def test_new_profile_registered_with_correct_ua(self, name, ua_substr):
+        """New profiles should be registered with correct user agents."""
+        profile = FingerprintRegistry.get(name)
+        assert profile.name == name
+        assert profile.ja3, f"{name} missing ja3"
+        assert ua_substr in profile.user_agent, f"{name} UA should contain '{ua_substr}'"
+
 
 class TestPluginLoading:
     """Tests for plugin loading utilities."""
