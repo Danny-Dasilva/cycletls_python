@@ -204,7 +204,36 @@ def _record_test_result(
         'wall_time': wall_time,
         'cpu_time': cpu_time,
         'req_per_sec': requests_count / wall_time if wall_time > 0 else 0,
+        'us_per_req': wall_time * 1_000_000 / requests_count if wall_time > 0 else 0,
     }
+
+
+def compute_vs_requests(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Add vs_requests comparison field using requests sync_session as baseline."""
+    if not results:
+        return []
+
+    baseline_time = None
+    for r in results:
+        if r.get('library') == 'requests' and r.get('session_type') == 'sync_session':
+            baseline_time = r['wall_time']
+            break
+
+    enriched = []
+    for r in results:
+        r = dict(r)
+        if baseline_time is None:
+            r['vs_requests'] = 'N/A'
+        elif r.get('library') == 'requests' and r.get('session_type') == 'sync_session':
+            r['vs_requests'] = 'baseline'
+        else:
+            wall = r.get('wall_time', 0)
+            if wall > 0 and baseline_time > 0:
+                r['vs_requests'] = f'{baseline_time / wall:.1f}x'
+            else:
+                r['vs_requests'] = 'N/A'
+        enriched.append(r)
+    return enriched
 
 
 def session_get_test(
