@@ -21,7 +21,7 @@ from test_utils import assert_valid_response
 class TestWebSocketConnection:
     """Test WebSocket connection establishment."""
 
-    @pytest.mark.skip(reason="WebSocket protocol may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_websocket_connection(self, cycletls_client):
         """Test basic WebSocket connection using protocol='websocket'."""
         # Using wss://echo.websocket.org as test server
@@ -33,7 +33,7 @@ class TestWebSocketConnection:
         assert_valid_response(response, expected_status=101)  # 101 Switching Protocols
         assert response.headers, "WebSocket response should have headers"
 
-    @pytest.mark.skip(reason="WebSocket protocol may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_websocket_connection_echo_server(self, cycletls_client):
         """Test WebSocket connection to echo.websocket.org."""
         # Test connection establishment
@@ -47,7 +47,7 @@ class TestWebSocketConnection:
         assert response.status_code in [101, 200], \
             f"WebSocket connection should return 101 or 200, got {response.status_code}"
 
-    @pytest.mark.skip(reason="WebSocket protocol may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_websocket_connection_local(self, cycletls_client):
         """Test WebSocket connection to local server (if available)."""
         # This would connect to a local WebSocket server on ws://localhost:port
@@ -70,7 +70,7 @@ class TestWebSocketConnection:
 class TestWebSocketMessages:
     """Test WebSocket message sending and receiving."""
 
-    @pytest.mark.skip(reason="WebSocket send/receive API may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_send_text_message(self, cycletls_client):
         """Test sending text messages over WebSocket."""
         # Connect to echo server
@@ -86,7 +86,7 @@ class TestWebSocketMessages:
         # For now, just verify connection was established
         assert response is not None, "WebSocket connection should be established"
 
-    @pytest.mark.skip(reason="WebSocket send/receive API may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_send_binary_message(self, cycletls_client):
         """Test sending binary messages over WebSocket."""
         # Connect to echo server
@@ -103,7 +103,7 @@ class TestWebSocketMessages:
         # For now, just verify connection was established
         assert response is not None, "WebSocket connection should be established"
 
-    @pytest.mark.skip(reason="WebSocket receive API may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_receive_messages(self, cycletls_client):
         """Test receiving messages from WebSocket server."""
         # Connect to echo server
@@ -120,7 +120,7 @@ class TestWebSocketMessages:
         # For now, just verify connection was established
         assert response is not None, "WebSocket connection should be established"
 
-    @pytest.mark.skip(reason="WebSocket echo functionality may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_echo_text_message(self, cycletls_client):
         """Test sending and receiving echoed text message."""
         # This test would:
@@ -144,7 +144,7 @@ class TestWebSocketMessages:
 
         assert response is not None, "WebSocket connection should be established"
 
-    @pytest.mark.skip(reason="WebSocket echo functionality may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_echo_binary_message(self, cycletls_client):
         """Test sending and receiving echoed binary message."""
         test_binary = b'\x00\x01\x02\x03\x04\x05'
@@ -166,7 +166,7 @@ class TestWebSocketMessages:
 class TestWebSocketClose:
     """Test WebSocket connection close functionality."""
 
-    @pytest.mark.skip(reason="WebSocket close API may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_close_connection(self, cycletls_client):
         """Test closing WebSocket connection."""
         # Connect
@@ -183,7 +183,7 @@ class TestWebSocketClose:
         # Verify connection is closed
         # This would check that subsequent operations fail or return appropriate status
 
-    @pytest.mark.skip(reason="WebSocket close API may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_close_with_code(self, cycletls_client):
         """Test closing WebSocket connection with status code."""
         # Connect
@@ -201,7 +201,7 @@ class TestWebSocketClose:
 class TestWebSocketErrors:
     """Test WebSocket error handling."""
 
-    @pytest.mark.skip(reason="WebSocket error handling may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_invalid_websocket_url(self, cycletls_client):
         """Test connection to invalid WebSocket URL."""
         with pytest.raises(Exception):
@@ -211,7 +211,7 @@ class TestWebSocketErrors:
                 timeout=2
             )
 
-    @pytest.mark.skip(reason="WebSocket error handling may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_connection_timeout(self, cycletls_client):
         """Test WebSocket connection timeout."""
         # Attempt to connect with very short timeout
@@ -222,7 +222,7 @@ class TestWebSocketErrors:
                 timeout=0.001  # Very short timeout
             )
 
-    @pytest.mark.skip(reason="WebSocket error handling may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_send_on_closed_connection(self, cycletls_client):
         """Test sending message on closed connection."""
         # Connect
@@ -242,7 +242,7 @@ class TestWebSocketErrors:
 class TestWebSocketAdvanced:
     """Test advanced WebSocket features."""
 
-    @pytest.mark.skip(reason="WebSocket ping/pong may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_ping_pong(self, cycletls_client):
         """Test WebSocket ping/pong mechanism."""
         # Connect
@@ -258,7 +258,7 @@ class TestWebSocketAdvanced:
         # pong = cycletls_client.ws_receive(response.request_id, timeout=5)
         # assert pong is not None, "Should receive pong response"
 
-    @pytest.mark.skip(reason="WebSocket subprotocols may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_websocket_subprotocols(self, cycletls_client):
         """Test WebSocket with subprotocols."""
         # Connect with subprotocol
@@ -272,7 +272,7 @@ class TestWebSocketAdvanced:
 
         assert response is not None, "WebSocket connection should be established"
 
-    @pytest.mark.skip(reason="WebSocket custom headers may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_websocket_custom_headers(self, cycletls_client):
         """Test WebSocket connection with custom headers."""
         custom_headers = {
@@ -288,7 +288,7 @@ class TestWebSocketAdvanced:
 
         assert response is not None, "WebSocket connection should be established"
 
-    @pytest.mark.skip(reason="WebSocket with proxy may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live WebSocket test server")
     def test_websocket_with_proxy(self, cycletls_client):
         """Test WebSocket connection through proxy."""
         # This would require a proxy server
@@ -304,6 +304,30 @@ class TestWebSocketAdvanced:
 
         except Exception as e:
             pytest.skip(f"Proxy not available: {e}")
+
+
+class TestWebSocketFFIExports:
+    """Verify Go FFI exports for WebSocket exist in the shared library."""
+
+    def test_ws_connect_export_exists(self):
+        from cycletls._ffi import _load_library
+        lib = _load_library()
+        assert hasattr(lib, "wsConnect"), "Go library should export wsConnect"
+
+    def test_ws_send_export_exists(self):
+        from cycletls._ffi import _load_library
+        lib = _load_library()
+        assert hasattr(lib, "wsSend"), "Go library should export wsSend"
+
+    def test_ws_receive_export_exists(self):
+        from cycletls._ffi import _load_library
+        lib = _load_library()
+        assert hasattr(lib, "wsReceive"), "Go library should export wsReceive"
+
+    def test_ws_close_export_exists(self):
+        from cycletls._ffi import _load_library
+        lib = _load_library()
+        assert hasattr(lib, "wsClose"), "Go library should export wsClose"
 
 
 class TestWebSocketVerification:

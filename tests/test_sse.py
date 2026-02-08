@@ -19,10 +19,29 @@ import time
 from test_utils import assert_valid_response, assert_valid_json_response
 
 
+class TestSSEFFIExports:
+    """Verify Go FFI exports for SSE exist in the shared library."""
+
+    def test_sse_connect_export_exists(self):
+        from cycletls._ffi import _load_library
+        lib = _load_library()
+        assert hasattr(lib, "sseConnect"), "Go library should export sseConnect"
+
+    def test_sse_next_event_export_exists(self):
+        from cycletls._ffi import _load_library
+        lib = _load_library()
+        assert hasattr(lib, "sseNextEvent"), "Go library should export sseNextEvent"
+
+    def test_sse_close_export_exists(self):
+        from cycletls._ffi import _load_library
+        lib = _load_library()
+        assert hasattr(lib, "sseClose"), "Go library should export sseClose"
+
+
 class TestSSEConnection:
     """Test Server-Sent Events connection establishment."""
 
-    @pytest.mark.skip(reason="SSE protocol may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_sse_connection(self, cycletls_client):
         """Test basic SSE connection using protocol='sse'."""
         # Using httpbin's stream endpoint or similar SSE server
@@ -45,7 +64,7 @@ class TestSSEConnection:
         assert 'text/event-stream' in content_type or 'application/json' in content_type, \
             f"SSE should have appropriate content type, got {content_type}"
 
-    @pytest.mark.skip(reason="SSE protocol may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_sse_connection_with_accept_header(self, cycletls_client):
         """Test SSE connection with Accept: text/event-stream header."""
         response = cycletls_client.get(
@@ -58,7 +77,7 @@ class TestSSEConnection:
 
         assert_valid_response(response, expected_status=200)
 
-    @pytest.mark.skip(reason="SSE protocol may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_sse_connection_local(self, cycletls_client):
         """Test SSE connection to local server (if available)."""
         # This would connect to a local SSE server
@@ -78,7 +97,7 @@ class TestSSEConnection:
 class TestSSEEvents:
     """Test Server-Sent Events receiving and parsing."""
 
-    @pytest.mark.skip(reason="SSE event parsing may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_receive_events(self, cycletls_client):
         """Test receiving events from SSE stream."""
         response = cycletls_client.get(
@@ -101,7 +120,7 @@ class TestSSEEvents:
             data_lines = [line for line in lines if line.startswith('data:')]
             assert len(data_lines) > 0, "Should receive at least one data event"
 
-    @pytest.mark.skip(reason="SSE event parsing may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_parse_sse_format(self, cycletls_client):
         """Test parsing SSE format from response."""
         response = cycletls_client.get(
@@ -139,7 +158,7 @@ class TestSSEEvents:
             assert len(events) > 0 or len(lines) > 0, \
                 "Should have received SSE data"
 
-    @pytest.mark.skip(reason="SSE streaming API may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_receive_multiple_events(self, cycletls_client):
         """Test receiving multiple events from SSE stream."""
         response = cycletls_client.get(
@@ -160,7 +179,7 @@ class TestSSEEvents:
 class TestSSEEventTypes:
     """Test different SSE event types."""
 
-    @pytest.mark.skip(reason="SSE event types may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_message_event(self, cycletls_client):
         """Test receiving 'message' event type (default)."""
         response = cycletls_client.get(
@@ -175,7 +194,7 @@ class TestSSEEventTypes:
             # Default event type is 'message'
             assert 'data:' in response.body, "Should contain data field"
 
-    @pytest.mark.skip(reason="SSE custom event types may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_custom_event_type(self, cycletls_client):
         """Test receiving custom event types."""
         # This would require a server that sends custom event types
@@ -191,7 +210,7 @@ class TestSSEEventTypes:
         assert 'event:' in event_line
         assert 'data:' in data_line
 
-    @pytest.mark.skip(reason="SSE event filtering may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_filter_event_types(self, cycletls_client):
         """Test filtering specific event types."""
         # This would filter for specific event types
@@ -203,7 +222,7 @@ class TestSSEEventTypes:
 class TestSSEEventID:
     """Test SSE event ID tracking."""
 
-    @pytest.mark.skip(reason="SSE event ID tracking may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_event_with_id(self, cycletls_client):
         """Test events with ID field."""
         # SSE format with ID:
@@ -218,7 +237,7 @@ class TestSSEEventID:
             event_id = id_line[0][3:].strip()
             assert event_id == '123', "Should extract event ID"
 
-    @pytest.mark.skip(reason="SSE event ID tracking may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_reconnect_with_last_event_id(self, cycletls_client):
         """Test reconnecting with Last-Event-ID header."""
         # When reconnecting, client should send Last-Event-ID header
@@ -236,7 +255,7 @@ class TestSSEEventID:
 class TestSSERetry:
     """Test SSE retry mechanism."""
 
-    @pytest.mark.skip(reason="SSE retry mechanism may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_retry_field(self, cycletls_client):
         """Test retry field in SSE events."""
         # SSE format with retry:
@@ -251,7 +270,7 @@ class TestSSERetry:
             retry_ms = int(retry_line[0][6:].strip())
             assert retry_ms == 5000, "Should extract retry value"
 
-    @pytest.mark.skip(reason="SSE auto-reconnect may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_auto_reconnect(self, cycletls_client):
         """Test automatic reconnection on connection loss."""
         # This would test auto-reconnect behavior
@@ -262,7 +281,7 @@ class TestSSERetry:
 class TestSSEClose:
     """Test SSE connection close functionality."""
 
-    @pytest.mark.skip(reason="SSE close API may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_close_connection(self, cycletls_client):
         """Test closing SSE connection."""
         response = cycletls_client.get(
@@ -275,7 +294,7 @@ class TestSSEClose:
         # Close connection (API needs to be implemented)
         # cycletls_client.sse_close(response.request_id)
 
-    @pytest.mark.skip(reason="SSE timeout may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_connection_timeout(self, cycletls_client):
         """Test SSE connection with timeout."""
         response = cycletls_client.get(
@@ -291,7 +310,7 @@ class TestSSEClose:
 class TestSSEErrors:
     """Test SSE error handling."""
 
-    @pytest.mark.skip(reason="SSE error handling may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_invalid_sse_endpoint(self, cycletls_client):
         """Test connection to invalid SSE endpoint."""
         with pytest.raises(Exception):
@@ -301,7 +320,7 @@ class TestSSEErrors:
                 timeout=2
             )
 
-    @pytest.mark.skip(reason="SSE error handling may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_non_sse_content_type(self, cycletls_client):
         """Test handling of non-SSE content type."""
         # Connect to regular JSON endpoint with SSE protocol
@@ -313,7 +332,7 @@ class TestSSEErrors:
         # Should handle gracefully (might return data anyway or error)
         assert response is not None, "Should handle non-SSE content type"
 
-    @pytest.mark.skip(reason="SSE error handling may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_connection_error(self, cycletls_client):
         """Test SSE connection to non-existent server."""
         with pytest.raises(Exception):
@@ -327,7 +346,7 @@ class TestSSEErrors:
 class TestSSEAdvanced:
     """Test advanced SSE features."""
 
-    @pytest.mark.skip(reason="SSE with custom headers may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_sse_with_custom_headers(self, cycletls_client):
         """Test SSE connection with custom headers."""
         custom_headers = {
@@ -343,7 +362,7 @@ class TestSSEAdvanced:
 
         assert_valid_response(response, expected_status=200)
 
-    @pytest.mark.skip(reason="SSE with proxy may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_sse_with_proxy(self, cycletls_client):
         """Test SSE connection through proxy."""
         try:
@@ -359,7 +378,7 @@ class TestSSEAdvanced:
         except Exception as e:
             pytest.skip(f"Proxy not available: {e}")
 
-    @pytest.mark.skip(reason="SSE streaming response may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_sse_streaming_response(self, cycletls_client):
         """Test SSE with streaming response handling."""
         # This would use a streaming response handler
@@ -370,7 +389,7 @@ class TestSSEAdvanced:
         # )
         pass
 
-    @pytest.mark.skip(reason="SSE multiline data may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_multiline_data(self, cycletls_client):
         """Test SSE events with multiline data."""
         # SSE supports multiline data:
@@ -389,7 +408,7 @@ class TestSSEAdvanced:
         assert 'second line' in full_data
         assert 'third line' in full_data
 
-    @pytest.mark.skip(reason="SSE comments may not be fully implemented yet")
+    @pytest.mark.skip(reason="Requires live SSE test server")
     def test_sse_comments(self, cycletls_client):
         """Test SSE comments (lines starting with :)."""
         # SSE comments: : this is a comment\n
