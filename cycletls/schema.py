@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -18,6 +19,77 @@ except ImportError:
     _json_loads = json.loads
 
 from .structures import CaseInsensitiveDict, CookieJar
+
+# Module-level constant: HTTP status phrases (avoids recreating dict on every .reason access)
+_STATUS_PHRASES = {
+    # 1xx Informational
+    100: "Continue",
+    101: "Switching Protocols",
+    102: "Processing",
+    103: "Early Hints",
+    # 2xx Success
+    200: "OK",
+    201: "Created",
+    202: "Accepted",
+    203: "Non-Authoritative Information",
+    204: "No Content",
+    205: "Reset Content",
+    206: "Partial Content",
+    207: "Multi-Status",
+    208: "Already Reported",
+    226: "IM Used",
+    # 3xx Redirection
+    300: "Multiple Choices",
+    301: "Moved Permanently",
+    302: "Found",
+    303: "See Other",
+    304: "Not Modified",
+    305: "Use Proxy",
+    307: "Temporary Redirect",
+    308: "Permanent Redirect",
+    # 4xx Client Error
+    400: "Bad Request",
+    401: "Unauthorized",
+    402: "Payment Required",
+    403: "Forbidden",
+    404: "Not Found",
+    405: "Method Not Allowed",
+    406: "Not Acceptable",
+    407: "Proxy Authentication Required",
+    408: "Request Timeout",
+    409: "Conflict",
+    410: "Gone",
+    411: "Length Required",
+    412: "Precondition Failed",
+    413: "Payload Too Large",
+    414: "URI Too Long",
+    415: "Unsupported Media Type",
+    416: "Range Not Satisfiable",
+    417: "Expectation Failed",
+    418: "I'm a teapot",
+    421: "Misdirected Request",
+    422: "Unprocessable Entity",
+    423: "Locked",
+    424: "Failed Dependency",
+    425: "Too Early",
+    426: "Upgrade Required",
+    428: "Precondition Required",
+    429: "Too Many Requests",
+    431: "Request Header Fields Too Large",
+    451: "Unavailable For Legal Reasons",
+    # 5xx Server Error
+    500: "Internal Server Error",
+    501: "Not Implemented",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+    504: "Gateway Timeout",
+    505: "HTTP Version Not Supported",
+    506: "Variant Also Negotiates",
+    507: "Insufficient Storage",
+    508: "Loop Detected",
+    510: "Not Extended",
+    511: "Network Authentication Required",
+}
 
 
 class Protocol(str, Enum):
@@ -108,8 +180,6 @@ class Request:
         # Convert timeout to integer (Go expects int, not float)
         # Round up to ensure we don't timeout prematurely
         # Minimum timeout is 1 second (Go defaults 0 to 15 seconds)
-        import math
-
         timeout_int = max(1, math.ceil(self.timeout)) if self.timeout > 0 else 0
 
         # Build dict with required fields (batch assignment is faster)
@@ -272,76 +342,7 @@ class Response:
 
     def _get_reason(self) -> str:
         """Helper to get HTTP reason phrases for status codes."""
-        status_phrases = {
-            # 1xx Informational
-            100: "Continue",
-            101: "Switching Protocols",
-            102: "Processing",
-            103: "Early Hints",
-            # 2xx Success
-            200: "OK",
-            201: "Created",
-            202: "Accepted",
-            203: "Non-Authoritative Information",
-            204: "No Content",
-            205: "Reset Content",
-            206: "Partial Content",
-            207: "Multi-Status",
-            208: "Already Reported",
-            226: "IM Used",
-            # 3xx Redirection
-            300: "Multiple Choices",
-            301: "Moved Permanently",
-            302: "Found",
-            303: "See Other",
-            304: "Not Modified",
-            305: "Use Proxy",
-            307: "Temporary Redirect",
-            308: "Permanent Redirect",
-            # 4xx Client Error
-            400: "Bad Request",
-            401: "Unauthorized",
-            402: "Payment Required",
-            403: "Forbidden",
-            404: "Not Found",
-            405: "Method Not Allowed",
-            406: "Not Acceptable",
-            407: "Proxy Authentication Required",
-            408: "Request Timeout",
-            409: "Conflict",
-            410: "Gone",
-            411: "Length Required",
-            412: "Precondition Failed",
-            413: "Payload Too Large",
-            414: "URI Too Long",
-            415: "Unsupported Media Type",
-            416: "Range Not Satisfiable",
-            417: "Expectation Failed",
-            418: "I'm a teapot",
-            421: "Misdirected Request",
-            422: "Unprocessable Entity",
-            423: "Locked",
-            424: "Failed Dependency",
-            425: "Too Early",
-            426: "Upgrade Required",
-            428: "Precondition Required",
-            429: "Too Many Requests",
-            431: "Request Header Fields Too Large",
-            451: "Unavailable For Legal Reasons",
-            # 5xx Server Error
-            500: "Internal Server Error",
-            501: "Not Implemented",
-            502: "Bad Gateway",
-            503: "Service Unavailable",
-            504: "Gateway Timeout",
-            505: "HTTP Version Not Supported",
-            506: "Variant Also Negotiates",
-            507: "Insufficient Storage",
-            508: "Loop Detected",
-            510: "Not Extended",
-            511: "Network Authentication Required",
-        }
-        return status_phrases.get(self.status_code, "Unknown")
+        return _STATUS_PHRASES.get(self.status_code, "Unknown")
 
     def raise_for_status(self) -> None:
         """Raise HTTPError if the response status indicates an error."""
@@ -355,7 +356,7 @@ class Response:
 
     def json(self) -> dict:
         """Parse response body as JSON."""
-        return _json_loads(self.body.encode())
+        return _json_loads(self.body)
 
     def __repr__(self) -> str:
         """Return detailed string representation of the Response."""
@@ -496,6 +497,11 @@ def _raise_for_error_response(data: dict) -> None:
         TLSError: For certificate errors
         CycleTLSError: For other errors
     """
+    # Short-circuit for successful responses (2xx, 3xx) — skip expensive body checks
+    status = data.get("Status", 0)
+    if 200 <= status < 400:
+        return
+
     # Import exceptions here to avoid circular import
     from .exceptions import (
         ConnectionError,
@@ -505,7 +511,6 @@ def _raise_for_error_response(data: dict) -> None:
         TLSError,
     )
 
-    status = data.get("Status", 0)
     error_msg = data.get("Body", "")
 
     # Check if this is an error response from Go

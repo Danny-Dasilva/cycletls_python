@@ -8,6 +8,13 @@ import logging
 import mimetypes
 import threading
 import urllib.parse
+
+try:
+    import orjson
+
+    _json_dumps = orjson.dumps
+except ImportError:
+    _json_dumps = None
 import warnings
 from collections.abc import Mapping, Sequence
 from types import TracebackType
@@ -282,7 +289,10 @@ class CycleTLS:
         if json_data is not None:
             if data is not None:
                 raise ValueError("Cannot specify both 'data' and 'json_data' parameters")
-            body_value = json.dumps(json_data)
+            if _json_dumps is not None:
+                body_value = _json_dumps(json_data).decode("utf-8")
+            else:
+                body_value = json.dumps(json_data)
             headers["Content-Type"] = "application/json"
         elif data is not None:
             if isinstance(data, dict):
@@ -542,7 +552,10 @@ class CycleTLS:
         if json_data is not None:
             if data is not None:
                 raise ValueError("Cannot specify both 'data' and 'json_data' in batch request")
-            body_value = json.dumps(json_data)
+            if _json_dumps is not None:
+                body_value = _json_dumps(json_data).decode("utf-8")
+            else:
+                body_value = json.dumps(json_data)
             headers["Content-Type"] = "application/json"
         elif data is not None:
             if isinstance(data, dict):
