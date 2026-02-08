@@ -20,8 +20,12 @@ from collections.abc import Mapping, Sequence
 from types import TracebackType
 from typing import Any, Dict, Iterable, Literal, Optional, Tuple, Union
 
+from ._ffi import _has_callback_support
 from ._ffi import send_batch_request as ffi_send_batch_request
 from ._ffi import send_request as ffi_send_request
+from ._ffi import send_request_async as ffi_send_request_async
+from ._ffi import send_request_async_callback as ffi_send_request_async_callback
+from ._ffi import send_requests_batch as ffi_send_requests_batch
 from .exceptions import CycleTLSError
 from .fingerprints import FingerprintRegistry, TLSFingerprint
 from .schema import Request, Response, _dict_to_response
@@ -193,9 +197,25 @@ class CycleTLS:
         self.close()
         return False
 
+    async def __aenter__(self) -> "CycleTLS":
+        """Allow usage as an async context manager."""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Literal[False]:
+        """Cleanup resources when exiting an async context manager block."""
+        await self.aclose()
+        return False
+
     def __del__(self) -> None:  # pragma: no cover - best-effort cleanup
+        # Directly set _closed to avoid issues with subclasses that override
+        # close() as a coroutine (e.g. AsyncCycleTLS).
         try:
-            self.close()
+            self._closed = True
         except Exception:
             pass
 
@@ -203,7 +223,23 @@ class CycleTLS:
         """Close the client (no-op retained for API compatibility)."""
         self._closed = True
 
-    def request(
+    async def aclose(self) -> None:
+        """Async close for httpx-compatible async cleanup.
+
+        This is the async counterpart of :meth:`close`. It allows usage with
+        async cleanup patterns like ``await client.aclose()``.
+
+        Directly sets ``_closed`` rather than calling :meth:`close` so that
+        subclasses that override ``close()`` as a coroutine (e.g.
+        ``AsyncCycleTLS``) work without needing to be awaited separately.
+        """
+        self._closed = True
+
+    # ------------------------------------------------------------------
+    # Shared request preparation (used by both sync and async paths)
+    # ------------------------------------------------------------------
+
+    def _prepare_request(
         self,
         method: str,
         url: str,
@@ -213,9 +249,12 @@ class CycleTLS:
         files: Optional[Dict[str, Any]] = None,
         fingerprint: Optional[Union[str, TLSFingerprint]] = None,
         **kwargs: Any,
-    ) -> Response:
-        """
-        Send an HTTP request with enhanced data handling.
+    ) -> Dict[str, Any]:
+        """Prepare a request payload dict without sending it.
+
+        This method handles all parameter normalisation (fingerprints, deprecated
+        body params, header extraction, cookie conversion, multipart encoding,
+        etc.) and returns the payload ready for the FFI layer.
 
         Args:
             method: HTTP method (GET, POST, etc.)
@@ -223,23 +262,13 @@ class CycleTLS:
             params: Query parameters to append to URL
             data: Form data or raw body
             json_data: JSON data (auto-serialized)
-            files: File uploads (not yet supported)
+            files: File uploads (multipart form data)
             fingerprint: TLS fingerprint profile name or TLSFingerprint instance.
-                        If a string, looks up the profile in FingerprintRegistry.
-                        Applies the profile's ja3, user_agent, header_order, etc.
             **kwargs: Additional CycleTLS options (headers, cookies, proxy, etc.)
 
         Returns:
-            Response: Response object with status, headers, body, cookies, etc.
-
-        Example:
-            >>> # Use a built-in fingerprint profile
-            >>> response = client.get("https://example.com", fingerprint="chrome_120")
-            >>>
-            >>> # Or use a custom TLSFingerprint instance
-            >>> from cycletls.fingerprints import TLSFingerprint
-            >>> custom = TLSFingerprint(name="custom", ja3="...", user_agent="Custom/1.0")
-            >>> response = client.get("https://example.com", fingerprint=custom)
+            Payload dictionary suitable for ``ffi_send_request`` /
+            ``ffi_send_request_async``.
         """
         if self._closed:
             raise CycleTLSError("CycleTLS client is closed")
@@ -376,12 +405,19 @@ class CycleTLS:
             if "proxy" in kwargs and kwargs["proxy"]:
                 logger.debug(f"Using proxy: {kwargs['proxy']}")
 
-        try:
-            response_data = ffi_send_request(payload)
-        except Exception as exc:  # pragma: no cover - unexpected backend failure
-            logger.error(f"Request to {url} failed: {exc}")
-            raise CycleTLSError(f"Failed to execute CycleTLS request: {exc}") from exc
+        return payload
 
+    @staticmethod
+    def _parse_response(response_data: Dict[str, Any], url: str = "") -> Response:
+        """Convert raw FFI response data into a Response object.
+
+        Args:
+            response_data: Raw dict from the FFI layer.
+            url: Original request URL (for error messages).
+
+        Returns:
+            Parsed Response object.
+        """
         if not isinstance(response_data, dict):
             logger.error("Invalid response payload received from CycleTLS backend")
             raise CycleTLSError("Invalid response payload received from CycleTLS backend")
@@ -399,6 +435,61 @@ class CycleTLS:
         except Exception as exc:  # pragma: no cover - validation error
             logger.error(f"Failed to parse response: {exc}")
             raise CycleTLSError(f"Failed to parse CycleTLS response: {exc}") from exc
+
+    # ------------------------------------------------------------------
+    # Synchronous request methods
+    # ------------------------------------------------------------------
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        **kwargs: Any,
+    ) -> Response:
+        """
+        Send an HTTP request with enhanced data handling.
+
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            url: Target URL
+            params: Query parameters to append to URL
+            data: Form data or raw body
+            json_data: JSON data (auto-serialized)
+            files: File uploads (not yet supported)
+            fingerprint: TLS fingerprint profile name or TLSFingerprint instance.
+                        If a string, looks up the profile in FingerprintRegistry.
+                        Applies the profile's ja3, user_agent, header_order, etc.
+            **kwargs: Additional CycleTLS options (headers, cookies, proxy, etc.)
+
+        Returns:
+            Response: Response object with status, headers, body, cookies, etc.
+
+        Example:
+            >>> # Use a built-in fingerprint profile
+            >>> response = client.get("https://example.com", fingerprint="chrome_120")
+            >>>
+            >>> # Or use a custom TLSFingerprint instance
+            >>> from cycletls.fingerprints import TLSFingerprint
+            >>> custom = TLSFingerprint(name="custom", ja3="...", user_agent="Custom/1.0")
+            >>> response = client.get("https://example.com", fingerprint=custom)
+        """
+        payload = self._prepare_request(
+            method, url, params=params, data=data, json_data=json_data,
+            files=files, fingerprint=fingerprint, **kwargs,
+        )
+
+        try:
+            response_data = ffi_send_request(payload)
+        except Exception as exc:  # pragma: no cover - unexpected backend failure
+            logger.error(f"Request to {url} failed: {exc}")
+            raise CycleTLSError(f"Failed to execute CycleTLS request: {exc}") from exc
+
+        return self._parse_response(response_data, url)
 
     def get(self, url, params=None, fingerprint=None, **kwargs) -> Response:
         """Sends a GET request."""
@@ -511,20 +602,7 @@ class CycleTLS:
             logger.error(f"Batch request failed: {exc}")
             raise CycleTLSError(f"Failed to execute batch request: {exc}") from exc
 
-        # Convert response dicts to Response objects
-        responses = []
-        for response_data in response_data_list:
-            if not isinstance(response_data, dict):
-                logger.error("Invalid response payload in batch result")
-                raise CycleTLSError("Invalid response payload in batch result")
-            try:
-                response = _dict_to_response(response_data)
-                responses.append(response)
-            except Exception as exc:  # pragma: no cover - validation error
-                logger.error(f"Failed to parse batch response: {exc}")
-                raise CycleTLSError(f"Failed to parse batch response: {exc}") from exc
-
-        return responses
+        return [self._parse_response(rd) for rd in response_data_list]
 
     def _build_batch_payload(self, req: dict, request_id: str) -> dict:
         """Build a payload dict for a batch request item.
@@ -598,3 +676,143 @@ class CycleTLS:
             "requestId": request_id,
             "options": options,
         }
+
+    # ------------------------------------------------------------------
+    # Asynchronous request methods
+    # ------------------------------------------------------------------
+
+    async def arequest(
+        self,
+        method: str,
+        url: str,
+        params: Optional[ParamsType] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        fingerprint: Optional[Union[str, TLSFingerprint]] = None,
+        poll_interval: float = 0.0,
+        timeout: float = 30.0,
+        **kwargs: Any,
+    ) -> Response:
+        """Send an async HTTP request with enhanced data handling.
+
+        This is the async counterpart of :meth:`request`. It shares the same
+        request preparation logic and adds async-specific polling parameters.
+
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            url: Target URL
+            params: Query parameters to append to URL
+            data: Form data or raw body
+            json_data: JSON data (auto-serialized)
+            files: File uploads (multipart form data)
+            fingerprint: TLS fingerprint profile name or TLSFingerprint instance.
+            poll_interval: Time between completion checks (default: 0s = adaptive)
+            timeout: Maximum wait time for request completion (default: 30s)
+            **kwargs: Additional CycleTLS options (headers, cookies, proxy, etc.)
+
+        Returns:
+            Response: Response object with status, headers, body, cookies, etc.
+        """
+        payload = self._prepare_request(
+            method, url, params=params, data=data, json_data=json_data,
+            files=files, fingerprint=fingerprint, **kwargs,
+        )
+
+        try:
+            # Use callback-based async (zero-copy, pipe notification) when available,
+            # fall back to polling-based async otherwise
+            if _has_callback_support():
+                try:
+                    response_data = await ffi_send_request_async_callback(payload, timeout)
+                except RuntimeError:
+                    # Callback path can fail under heavy concurrent load (Go-side
+                    # race with HTTP/2 stream cancellation). Fall back to polling.
+                    logger.debug("Callback async failed, falling back to polling")
+                    response_data = await ffi_send_request_async(payload, poll_interval, timeout)
+            else:
+                response_data = await ffi_send_request_async(payload, poll_interval, timeout)
+        except Exception as exc:  # pragma: no cover - unexpected backend failure
+            logger.error(f"Async request to {url} failed: {exc}")
+            raise CycleTLSError(f"Failed to execute async CycleTLS request: {exc}") from exc
+
+        return self._parse_response(response_data, url)
+
+    async def aget(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+        """Sends an async GET request."""
+        return await self.arequest("get", url, params=params, fingerprint=fingerprint, **kwargs)
+
+    async def aoptions(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+        """Sends an async OPTIONS request."""
+        return await self.arequest("options", url, params=params, fingerprint=fingerprint, **kwargs)
+
+    async def ahead(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+        """Sends an async HEAD request."""
+        return await self.arequest("head", url, params=params, fingerprint=fingerprint, **kwargs)
+
+    async def apost(
+        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+    ) -> Response:
+        """Sends an async POST request."""
+        return await self.arequest(
+            "post", url, params=params, data=data, json_data=json_data,
+            fingerprint=fingerprint, **kwargs,
+        )
+
+    async def aput(
+        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+    ) -> Response:
+        """Sends an async PUT request."""
+        return await self.arequest(
+            "put", url, params=params, data=data, json_data=json_data,
+            fingerprint=fingerprint, **kwargs,
+        )
+
+    async def apatch(
+        self, url, params=None, data=None, json_data=None, fingerprint=None, **kwargs
+    ) -> Response:
+        """Sends an async PATCH request."""
+        return await self.arequest(
+            "patch", url, params=params, data=data, json_data=json_data,
+            fingerprint=fingerprint, **kwargs,
+        )
+
+    async def adelete(self, url, params=None, fingerprint=None, **kwargs) -> Response:
+        """Sends an async DELETE request."""
+        return await self.arequest("delete", url, params=params, fingerprint=fingerprint, **kwargs)
+
+    async def abatch(self, requests: list[dict]) -> list[Response]:
+        """Send multiple requests concurrently as an async batch.
+
+        Each request is submitted asynchronously and all run in parallel.
+
+        Args:
+            requests: List of request dictionaries (same format as :meth:`batch`).
+
+        Returns:
+            List of Response objects in the same order as input requests.
+
+        Raises:
+            CycleTLSError: If the client is closed or any request fails.
+        """
+        if self._closed:
+            raise CycleTLSError("CycleTLS client is closed")
+
+        if not requests:
+            return []
+
+        # Build payloads for each request
+        payloads = []
+        for i, req in enumerate(requests):
+            payload = self._build_batch_payload(req, request_id=f"batch_{i}")
+            payloads.append(payload)
+
+        logger.debug(f"Sending async batch of {len(payloads)} requests")
+
+        try:
+            response_data_list = await ffi_send_requests_batch(payloads)
+        except Exception as exc:  # pragma: no cover - unexpected backend failure
+            logger.error(f"Async batch request failed: {exc}")
+            raise CycleTLSError(f"Failed to execute async batch request: {exc}") from exc
+
+        return [self._parse_response(rd) for rd in response_data_list]

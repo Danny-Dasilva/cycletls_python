@@ -252,17 +252,17 @@ class SSEConnection:
 
     async def connect_async(self) -> None:
         """Async version of connect()."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self.connect)
 
     async def next_event_async(self) -> Optional[SSEEvent]:
         """Async version of next_event()."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.next_event)
 
     async def close_async(self) -> None:
         """Async version of close()."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self.close)
 
     def __enter__(self) -> "SSEConnection":

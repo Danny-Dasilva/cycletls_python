@@ -74,7 +74,7 @@ from .sse import (
     SSEError,
 )
 from .sse import (
-    SSEEvent as SSEEventClass,
+    SSEEvent as SSEEvent,  # type: ignore[misc,assignment]  # override schema.py version
 )
 from .structures import CaseInsensitiveDict, CookieJar
 
@@ -85,15 +85,10 @@ from .websocket import (
     WebSocketError,
 )
 from .websocket import (
-    WebSocketMessage as WSMessage,
+    WebSocketMessage as WebSocketMessage,  # type: ignore[misc,assignment]  # override schema.py version
 )
 
-# Re-export with proper names (override schema.py versions with full implementations)
-WebSocketMessage = WSMessage  # type: ignore[misc,assignment]
-SSEEvent = SSEEventClass  # type: ignore[misc,assignment]
-
-# Import global session management
-# Import configuration management
+# Import configuration and global session management
 from ._config import (  # noqa: E402
     _CONFIGURABLE_ATTRS,
     _config,
@@ -286,9 +281,9 @@ async def async_request(method: str, url: str, **kwargs) -> "Response":
         >>> import cycletls
         >>> response = await cycletls.async_request('GET', 'https://example.com')
     """
-    async with AsyncCycleTLS() as client:
+    async with CycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
-        return await client.request(method, url, **merged_kwargs)
+        return await client.arequest(method, url, **merged_kwargs)
 
 
 async def aget(url: str, **kwargs) -> "Response":
@@ -308,9 +303,9 @@ async def aget(url: str, **kwargs) -> "Response":
         >>> # Or use the original function with await:
         >>> response = await cycletls.get(url)  # Will auto-detect async context
     """
-    async with AsyncCycleTLS() as client:
+    async with CycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
-        return await client.get(url, **merged_kwargs)
+        return await client.aget(url, **merged_kwargs)
 
 
 async def apost(
@@ -332,48 +327,48 @@ async def apost(
         >>> import cycletls
         >>> response = await cycletls.apost('https://api.example.com', json_data={'key': 'value'})
     """
-    async with AsyncCycleTLS() as client:
+    async with CycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
-        return await client.post(url, data=data, json_data=json_data, **merged_kwargs)
+        return await client.apost(url, data=data, json_data=json_data, **merged_kwargs)
 
 
 async def aput(
     url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs
 ) -> "Response":
     """Make an async PUT request."""
-    async with AsyncCycleTLS() as client:
+    async with CycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
-        return await client.put(url, data=data, json_data=json_data, **merged_kwargs)
+        return await client.aput(url, data=data, json_data=json_data, **merged_kwargs)
 
 
 async def apatch(
     url: str, data: Optional[Any] = None, json_data: Optional[Dict] = None, **kwargs
 ) -> "Response":
     """Make an async PATCH request."""
-    async with AsyncCycleTLS() as client:
+    async with CycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
-        return await client.patch(url, data=data, json_data=json_data, **merged_kwargs)
+        return await client.apatch(url, data=data, json_data=json_data, **merged_kwargs)
 
 
 async def adelete(url: str, **kwargs) -> "Response":
     """Make an async DELETE request."""
-    async with AsyncCycleTLS() as client:
+    async with CycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
-        return await client.delete(url, **merged_kwargs)
+        return await client.adelete(url, **merged_kwargs)
 
 
 async def ahead(url: str, **kwargs) -> "Response":
     """Make an async HEAD request."""
-    async with AsyncCycleTLS() as client:
+    async with CycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
-        return await client.head(url, **merged_kwargs)
+        return await client.ahead(url, **merged_kwargs)
 
 
 async def aoptions(url: str, **kwargs) -> "Response":
     """Make an async OPTIONS request."""
-    async with AsyncCycleTLS() as client:
+    async with CycleTLS() as client:
         merged_kwargs = _merge_defaults(kwargs)
-        return await client.options(url, **merged_kwargs)
+        return await client.aoptions(url, **merged_kwargs)
 
 
 # Module-level __getattr__ for configuration access (Python 3.7+)
