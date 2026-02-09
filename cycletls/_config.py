@@ -31,26 +31,8 @@ _CONFIG_TO_PARAM_MAPPING = {
     "default_order_headers_as_provided": "order_headers_as_provided",
 }
 
-# Valid configuration attributes
-_CONFIGURABLE_ATTRS = {
-    "default_ja3",
-    "default_ja4r",
-    "default_http2_fingerprint",
-    "default_quic_fingerprint",
-    "default_disable_grease",
-    "default_user_agent",
-    "default_proxy",
-    "default_timeout",
-    "default_enable_connection_reuse",
-    "default_insecure_skip_verify",
-    "default_server_name",
-    "default_force_http1",
-    "default_force_http3",
-    "default_protocol",
-    "default_disable_redirect",
-    "default_header_order",
-    "default_order_headers_as_provided",
-}
+# Valid configuration attributes (derived from mapping to avoid duplication)
+_CONFIGURABLE_ATTRS = set(_CONFIG_TO_PARAM_MAPPING)
 
 
 def _validate_config(name: str, value: Any) -> None:

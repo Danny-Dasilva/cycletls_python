@@ -324,7 +324,7 @@ class Response:
     @property
     def reason(self) -> str:
         """Return the HTTP reason phrase for the status code."""
-        return self._get_reason()
+        return _STATUS_PHRASES.get(self.status_code, "Unknown")
 
     @property
     def url(self) -> Optional[str]:
@@ -339,10 +339,6 @@ class Response:
         if match:
             return match.group(1).strip("\"'")
         return "utf-8"
-
-    def _get_reason(self) -> str:
-        """Helper to get HTTP reason phrases for status codes."""
-        return _STATUS_PHRASES.get(self.status_code, "Unknown")
 
     def raise_for_status(self) -> None:
         """Raise HTTPError if the response status indicates an error."""
@@ -512,44 +508,82 @@ def _raise_for_error_response(data: dict) -> None:
         return  # Not an error, don't raise
 
     # Timeout errors (status 408 or timeout patterns)
-    if status == 408 or _matches_any(error_lower, (
-        "timeout", "deadline exceeded", "request canceled",
-        "context canceled", "context done", "i/o timeout",
-    )):
+    if status == 408 or _matches_any(
+        error_lower,
+        (
+            "timeout",
+            "deadline exceeded",
+            "request canceled",
+            "context canceled",
+            "context done",
+            "i/o timeout",
+        ),
+    ):
         raise Timeout(f"Request timed out: {error_msg}")
 
     # DNS/lookup failure (status 421 or DNS patterns)
-    if status == 421 or _matches_any(error_lower, (
-        "no such host", "lookup", "dnserror",
-        "getaddrinfo", "could not resolve", "dns",
-    )):
+    if status == 421 or _matches_any(
+        error_lower,
+        (
+            "no such host",
+            "lookup",
+            "dnserror",
+            "getaddrinfo",
+            "could not resolve",
+            "dns",
+        ),
+    ):
         raise ConnectionError(f"DNS lookup failed: {error_msg}")
 
     # Connection errors (general) - check BEFORE TLS status code to handle EOF, etc.
     # that might come with TLS-related status codes due to connection issues during handshake
-    if _matches_any(error_lower, (
-        "connection reset", "connection closed", "closed network connection",
-        "eof", "broken pipe", "network is unreachable",
-    )):
+    if _matches_any(
+        error_lower,
+        (
+            "connection reset",
+            "connection closed",
+            "closed network connection",
+            "eof",
+            "broken pipe",
+            "network is unreachable",
+        ),
+    ):
         raise ConnectionError(f"Connection error: {error_msg}")
 
     # TLS/certificate errors (status 495)
     # Only match if there are actual certificate-related keywords in the error
-    if status == 495 and _matches_any(error_lower, (
-        "certificate", "x509:", "tls: failed to verify", "handshake",
-    )):
+    if status == 495 and _matches_any(
+        error_lower,
+        (
+            "certificate",
+            "x509:",
+            "tls: failed to verify",
+            "handshake",
+        ),
+    ):
         raise TLSError(f"TLS error: {error_msg}")
 
     # Also check for TLS patterns without specific status code
-    if _matches_any(error_lower, (
-        "certificate", "x509:", "tls: failed to verify", "ssl",
-    )):
+    if _matches_any(
+        error_lower,
+        (
+            "certificate",
+            "x509:",
+            "tls: failed to verify",
+            "ssl",
+        ),
+    ):
         raise TLSError(f"TLS error: {error_msg}")
 
     # Connection refused (status 502 or connection refused patterns)
-    if status == 502 or _matches_any(error_lower, (
-        "connection refused", "refused", "no connection could be made",
-    )):
+    if status == 502 or _matches_any(
+        error_lower,
+        (
+            "connection refused",
+            "refused",
+            "no connection could be made",
+        ),
+    ):
         raise ConnectionError(f"Connection refused: {error_msg}")
 
     # Address errors (status 405)
@@ -557,11 +591,18 @@ def _raise_for_error_response(data: dict) -> None:
         raise ConnectionError(f"Address error: {error_msg}")
 
     # Invalid URL patterns
-    if _matches_any(error_lower, (
-        "invalid url", "unsupported protocol", "missing protocol scheme",
-        "invalid character", "parse",
-        "first path segment in url cannot contain colon", "unsupported scheme",
-    )):
+    if _matches_any(
+        error_lower,
+        (
+            "invalid url",
+            "unsupported protocol",
+            "missing protocol scheme",
+            "invalid character",
+            "parse",
+            "first path segment in url cannot contain colon",
+            "unsupported scheme",
+        ),
+    ):
         raise InvalidURL(f"Invalid URL: {error_msg}")
 
     # Syscall errors (status 401 from Go)
@@ -604,9 +645,7 @@ def _dict_to_response(data: dict, raise_on_error: bool = True) -> Response:
             except Exception as exc:
                 from .exceptions import CycleTLSError
 
-                raise CycleTLSError(
-                    f"Failed to decode BodyBytes from base64: {exc}"
-                ) from exc
+                raise CycleTLSError(f"Failed to decode BodyBytes from base64: {exc}") from exc
 
     # Convert cookies
     raw_cookies = None
