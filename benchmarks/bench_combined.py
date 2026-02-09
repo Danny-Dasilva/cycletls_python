@@ -14,6 +14,7 @@ import csv
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 # Add parent directory to path
@@ -21,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from benchmarks.core import (
     CycleTLSAsyncSession,
+    CycleTLSBatchSession,
     CycleTLSSession,
     PycurlSession,
     Urllib3Session,
@@ -71,7 +73,7 @@ def import_sync_libraries() -> Dict[str, Tuple[Type, str]]:
     try:
         import hrequests
         libraries['hrequests'] = (hrequests.Session, 'sync')
-    except ImportError as e:
+    except (ImportError, AttributeError) as e:
         errors.append(f"hrequests: {e}")
 
     try:
@@ -264,6 +266,54 @@ def write_csv_output(results: List[Dict], output_file: str) -> None:
     print(f"\nCSV written to {output_file}")
 
 
+def run_batch_benchmark(url: str, reps: int = 500) -> Dict:
+    """Run benchmark using CycleTLS batch API (single FFI call)."""
+    try:
+        session = CycleTLSBatchSession()
+    except Exception as e:
+        print(f"  Skipping cycletls batch: {e}")
+        return {}
+
+    start = time.perf_counter()
+    session.batch_get(url, reps)
+    elapsed = time.perf_counter() - start
+    session.close()
+
+    us_per_req = (elapsed / reps) * 1_000_000
+    req_per_sec = reps / elapsed
+    return {
+        "library": "**cycletls** (batch)",
+        "us_per_req": us_per_req,
+        "req_per_sec": req_per_sec,
+    }
+
+
+def run_threaded_benchmark(url: str, reps: int = 500, workers: int = 16) -> Dict:
+    """Run benchmark using CycleTLS sync with ThreadPoolExecutor."""
+    from cycletls import CycleTLS
+    try:
+        session = CycleTLS()
+    except Exception as e:
+        print(f"  Skipping cycletls threaded: {e}")
+        return {}
+
+    start = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(session.get, url) for _ in range(reps)]
+        for f in futures:
+            _ = f.result()
+    elapsed = time.perf_counter() - start
+    session.close()
+
+    us_per_req = (elapsed / reps) * 1_000_000
+    req_per_sec = reps / elapsed
+    return {
+        "library": "**cycletls** (threaded)",
+        "us_per_req": us_per_req,
+        "req_per_sec": req_per_sec,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Combined HTTP client benchmark (sync + async)",
@@ -272,10 +322,18 @@ def main():
     parser.add_argument("--url", default="http://localhost:5001/", help="Target URL")
     parser.add_argument("-r", "--repetitions", type=int, default=500, help="Requests per test")
     parser.add_argument("-o", "--output", default="benchmark_combined.csv", help="Output CSV")
+    parser.add_argument(
+        "-l", "--library",
+        nargs="*",
+        help="Test only specific libraries (e.g. cycletls requests primp). "
+             "Supports: requests, httpx, niquests, curl_cffi, tls_client, primp, "
+             "hrequests, urllib3, pycurl, aiohttp, cycletls, batch, threaded",
+    )
     args = parser.parse_args()
 
     url = args.url
     reps = args.repetitions
+    lib_filter = set(args.library) if args.library else None
 
     print("=" * 70)
     print("Combined HTTP Client Benchmark (Sync + Async)")
@@ -286,6 +344,11 @@ def main():
     print("\nImporting libraries...")
     sync_libs = import_sync_libraries()
     async_libs = import_async_libraries()
+
+    # Apply library filter
+    if lib_filter:
+        sync_libs = {k: v for k, v in sync_libs.items() if k in lib_filter}
+        async_libs = {k: v for k, v in async_libs.items() if k in lib_filter}
 
     # --- Run sync benchmarks ---
     sync_results = {}
@@ -311,6 +374,31 @@ def main():
                 result['mode'] = 'async'
                 async_results[name] = result
 
+    # --- Run batch and threaded benchmarks ---
+    extra_results = []
+    run_batch = lib_filter is None or "batch" in lib_filter or "cycletls" in lib_filter
+    run_threaded = lib_filter is None or "threaded" in lib_filter or "cycletls" in lib_filter
+
+    if run_batch or run_threaded:
+        print("\nExtra benchmarks (batch + threaded):")
+        print("-" * 50)
+
+    if run_batch:
+        batch_result = run_batch_benchmark(url, reps)
+        if batch_result:
+            batch_result['display_name'] = batch_result['library']
+            batch_result['elapsed'] = reps * batch_result['us_per_req'] / 1_000_000
+            batch_result['reps'] = reps
+            extra_results.append(batch_result)
+
+    if run_threaded:
+        threaded_result = run_threaded_benchmark(url, reps)
+        if threaded_result:
+            threaded_result['display_name'] = threaded_result['library']
+            threaded_result['elapsed'] = reps * threaded_result['us_per_req'] / 1_000_000
+            threaded_result['reps'] = reps
+            extra_results.append(threaded_result)
+
     # --- Combine: pick best per library, but keep both sync and async if both tested ---
     def _display_name(name: str, label: str) -> str:
         if name == 'cycletls':
@@ -325,6 +413,9 @@ def main():
             if result is not None:
                 result['display_name'] = _display_name(name, result['label'])
                 combined.append(result)
+
+    # Add extra (batch + threaded) results
+    combined.extend(extra_results)
 
     # Sort by µs/req (fastest first)
     combined.sort(key=lambda x: x['us_per_req'])

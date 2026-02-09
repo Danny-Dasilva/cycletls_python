@@ -869,23 +869,117 @@ func getRequestZeroCopy(data *C.char, dataLen C.int, outLen *C.int) *C.char {
 
     request.Options.Method = normalizeMethod(request.Options.Method)
 
-    // Use goroutine-based execution
-    resultCh := make(chan map[string]interface{}, 1)
+    client := getFFIClient()
+    resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
+    if err != nil {
+        log.Printf("cycletls: request failed: %v", err)
+        return marshalPayloadZeroCopy(buildErrorPayload(request.RequestID, err.Error()), outLen)
+    }
+    return marshalPayloadZeroCopy(buildResponsePayload(request.RequestID, resp), outLen)
+}
 
+//export submitRequestAsyncZeroCopy
+func submitRequestAsyncZeroCopy(data *C.char, dataLen C.int) C.uintptr_t {
+    if data == nil || dataLen <= 0 {
+        return 0
+    }
+
+    // Convert C bytes to Go slice (zero-copy style)
+    msgpackData := C.GoBytes(unsafe.Pointer(data), dataLen)
+
+    request := cycleTLSRequest{}
+    if err := msgpack.Unmarshal(msgpackData, &request); err != nil {
+        log.Printf("cycletls: failed to unmarshal async zerocopy request: %v", err)
+        return 0
+    }
+
+    if request.RequestID == "" {
+        request.RequestID = "cycleTLSRequest"
+    }
+
+    request.Options.Method = normalizeMethod(request.Options.Method)
+
+    // Create result storage
+    resultStore := &asyncResultWithNotify{
+        requestID: request.RequestID,
+        ready:     false,
+    }
+
+    // Create handle using cgo.Handle
+    handle := cgo.NewHandle(resultStore)
+    handleID := uintptr(handle)
+    asyncNotifyResults.Store(handleID, resultStore)
+
+    // Spawn goroutine to execute request
     go func() {
         client := getFFIClient()
+
+        var payload map[string]interface{}
         resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
         if err != nil {
-            log.Printf("cycletls: request failed: %v", err)
-            resultCh <- buildErrorPayload(request.RequestID, err.Error())
+            payload = buildErrorPayload(request.RequestID, err.Error())
         } else {
-            resultCh <- buildResponsePayload(request.RequestID, resp)
+            payload = buildResponsePayload(request.RequestID, resp)
         }
+
+        // Marshal result to msgpack
+        resultBytes, marshalErr := msgpack.Marshal(payload)
+        if marshalErr != nil {
+            // Fallback error response
+            fallback := buildErrorPayload(request.RequestID, "failed to marshal response")
+            resultBytes, _ = msgpack.Marshal(fallback)
+        }
+
+        // Store result
+        resultStore.mu.Lock()
+        resultStore.result = resultBytes
+        resultStore.ready = true
+        resultStore.mu.Unlock()
     }()
 
-    // Block until result is ready
-    payload := <-resultCh
-    return marshalPayloadZeroCopy(payload, outLen)
+    return C.uintptr_t(handleID)
+}
+
+//export getAsyncResultZeroCopy
+func getAsyncResultZeroCopy(handlePtr C.uintptr_t, outLen *C.int) *C.char {
+    if handlePtr == 0 {
+        return nil
+    }
+
+    handleID := uintptr(handlePtr)
+
+    // Retrieve result from store
+    val, ok := asyncNotifyResults.Load(handleID)
+    if !ok {
+        return nil
+    }
+
+    resultStore := val.(*asyncResultWithNotify)
+
+    // Check if ready
+    resultStore.mu.Lock()
+    if !resultStore.ready {
+        resultStore.mu.Unlock()
+        return nil
+    }
+    resultBytes := resultStore.result
+    resultStore.mu.Unlock()
+
+    // Cleanup
+    asyncNotifyResults.Delete(handleID)
+    handle := cgo.Handle(handlePtr)
+    handle.Delete()
+
+    // Return result (caller must free with freeString)
+    *outLen = C.int(len(resultBytes))
+    return C.CString(string(resultBytes))
+}
+
+//export freeMemory
+func freeMemory(ptr *C.char) {
+    if ptr != nil {
+        C.free(unsafe.Pointer(ptr))
+    }
 }
 
 //export sendBatchRequestZeroCopy

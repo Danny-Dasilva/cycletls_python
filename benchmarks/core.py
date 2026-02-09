@@ -47,6 +47,22 @@ class CycleTLSAsyncSession:
         self.client.close()
 
 
+class CycleTLSBatchSession:
+    """Wrapper for CycleTLS batch API to provide a Session-like interface."""
+
+    def __init__(self):
+        from cycletls import CycleTLS
+        self.client = CycleTLS()
+
+    def batch_get(self, url: str, count: int):
+        """Send `count` GET requests via batch API."""
+        requests = [{"url": url, "method": "GET"} for _ in range(count)]
+        return self.client.batch(requests)
+
+    def close(self):
+        self.client.close()
+
+
 class Urllib3Session:
     """Wrapper for urllib3 to provide a Session-like interface."""
 

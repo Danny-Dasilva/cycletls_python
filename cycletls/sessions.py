@@ -52,14 +52,26 @@ class Session(CycleTLS):
         self,
         base_url: Optional[str] = None,
         auth: Optional[Tuple[str, str]] = None,
+        use_batching: bool = False,
+        batch_size: int = 32,
+        flush_interval: float = 0.0001,
     ):
         """Initialize a Session.
 
         Args:
             base_url: Base URL prepended to relative URLs (e.g. 'https://api.example.com')
             auth: Default (username, password) tuple for HTTP Basic authentication
+            use_batching: If True, route individual requests through the batch
+                FFI path for higher throughput.
+            batch_size: Maximum number of requests to accumulate per batch.
+            flush_interval: Maximum time (seconds) to wait before flushing a
+                partial batch.
         """
-        super().__init__()
+        super().__init__(
+            use_batching=use_batching,
+            batch_size=batch_size,
+            flush_interval=flush_interval,
+        )
         self.cookies = CookieJar([])
         self.headers = CaseInsensitiveDict({})
         self.base_url = base_url.rstrip("/") if base_url else None

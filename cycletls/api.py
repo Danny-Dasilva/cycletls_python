@@ -20,6 +20,7 @@ from collections.abc import Mapping, Sequence
 from types import TracebackType
 from typing import Any, Dict, Iterable, Literal, Optional, Tuple, Union
 
+from ._batcher import RequestBatcher, get_batcher, shutdown_batcher
 from ._ffi import _has_callback_support
 from ._ffi import send_batch_request as ffi_send_batch_request
 from ._ffi import send_request as ffi_send_request
@@ -179,9 +180,30 @@ def _encode_multipart_formdata(
 class CycleTLS:
     """CycleTLS client for making HTTP requests with advanced TLS fingerprinting."""
 
-    def __init__(self) -> None:
-        """Initialize CycleTLS client."""
+    def __init__(
+        self,
+        use_batching: bool = False,
+        batch_size: int = 32,
+        flush_interval: float = 0.0001,
+    ) -> None:
+        """Initialize CycleTLS client.
+
+        Args:
+            use_batching: If True, route individual requests through the batch
+                FFI path for higher throughput.
+            batch_size: Maximum number of requests to accumulate per batch.
+            flush_interval: Maximum time (seconds) to wait before flushing a
+                partial batch.
+        """
         self._closed = False
+        self._use_batching = use_batching
+        self._batcher = None
+        if use_batching:
+            self._batcher = get_batcher(
+                batch_fn=ffi_send_batch_request,
+                batch_size=batch_size,
+                flush_interval=flush_interval,
+            )
 
     def __enter__(self) -> "CycleTLS":
         """Allow usage as a context manager."""
@@ -220,7 +242,10 @@ class CycleTLS:
             pass
 
     def close(self) -> None:
-        """Close the client (no-op retained for API compatibility)."""
+        """Close the client and shut down batcher if active."""
+        if self._batcher is not None:
+            shutdown_batcher()
+            self._batcher = None
         self._closed = True
 
     async def aclose(self) -> None:
@@ -506,6 +531,10 @@ class CycleTLS:
             json=json, files=files, fingerprint=fingerprint, auth=auth, **kwargs,
         )
 
+        if self._batcher is not None:
+            result = self._batcher.submit_sync(payload)
+            return self._parse_response(result, url)
+
         try:
             response_data = ffi_send_request(payload)
         except Exception as exc:  # pragma: no cover - unexpected backend failure
@@ -786,6 +815,10 @@ class CycleTLS:
             method, url, params=params, data=data, json_data=json_data,
             json=json, files=files, fingerprint=fingerprint, auth=auth, **kwargs,
         )
+
+        if self._batcher is not None:
+            result = await self._batcher.submit_async(payload)
+            return self._parse_response(result, url)
 
         try:
             if use_callback and _has_callback_support():

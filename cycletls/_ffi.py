@@ -58,6 +58,13 @@ _ffi.cdef(
     uintptr_t submitRequestAsyncWithNotify(char* data, int dataLen, int notifyFD);
     // Retrieves result after notification (guaranteed ready)
     char* getAsyncResult(uintptr_t handle, int* outLen);
+
+    // Zero-copy async API (raw msgpack, no base64)
+    uintptr_t submitRequestAsyncZeroCopy(char* data, int dataLen);
+    char* getAsyncResultZeroCopy(uintptr_t handle, int* outLen);
+
+    // Memory management for zero-copy results
+    void freeMemory(char* ptr);
     """
 )
 
@@ -65,6 +72,7 @@ _lib = None
 _lib_lock = threading.Lock()
 _use_zerocopy = None  # None = auto-detect, True/False = forced
 _use_callback = None  # None = auto-detect, True/False = forced
+_use_async_zerocopy: Optional[bool] = None
 
 
 def _get_library_filenames() -> list[str]:
@@ -143,21 +151,27 @@ def _load_library():
         raise CycleTLSError(error_msg)
 
 
+def _has_symbol(name: str) -> bool:
+    """Check if the loaded library exports a given symbol."""
+    lib = _load_library()
+    try:
+        getattr(lib, name)
+        return True
+    except AttributeError:
+        return False
+
+
 def _has_zerocopy_support() -> bool:
     """Check if the loaded library supports zero-copy API."""
     global _use_zerocopy
     if _use_zerocopy is not None:
         return _use_zerocopy
 
-    lib = _load_library()
-    try:
-        # Check if getRequestZeroCopy exists
-        _ = lib.getRequestZeroCopy
-        _use_zerocopy = True
-        logger.debug("Zero-copy FFI mode enabled")
-    except AttributeError:
-        _use_zerocopy = False
-        logger.debug("Zero-copy FFI not available, using base64 mode")
+    _use_zerocopy = _has_symbol("getRequestZeroCopy")
+    logger.debug(
+        "Zero-copy FFI mode enabled" if _use_zerocopy
+        else "Zero-copy FFI not available, using base64 mode"
+    )
     return _use_zerocopy
 
 
@@ -167,16 +181,29 @@ def _has_callback_support() -> bool:
     if _use_callback is not None:
         return _use_callback
 
-    lib = _load_library()
-    try:
-        _ = lib.submitRequestAsyncWithNotify
-        _ = lib.getAsyncResult
-        _use_callback = True
-        logger.debug("Callback-based async API enabled")
-    except AttributeError:
-        _use_callback = False
-        logger.debug("Callback-based async API not available, using polling fallback")
+    _use_callback = (
+        _has_symbol("submitRequestAsyncWithNotify") and _has_symbol("getAsyncResult")
+    )
+    logger.debug(
+        "Callback-based async API enabled" if _use_callback
+        else "Callback-based async API not available, using polling fallback"
+    )
     return _use_callback
+
+
+def _has_async_zerocopy_support() -> bool:
+    """Check if the loaded library supports zero-copy async API."""
+    global _use_async_zerocopy
+    if _use_async_zerocopy is not None:
+        return _use_async_zerocopy
+    _use_async_zerocopy = (
+        _has_symbol("submitRequestAsyncZeroCopy") and _has_symbol("getAsyncResultZeroCopy")
+    )
+    logger.debug(
+        "Zero-copy async API enabled" if _use_async_zerocopy
+        else "Zero-copy async API not available"
+    )
+    return _use_async_zerocopy
 
 
 def _send_request_zerocopy(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -334,6 +361,28 @@ def check_request_async(handle: int) -> Optional[Dict[str, Any]]:
         raise CycleTLSError(f"Failed to decode response data: {exc}") from exc
 
 
+def submit_request_async_zerocopy(payload: dict) -> int:
+    """Submit an async request using zero-copy (raw msgpack, no base64)."""
+    lib = _load_library()
+    msgpack_data = ormsgpack.packb(payload)
+    buf = _ffi.from_buffer(msgpack_data)
+    handle = lib.submitRequestAsyncZeroCopy(buf, len(msgpack_data))
+    return int(handle)
+
+
+def check_request_async_zerocopy(handle: int) -> Optional[dict]:
+    """Check if an async zero-copy result is ready. Returns dict or None."""
+    lib = _load_library()
+    out_len = _ffi.new("int*")
+    result_ptr = lib.getAsyncResultZeroCopy(handle, out_len)
+    if result_ptr == _ffi.NULL:
+        return None
+    length = out_len[0]
+    data = bytes(_ffi.buffer(result_ptr, length))
+    lib.freeString(result_ptr)
+    return ormsgpack.unpackb(data)
+
+
 async def send_request_async(
     payload: Dict[str, Any], poll_interval: float = 0.0, timeout: float = 30.0
 ) -> Dict[str, Any]:
@@ -351,8 +400,16 @@ async def send_request_async(
         CycleTLSError: If request fails
         asyncio.TimeoutError: If timeout is exceeded
     """
+    # Auto-select zero-copy submit/check when available
+    if _has_async_zerocopy_support():
+        _submit_fn = submit_request_async_zerocopy
+        _check_fn = check_request_async_zerocopy
+    else:
+        _submit_fn = submit_request_async
+        _check_fn = check_request_async
+
     # Submit request
-    handle = submit_request_async(payload)
+    handle = _submit_fn(payload)
 
     # Poll for completion with adaptive backoff
     loop = asyncio.get_running_loop()
@@ -361,7 +418,7 @@ async def send_request_async(
 
     while True:
         # Check if ready
-        result = check_request_async(handle)
+        result = _check_fn(handle)
         if result is not None:
             return result
 
@@ -608,9 +665,12 @@ __all__ = [
     "send_request",
     "submit_request_async",
     "check_request_async",
+    "submit_request_async_zerocopy",
+    "check_request_async_zerocopy",
     "send_request_async",
     "send_request_async_callback",
     "send_requests_batch",
     "send_batch_request",
     "_has_callback_support",
+    "_has_async_zerocopy_support",
 ]

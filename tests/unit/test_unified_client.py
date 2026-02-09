@@ -88,7 +88,8 @@ class TestPrepareRequest:
             "POST", "https://example.com", json_data={"key": "value"}
         )
         options = payload["options"]
-        assert options["body"] == json.dumps({"key": "value"})
+        # orjson produces compact JSON (no spaces), stdlib json adds spaces
+        assert options["body"] == json.dumps({"key": "value"}, separators=(",", ":"))
         assert options["headers"]["Content-Type"] == "application/json"
 
     def test_form_data_urlencoded(self):

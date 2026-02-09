@@ -372,80 +372,61 @@ def _cookie_to_dict(cookie: Union[Cookie, dict]) -> dict:
 
     Accepts both Cookie dataclass instances and plain dictionaries for flexibility.
     """
-    # Handle dict input (e.g., from test code passing raw dicts)
+    # Extract fields from either dict or Cookie dataclass
     if isinstance(cookie, dict):
-        result = {
-            "name": cookie.get("name", ""),
-            "value": cookie.get("value", ""),
-            "secure": cookie.get("secure", False),
-            "httpOnly": cookie.get("httpOnly", cookie.get("http_only", False)),
-        }
-        if "path" in cookie and cookie["path"] is not None:
-            result["path"] = cookie["path"]
-        if "domain" in cookie and cookie["domain"] is not None:
-            result["domain"] = cookie["domain"]
-        if "expires" in cookie and cookie["expires"] is not None:
-            # Use rawExpires field which accepts a string in various formats
-            exp = cookie["expires"]
-            if hasattr(exp, "strftime"):
-                result["rawExpires"] = exp.strftime("%a, %d %b %Y %H:%M:%S GMT")
-            else:
-                result["rawExpires"] = str(exp)
-        if "maxAge" in cookie and cookie["maxAge"] is not None:
-            result["maxAge"] = cookie["maxAge"]
-        if "max_age" in cookie and cookie["max_age"] is not None:
-            result["maxAge"] = cookie["max_age"]
-        if "sameSite" in cookie and cookie["sameSite"] is not None:
-            result["sameSite"] = _convert_same_site(cookie["sameSite"])
-        if "same_site" in cookie and cookie["same_site"] is not None:
-            result["sameSite"] = _convert_same_site(cookie["same_site"])
-        return result
+        name = cookie.get("name", "")
+        value = cookie.get("value", "")
+        path = cookie.get("path")
+        domain = cookie.get("domain")
+        expires = cookie.get("expires")
+        max_age = cookie.get("maxAge") or cookie.get("max_age")
+        secure = cookie.get("secure", False)
+        http_only = cookie.get("httpOnly", cookie.get("http_only", False))
+        same_site = cookie.get("sameSite") or cookie.get("same_site")
+    else:
+        name = cookie.name
+        value = cookie.value
+        path = cookie.path
+        domain = cookie.domain
+        expires = cookie.expires
+        max_age = cookie.max_age
+        secure = cookie.secure
+        http_only = cookie.http_only
+        same_site = cookie.same_site
 
-    # Handle Cookie dataclass instance
-    result = {
-        "name": cookie.name,
-        "value": cookie.value,
-        "secure": cookie.secure,
-        "httpOnly": cookie.http_only,
+    # Build result dict from extracted values
+    result: dict = {
+        "name": name,
+        "value": value,
+        "secure": secure,
+        "httpOnly": http_only,
     }
-    if cookie.path is not None:
-        result["path"] = cookie.path
-    if cookie.domain is not None:
-        result["domain"] = cookie.domain
-    if cookie.expires is not None:
-        # Use rawExpires field which accepts a string in various formats
-        # Go's Cookie struct has: rawExpires string `msgpack:"rawExpires"`
-        # This avoids the msgpack time.Time binary format issue
-        result["rawExpires"] = cookie.expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
-    if cookie.max_age is not None:
-        result["maxAge"] = cookie.max_age
-    if cookie.same_site is not None:
-        result["sameSite"] = _convert_same_site(cookie.same_site)
+    if path is not None:
+        result["path"] = path
+    if domain is not None:
+        result["domain"] = domain
+    if expires is not None:
+        if hasattr(expires, "strftime"):
+            result["rawExpires"] = expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
+        else:
+            result["rawExpires"] = str(expires)
+    if max_age is not None:
+        result["maxAge"] = max_age
+    if same_site is not None:
+        result["sameSite"] = _convert_same_site(same_site)
     return result
 
 
-def _convert_same_site(value: Union[str, int, None]) -> int:
-    """Convert SameSite value to Go's nhttp.SameSite int type.
+_SAME_SITE_MAP = {"default": 1, "lax": 2, "strict": 3, "none": 4}
 
-    Go's net/http SameSite constants:
-      SameSiteDefaultMode = 1
-      SameSiteLaxMode = 2
-      SameSiteStrictMode = 3
-      SameSiteNoneMode = 4
-    """
+
+def _convert_same_site(value: Union[str, int, None]) -> int:
+    """Convert SameSite value to Go's nhttp.SameSite int type."""
     if value is None:
         return 0
     if isinstance(value, int):
         return value
-
-    # Map string values to Go constants
-    same_site_map = {
-        "default": 1,
-        "lax": 2,
-        "strict": 3,
-        "none": 4,
-    }
-    return same_site_map.get(str(value).lower(), 0)
+    return _SAME_SITE_MAP.get(str(value).lower(), 0)
 
 
 def _dict_to_cookie(data: dict) -> Cookie:
@@ -470,6 +451,11 @@ def _dict_to_cookie(data: dict) -> Cookie:
         http_only=data.get("httpOnly", False),
         same_site=data.get("sameSite"),
     )
+
+
+def _matches_any(text: str, patterns: tuple[str, ...]) -> bool:
+    """Check if any of the patterns appear in the text."""
+    return any(p in text for p in patterns)
 
 
 def _raise_for_error_response(data: dict) -> None:
@@ -512,98 +498,58 @@ def _raise_for_error_response(data: dict) -> None:
     )
 
     error_msg = data.get("Body", "")
+    error_lower = error_msg.lower()
 
     # Check if this is an error response from Go
     # Go returns "Request returned a Syscall Error:" prefix for errors
     is_error_response = (
         status == 0
-        or "request returned a syscall error:" in error_msg.lower()
-        or "syscall error:" in error_msg.lower()
+        or "syscall error:" in error_lower
         or (status in (401, 405, 408, 421, 495, 502) and "->" in error_msg)
     )
 
     if not is_error_response:
         return  # Not an error, don't raise
 
-    error_lower = error_msg.lower()
-
     # Timeout errors (status 408 or timeout patterns)
-    if status == 408 or any(
-        pattern in error_lower
-        for pattern in [
-            "timeout",
-            "deadline exceeded",
-            "request canceled",
-            "context canceled",
-            "context done",
-            "i/o timeout",
-        ]
-    ):
+    if status == 408 or _matches_any(error_lower, (
+        "timeout", "deadline exceeded", "request canceled",
+        "context canceled", "context done", "i/o timeout",
+    )):
         raise Timeout(f"Request timed out: {error_msg}")
 
     # DNS/lookup failure (status 421 or DNS patterns)
-    if status == 421 or any(
-        pattern in error_lower
-        for pattern in [
-            "no such host",
-            "lookup",
-            "dnserror",
-            "getaddrinfo",
-            "could not resolve",
-            "dns",
-        ]
-    ):
+    if status == 421 or _matches_any(error_lower, (
+        "no such host", "lookup", "dnserror",
+        "getaddrinfo", "could not resolve", "dns",
+    )):
         raise ConnectionError(f"DNS lookup failed: {error_msg}")
 
     # Connection errors (general) - check BEFORE TLS status code to handle EOF, etc.
     # that might come with TLS-related status codes due to connection issues during handshake
-    if any(
-        pattern in error_lower
-        for pattern in [
-            "connection reset",
-            "connection closed",
-            "closed network connection",
-            "eof",
-            "broken pipe",
-            "network is unreachable",
-        ]
-    ):
+    if _matches_any(error_lower, (
+        "connection reset", "connection closed", "closed network connection",
+        "eof", "broken pipe", "network is unreachable",
+    )):
         raise ConnectionError(f"Connection error: {error_msg}")
 
     # TLS/certificate errors (status 495)
     # Only match if there are actual certificate-related keywords in the error
-    if status == 495 and any(
-        pattern in error_lower
-        for pattern in [
-            "certificate",
-            "x509:",
-            "tls: failed to verify",
-            "handshake",
-        ]
-    ):
+    if status == 495 and _matches_any(error_lower, (
+        "certificate", "x509:", "tls: failed to verify", "handshake",
+    )):
         raise TLSError(f"TLS error: {error_msg}")
 
     # Also check for TLS patterns without specific status code
-    if any(
-        pattern in error_lower
-        for pattern in [
-            "certificate",
-            "x509:",
-            "tls: failed to verify",
-            "ssl",
-        ]
-    ):
+    if _matches_any(error_lower, (
+        "certificate", "x509:", "tls: failed to verify", "ssl",
+    )):
         raise TLSError(f"TLS error: {error_msg}")
 
     # Connection refused (status 502 or connection refused patterns)
-    if status == 502 or any(
-        pattern in error_lower
-        for pattern in [
-            "connection refused",
-            "refused",
-            "no connection could be made",
-        ]
-    ):
+    if status == 502 or _matches_any(error_lower, (
+        "connection refused", "refused", "no connection could be made",
+    )):
         raise ConnectionError(f"Connection refused: {error_msg}")
 
     # Address errors (status 405)
@@ -611,18 +557,11 @@ def _raise_for_error_response(data: dict) -> None:
         raise ConnectionError(f"Address error: {error_msg}")
 
     # Invalid URL patterns
-    if any(
-        pattern in error_lower
-        for pattern in [
-            "invalid url",
-            "unsupported protocol",
-            "missing protocol scheme",
-            "invalid character",
-            "parse",
-            "first path segment in url cannot contain colon",
-            "unsupported scheme",
-        ]
-    ):
+    if _matches_any(error_lower, (
+        "invalid url", "unsupported protocol", "missing protocol scheme",
+        "invalid character", "parse",
+        "first path segment in url cannot contain colon", "unsupported scheme",
+    )):
         raise InvalidURL(f"Invalid URL: {error_msg}")
 
     # Syscall errors (status 401 from Go)
