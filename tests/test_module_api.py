@@ -9,6 +9,8 @@ import pytest
 import cycletls
 from cycletls import HTTPError
 
+pytestmark = pytest.mark.live
+
 
 class TestModuleLevelFunctions:
     """Test suite for module-level convenience functions"""

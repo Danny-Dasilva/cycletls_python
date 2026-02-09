@@ -15,6 +15,8 @@ import pytest
 import json
 from test_utils import assert_valid_response
 
+pytestmark = pytest.mark.live
+
 
 class TestTLS13Basic:
     """Test basic TLS 1.3 functionality."""
