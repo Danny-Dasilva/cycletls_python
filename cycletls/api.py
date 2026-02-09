@@ -20,7 +20,7 @@ from collections.abc import Mapping, Sequence
 from types import TracebackType
 from typing import Any, Dict, Iterable, Literal, Optional, Tuple, Union
 
-from ._batcher import RequestBatcher, get_batcher, shutdown_batcher
+from ._batcher import get_batcher, shutdown_batcher
 from ._ffi import _has_callback_support
 from ._ffi import send_batch_request as ffi_send_batch_request
 from ._ffi import send_request as ffi_send_request
@@ -30,6 +30,10 @@ from ._ffi import send_requests_batch as ffi_send_requests_batch
 from .exceptions import CycleTLSError
 from .fingerprints import FingerprintRegistry, TLSFingerprint
 from .schema import Request, Response, _dict_to_response
+
+# Reference to stdlib json.dumps for use inside methods where a parameter
+# named ``json`` shadows the module.
+_stdlib_json_dumps = json.dumps
 
 # Setup module logger
 logger = logging.getLogger(__name__)
@@ -365,7 +369,7 @@ class CycleTLS:
             if _json_dumps is not None:
                 body_value = _json_dumps(json_data).decode("utf-8")
             else:
-                body_value = json.dumps(json_data)
+                body_value = _stdlib_json_dumps(json_data)
             headers["Content-Type"] = "application/json"
         elif data is not None:
             if isinstance(data, dict):
@@ -527,8 +531,16 @@ class CycleTLS:
             >>> response = client.get("https://example.com", fingerprint=custom)
         """
         payload = self._prepare_request(
-            method, url, params=params, data=data, json_data=json_data,
-            json=json, files=files, fingerprint=fingerprint, auth=auth, **kwargs,
+            method,
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            json=json,
+            files=files,
+            fingerprint=fingerprint,
+            auth=auth,
+            **kwargs,
         )
 
         if self._batcher is not None:
@@ -563,7 +575,9 @@ class CycleTLS:
         **kwargs: Any,
     ) -> Response:
         """Sends an OPTIONS request."""
-        return self.request("options", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
+        return self.request(
+            "options", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs
+        )
 
     def head(
         self,
@@ -574,7 +588,9 @@ class CycleTLS:
         **kwargs: Any,
     ) -> Response:
         """Sends a HEAD request."""
-        return self.request("head", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
+        return self.request(
+            "head", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs
+        )
 
     def post(
         self,
@@ -589,8 +605,15 @@ class CycleTLS:
     ) -> Response:
         """Sends a POST request."""
         return self.request(
-            "post", url, params=params, data=data, json_data=json_data,
-            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
+            "post",
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            json=json,
+            fingerprint=fingerprint,
+            auth=auth,
+            **kwargs,
         )
 
     def put(
@@ -606,8 +629,15 @@ class CycleTLS:
     ) -> Response:
         """Sends a PUT request."""
         return self.request(
-            "put", url, params=params, data=data, json_data=json_data,
-            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
+            "put",
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            json=json,
+            fingerprint=fingerprint,
+            auth=auth,
+            **kwargs,
         )
 
     def patch(
@@ -623,8 +653,15 @@ class CycleTLS:
     ) -> Response:
         """Sends a PATCH request."""
         return self.request(
-            "patch", url, params=params, data=data, json_data=json_data,
-            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
+            "patch",
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            json=json,
+            fingerprint=fingerprint,
+            auth=auth,
+            **kwargs,
         )
 
     def delete(
@@ -636,7 +673,9 @@ class CycleTLS:
         **kwargs: Any,
     ) -> Response:
         """Sends a DELETE request."""
-        return self.request("delete", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
+        return self.request(
+            "delete", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs
+        )
 
     def batch(self, requests: list[dict]) -> list[Response]:
         """Send multiple requests in a single batch.
@@ -722,7 +761,7 @@ class CycleTLS:
             if _json_dumps is not None:
                 body_value = _json_dumps(json_data).decode("utf-8")
             else:
-                body_value = json.dumps(json_data)
+                body_value = _stdlib_json_dumps(json_data)
             headers["Content-Type"] = "application/json"
         elif data is not None:
             if isinstance(data, dict):
@@ -812,8 +851,16 @@ class CycleTLS:
             Response: Response object with status, headers, body, cookies, etc.
         """
         payload = self._prepare_request(
-            method, url, params=params, data=data, json_data=json_data,
-            json=json, files=files, fingerprint=fingerprint, auth=auth, **kwargs,
+            method,
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            json=json,
+            files=files,
+            fingerprint=fingerprint,
+            auth=auth,
+            **kwargs,
         )
 
         if self._batcher is not None:
@@ -845,7 +892,9 @@ class CycleTLS:
         **kwargs: Any,
     ) -> Response:
         """Sends an async GET request."""
-        return await self.arequest("get", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
+        return await self.arequest(
+            "get", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs
+        )
 
     async def aoptions(
         self,
@@ -856,7 +905,9 @@ class CycleTLS:
         **kwargs: Any,
     ) -> Response:
         """Sends an async OPTIONS request."""
-        return await self.arequest("options", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
+        return await self.arequest(
+            "options", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs
+        )
 
     async def ahead(
         self,
@@ -867,7 +918,9 @@ class CycleTLS:
         **kwargs: Any,
     ) -> Response:
         """Sends an async HEAD request."""
-        return await self.arequest("head", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
+        return await self.arequest(
+            "head", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs
+        )
 
     async def apost(
         self,
@@ -882,8 +935,15 @@ class CycleTLS:
     ) -> Response:
         """Sends an async POST request."""
         return await self.arequest(
-            "post", url, params=params, data=data, json_data=json_data,
-            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
+            "post",
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            json=json,
+            fingerprint=fingerprint,
+            auth=auth,
+            **kwargs,
         )
 
     async def aput(
@@ -899,8 +959,15 @@ class CycleTLS:
     ) -> Response:
         """Sends an async PUT request."""
         return await self.arequest(
-            "put", url, params=params, data=data, json_data=json_data,
-            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
+            "put",
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            json=json,
+            fingerprint=fingerprint,
+            auth=auth,
+            **kwargs,
         )
 
     async def apatch(
@@ -916,8 +983,15 @@ class CycleTLS:
     ) -> Response:
         """Sends an async PATCH request."""
         return await self.arequest(
-            "patch", url, params=params, data=data, json_data=json_data,
-            json=json, fingerprint=fingerprint, auth=auth, **kwargs,
+            "patch",
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            json=json,
+            fingerprint=fingerprint,
+            auth=auth,
+            **kwargs,
         )
 
     async def adelete(
@@ -929,7 +1003,9 @@ class CycleTLS:
         **kwargs: Any,
     ) -> Response:
         """Sends an async DELETE request."""
-        return await self.arequest("delete", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs)
+        return await self.arequest(
+            "delete", url, params=params, fingerprint=fingerprint, auth=auth, **kwargs
+        )
 
     async def abatch(self, requests: list[dict]) -> list[Response]:
         """Send multiple requests concurrently as an async batch.

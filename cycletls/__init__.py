@@ -31,6 +31,20 @@ from typing import Any, Dict, Optional
 
 from cycletls.__version__ import __version__
 
+# Import configuration and global session management
+from ._config import (  # noqa: E402
+    _CONFIGURABLE_ATTRS,
+    _config,
+    _merge_defaults,
+    get_default,
+    reset_defaults,
+    set_default,
+)
+from ._global import (  # noqa: E402
+    close_global_session,
+    get_global_session,
+)
+
 # Import core classes
 from .api import CycleTLS
 from .async_api import AsyncCycleTLS, async_delete, async_get, async_post, async_put
@@ -86,20 +100,6 @@ from .websocket import (
 )
 from .websocket import (
     WebSocketMessage as WebSocketMessage,  # type: ignore[misc,assignment]  # override schema.py version
-)
-
-# Import configuration and global session management
-from ._config import (  # noqa: E402
-    _CONFIGURABLE_ATTRS,
-    _config,
-    _merge_defaults,
-    get_default,
-    reset_defaults,
-    set_default,
-)
-from ._global import (  # noqa: E402
-    close_global_session,
-    get_global_session,
 )
 
 # Initialize default configuration on package import

@@ -83,7 +83,9 @@ class Session(CycleTLS):
             return f"{self.base_url}/{url.lstrip('/')}"
         return url
 
-    def _merge_session_state(self, kwargs: Dict[str, Any], auth: Optional[Tuple[str, str]] = None) -> Optional[Tuple[str, str]]:
+    def _merge_session_state(
+        self, kwargs: Dict[str, Any], auth: Optional[Tuple[str, str]] = None
+    ) -> Optional[Tuple[str, str]]:
         """Merge session-level headers, cookies, and auth into request kwargs.
 
         Returns the effective auth tuple (request-level overrides session-level).
@@ -162,8 +164,15 @@ class Session(CycleTLS):
         effective_auth = self._merge_session_state(kwargs, auth=auth)
 
         response = super().request(
-            method, url, params=params, data=data, json_data=json_data,
-            json=json, files=files, fingerprint=fingerprint, auth=effective_auth,
+            method,
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            json=json,
+            files=files,
+            fingerprint=fingerprint,
+            auth=effective_auth,
             **kwargs,
         )
 
@@ -214,10 +223,19 @@ class Session(CycleTLS):
         effective_auth = self._merge_session_state(kwargs, auth=auth)
 
         response = await super().arequest(
-            method, url, params=params, data=data, json_data=json_data,
-            json=json, files=files, fingerprint=fingerprint, auth=effective_auth,
-            poll_interval=poll_interval, timeout=timeout,
-            use_callback=use_callback, **kwargs,
+            method,
+            url,
+            params=params,
+            data=data,
+            json_data=json_data,
+            json=json,
+            files=files,
+            fingerprint=fingerprint,
+            auth=effective_auth,
+            poll_interval=poll_interval,
+            timeout=timeout,
+            use_callback=use_callback,
+            **kwargs,
         )
 
         self._update_cookies_from_response(response)

@@ -169,7 +169,8 @@ def _has_zerocopy_support() -> bool:
 
     _use_zerocopy = _has_symbol("getRequestZeroCopy")
     logger.debug(
-        "Zero-copy FFI mode enabled" if _use_zerocopy
+        "Zero-copy FFI mode enabled"
+        if _use_zerocopy
         else "Zero-copy FFI not available, using base64 mode"
     )
     return _use_zerocopy
@@ -181,11 +182,10 @@ def _has_callback_support() -> bool:
     if _use_callback is not None:
         return _use_callback
 
-    _use_callback = (
-        _has_symbol("submitRequestAsyncWithNotify") and _has_symbol("getAsyncResult")
-    )
+    _use_callback = _has_symbol("submitRequestAsyncWithNotify") and _has_symbol("getAsyncResult")
     logger.debug(
-        "Callback-based async API enabled" if _use_callback
+        "Callback-based async API enabled"
+        if _use_callback
         else "Callback-based async API not available, using polling fallback"
     )
     return _use_callback
@@ -196,11 +196,12 @@ def _has_async_zerocopy_support() -> bool:
     global _use_async_zerocopy
     if _use_async_zerocopy is not None:
         return _use_async_zerocopy
-    _use_async_zerocopy = (
-        _has_symbol("submitRequestAsyncZeroCopy") and _has_symbol("getAsyncResultZeroCopy")
+    _use_async_zerocopy = _has_symbol("submitRequestAsyncZeroCopy") and _has_symbol(
+        "getAsyncResultZeroCopy"
     )
     logger.debug(
-        "Zero-copy async API enabled" if _use_async_zerocopy
+        "Zero-copy async API enabled"
+        if _use_async_zerocopy
         else "Zero-copy async API not available"
     )
     return _use_async_zerocopy

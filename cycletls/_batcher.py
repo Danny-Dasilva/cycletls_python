@@ -22,7 +22,7 @@ import logging
 import queue
 import threading
 from concurrent.futures import Future
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -227,15 +227,14 @@ class RequestBatcher:
         # Distribute results back to callers.
         if len(results) != len(batch):
             exc = RuntimeError(
-                f"Batch FFI returned {len(results)} results for "
-                f"{len(batch)} requests"
+                f"Batch FFI returned {len(results)} results for {len(batch)} requests"
             )
             for pending in batch:
                 if not pending.future.done():
                     pending.future.set_exception(exc)
             return
 
-        for pending, result in zip(batch, results):
+        for pending, result in zip(batch, results, strict=True):
             if not pending.future.done():
                 pending.future.set_result(result)
 
