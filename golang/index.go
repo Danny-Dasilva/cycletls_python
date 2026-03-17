@@ -1034,21 +1034,22 @@ func dispatchSSEAsync(res fullRequest, chanWrite *safeChannelWriter) {
 	}
 
 	// Read SSE events
+sseLoop:
 	for {
 		select {
 		case <-res.req.Context().Done():
 			debugLogger.Printf("SSE request %s was canceled", res.options.RequestID)
-			break
+			break sseLoop
 
 		default:
 			event, err := sseResp.NextEvent()
 			if err != nil {
 				if err == io.EOF {
 					// Normal end of stream
-					break
+					break sseLoop
 				}
 				debugLogger.Printf("SSE read error: %s", err.Error())
-				break
+				break sseLoop
 			}
 
 			if event == nil {
@@ -1707,6 +1708,9 @@ func (client CycleTLS) Do(URL string, options Options, Method string) (Response,
 		UserAgent:          options.UserAgent,
 		Cookies:            options.Cookies,
 		InsecureSkipVerify: options.InsecureSkipVerify,
+		ServerName:         options.ServerName,
+		TLS13AutoRetry:     options.TLS13AutoRetry,
+		DisableGrease:      options.DisableGrease,
 		ForceHTTP1:         options.ForceHTTP1,
 		ForceHTTP3:         options.ForceHTTP3,
 		HeaderOrder:        options.HeaderOrder,
