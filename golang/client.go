@@ -6,6 +6,7 @@ import (
 	fhttp "github.com/Danny-Dasilva/fhttp"
 	"hash/crc32"
 	"hash/fnv"
+	"net"
 	"sync"
 	"time"
 
@@ -207,7 +208,7 @@ func NewTransportWithProxy(ja3 string, useragent string, proxy proxy.ContextDial
 }
 
 // generateClientKey creates a unique key for client pooling based on browser configuration
-func generateClientKey(browser Browser, timeout int, disableRedirect bool, proxyURL string) string {
+func generateClientKey(browser Browser, timeout int, disableRedirect bool, proxyURL string, localAddress string) string {
 	// Create cookie signature for the key
 	cookieStr := ""
 	for _, cookie := range browser.Cookies {
@@ -215,7 +216,7 @@ func generateClientKey(browser Browser, timeout int, disableRedirect bool, proxy
 	}
 
 	// Create a hash of the configuration that affects connection behavior
-	configStr := fmt.Sprintf("ja3:%s|ja4r:%s|http2:%s|quic:%s|ua:%s|sni:%s|proxy:%s|timeout:%d|redirect:%t|skipverify:%t|forcehttp1:%t|forcehttp3:%t%s",
+	configStr := fmt.Sprintf("ja3:%s|ja4r:%s|http2:%s|quic:%s|ua:%s|sni:%s|proxy:%s|local:%s|timeout:%d|redirect:%t|skipverify:%t|forcehttp1:%t|forcehttp3:%t%s",
 		browser.JA3,
 		browser.JA4r,
 		browser.HTTP2Fingerprint,
@@ -223,6 +224,7 @@ func generateClientKey(browser Browser, timeout int, disableRedirect bool, proxy
 		browser.UserAgent,
 		browser.ServerName,
 		proxyURL,
+		localAddress,
 		timeout,
 		disableRedirect,
 		browser.InsecureSkipVerify,
@@ -259,12 +261,12 @@ func generateClientKey(browser Browser, timeout int, disableRedirect bool, proxy
 // http.Transport would still pool idle conns per address — see the badssl
 // triage report at .claude/cache/agents/source-tracer/output.md for the
 // failure mode this prevents.
-func getOrCreateClient(browser Browser, timeout int, disableRedirect bool, userAgent string, enableConnectionReuse bool, proxyURL ...string) (fhttp.Client, error) {
+func getOrCreateClient(browser Browser, timeout int, disableRedirect bool, userAgent string, enableConnectionReuse bool, localAddress string, proxyURL ...string) (fhttp.Client, error) {
 	// If connection reuse is disabled, always create a new client and tell
 	// the inner http.Transport to disable keep-alives.
 	if !enableConnectionReuse {
 		browser.DisableKeepAlives = true
-		return createNewClient(browser, timeout, disableRedirect, userAgent, proxyURL...)
+		return createNewClient(browser, timeout, disableRedirect, userAgent, localAddress, proxyURL...)
 	}
 
 	proxyStr := ""
@@ -272,7 +274,7 @@ func getOrCreateClient(browser Browser, timeout int, disableRedirect bool, userA
 		proxyStr = proxyURL[0]
 	}
 
-	clientKey := generateClientKey(browser, timeout, disableRedirect, proxyStr)
+	clientKey := generateClientKey(browser, timeout, disableRedirect, proxyStr, localAddress)
 
 	// Get the appropriate shard for this client key
 	shard := globalPool.getShard(clientKey)
@@ -299,7 +301,7 @@ func getOrCreateClient(browser Browser, timeout int, disableRedirect bool, userA
 	}
 
 	// Create new client
-	client, err := createNewClient(browser, timeout, disableRedirect, userAgent, proxyURL...)
+	client, err := createNewClient(browser, timeout, disableRedirect, userAgent, localAddress, proxyURL...)
 	if err != nil {
 		return fhttp.Client{}, err
 	}
@@ -316,17 +318,23 @@ func getOrCreateClient(browser Browser, timeout int, disableRedirect bool, userA
 }
 
 // createNewClient creates a new HTTP client (internal function)
-func createNewClient(browser Browser, timeout int, disableRedirect bool, userAgent string, proxyURL ...string) (fhttp.Client, error) {
+func createNewClient(browser Browser, timeout int, disableRedirect bool, userAgent string, localAddress string, proxyURL ...string) (fhttp.Client, error) {
 	var dialer proxy.ContextDialer
 	if len(proxyURL) > 0 && len(proxyURL[0]) > 0 {
 		var err error
-		dialer, err = newConnectDialer(proxyURL[0], userAgent)
+		dialer, err = newConnectDialer(proxyURL[0], userAgent, localAddress)
 		if err != nil {
 			return fhttp.Client{
 				Timeout:       time.Duration(timeout) * time.Second,
 				CheckRedirect: disabledRedirect,
 			}, err
 		}
+	} else if localAddress != "" {
+		ip := net.ParseIP(localAddress)
+		if ip == nil {
+			return fhttp.Client{}, fmt.Errorf("invalid local_address %q: not a valid IP address", localAddress)
+		}
+		dialer = &net.Dialer{LocalAddr: &net.TCPAddr{IP: ip}}
 	} else {
 		dialer = proxy.Direct
 	}
@@ -373,12 +381,12 @@ func clearAllConnections() {
 // newClient creates a new http client (backward compatibility - defaults to no connection reuse)
 func newClient(browser Browser, timeout int, disableRedirect bool, UserAgent string, proxyURL ...string) (fhttp.Client, error) {
 	// Backward compatibility: default to no connection reuse for existing code
-	return getOrCreateClient(browser, timeout, disableRedirect, UserAgent, false, proxyURL...)
+	return getOrCreateClient(browser, timeout, disableRedirect, UserAgent, false, "", proxyURL...)
 }
 
 // newClientWithReuse creates a new http client with configurable connection reuse
-func newClientWithReuse(browser Browser, timeout int, disableRedirect bool, UserAgent string, enableConnectionReuse bool, proxyURL ...string) (fhttp.Client, error) {
-	return getOrCreateClient(browser, timeout, disableRedirect, UserAgent, enableConnectionReuse, proxyURL...)
+func newClientWithReuse(browser Browser, timeout int, disableRedirect bool, UserAgent string, enableConnectionReuse bool, localAddress string, proxyURL ...string) (fhttp.Client, error) {
+	return getOrCreateClient(browser, timeout, disableRedirect, UserAgent, enableConnectionReuse, localAddress, proxyURL...)
 }
 
 // WebSocketConnect establishes a WebSocket connection
@@ -439,7 +447,7 @@ func (browser Browser) WebSocketConnect(ctx context.Context, urlStr string) (*we
 // SSEConnect establishes an SSE connection
 func (browser Browser) SSEConnect(ctx context.Context, urlStr string) (*SSEResponse, error) {
 	// Create HTTP client with connection reuse enabled
-	httpClient, err := newClientWithReuse(browser, 30, false, browser.UserAgent, true)
+	httpClient, err := newClientWithReuse(browser, 30, false, browser.UserAgent, true, "")
 	if err != nil {
 		return nil, err
 	}

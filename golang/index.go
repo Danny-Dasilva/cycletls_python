@@ -122,6 +122,7 @@ type Options struct {
 
 	// Connection options
 	Proxy              string   `json:"proxy" msgpack:"proxy"`
+	LocalAddress       string   `json:"localAddress" msgpack:"localAddress"` // Bind outgoing TCP connections to this local IP address
 	ServerName         string   `json:"serverName" msgpack:"serverName"` // Custom TLS SNI override
 	Cookies            []Cookie `json:"cookies" msgpack:"cookies"`
 	Timeout            int      `json:"timeout" msgpack:"timeout"`
@@ -260,6 +261,7 @@ func processRequest(request cycleTLSRequest) (result fullRequest) {
 		request.Options.DisableRedirect,
 		request.Options.UserAgent,
 		enableConnectionReuse,
+		request.Options.LocalAddress,
 		request.Options.Proxy,
 	)
 	if err != nil {
@@ -412,6 +414,7 @@ func dispatchHTTP3Request(request cycleTLSRequest) (result fullRequest) {
 		request.Options.DisableRedirect,
 		request.Options.UserAgent,
 		enableConnectionReuse,
+		request.Options.LocalAddress,
 		request.Options.Proxy,
 	)
 	if err != nil {
@@ -500,6 +503,7 @@ func dispatchSSERequest(request cycleTLSRequest) (result fullRequest) {
 		request.Options.DisableRedirect,
 		request.Options.UserAgent,
 		enableConnectionReuse,
+		request.Options.LocalAddress,
 		request.Options.Proxy,
 	)
 	if err != nil {
@@ -1725,6 +1729,7 @@ func (client CycleTLS) Do(URL string, options Options, Method string) (Response,
 		options.DisableRedirect,
 		options.UserAgent,
 		enableConnectionReuse,
+		options.LocalAddress,
 		options.Proxy,
 	)
 	if err != nil {

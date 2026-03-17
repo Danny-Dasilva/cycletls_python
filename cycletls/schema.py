@@ -157,6 +157,7 @@ class Request:
     # Connection options
     user_agent: str = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:87.0) Gecko/20100101 Firefox/87.0"
     proxy: str = ""
+    local_address: Optional[str] = None  # Bind outgoing TCP connections to this local IP address
     cookies: Optional[List[Cookie]] = None
     timeout: Union[int, float] = 6  # Timeout in seconds (floats are rounded up to nearest integer)
     disable_redirect: bool = False
@@ -226,6 +227,8 @@ class Request:
             result["quicFingerprint"] = self.quic_fingerprint
         if self.server_name is not None:
             result["serverName"] = self.server_name
+        if self.local_address is not None:
+            result["localAddress"] = self.local_address
         if self.protocol is not None:
             result["protocol"] = self.protocol.value
         if self.cookies is not None:
