@@ -516,7 +516,17 @@ class CycleTLS:
                         If a string, looks up the profile in FingerprintRegistry.
                         Applies the profile's ja3, user_agent, header_order, etc.
             auth: (username, password) tuple for HTTP Basic authentication
-            **kwargs: Additional CycleTLS options (headers, cookies, proxy, etc.)
+            **kwargs: Additional CycleTLS options. Notable options include:
+                - headers: dict of extra HTTP headers
+                - cookies: list of cookie dicts
+                - ja3: JA3 TLS fingerprint string
+                - user_agent: User-Agent header value
+                - proxy: proxy URL (e.g. "http://user:pass@host:port")
+                - local_address: local IP address to bind the outgoing TCP
+                  connection to (useful on multi-homed hosts)
+                - timeout: request timeout in seconds
+                - insecure_skip_verify: skip TLS certificate verification
+                - enable_connection_reuse: reuse persistent connections (default True)
 
         Returns:
             Response: Response object with status, headers, body, cookies, etc.
