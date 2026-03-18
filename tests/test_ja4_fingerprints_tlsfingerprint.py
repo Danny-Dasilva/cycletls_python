@@ -71,9 +71,9 @@ def extract_ja4_from_response(data: dict) -> dict:
     return {}
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def cycle_client():
-    """Create a single CycleTLS client for all tests in this module"""
+    """Create a fresh CycleTLS client for each test (TrackMe closes connections after each request)"""
     with CycleTLS() as client:
         yield client
 
