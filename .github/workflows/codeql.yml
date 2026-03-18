@@ -66,6 +66,14 @@ jobs:
     # or others). This is typically only required for manual builds.
     # - name: Setup runtime (example)
     #   uses: actions/setup-example@v1
+    - name: Set up Go
+      if: matrix.language == 'go'
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.26'
+        cache-dependency-path: |
+          golang/go.sum
+          benchmarks/go.sum
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -86,15 +94,6 @@ jobs:
     # to build your code.
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
-    - name: Set up Go
-      if: matrix.language == 'go'
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.26'
-        cache-dependency-path: |
-          golang/go.sum
-          benchmarks/go.sum
-
     - name: Run manual build steps
       if: matrix.language == 'go'
       shell: bash
