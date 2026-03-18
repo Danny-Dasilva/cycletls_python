@@ -108,7 +108,8 @@ jobs:
 
         pushd benchmarks
         go mod download
-        go build ./...
+        go build ./benchmarks.go
+        go build ./bench_server.go
         popd
 
     - name: Perform CodeQL Analysis
