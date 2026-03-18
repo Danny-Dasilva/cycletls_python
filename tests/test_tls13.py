@@ -206,6 +206,7 @@ class TestTLS12Fallback:
                 endpoint,
                 ja3=firefox_ja3,
                 user_agent="Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:87.0) Gecko/20100101 Firefox/87.0",
+                enable_connection_reuse=False,
                 timeout=30
             )
 
@@ -261,6 +262,7 @@ class TestTLS13WithJa3er:
             f"{_TRACKME_URL}/api/clean",
             ja3=chrome_ja3,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
+            enable_connection_reuse=False,
             timeout=30
         )
 

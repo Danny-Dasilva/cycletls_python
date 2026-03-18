@@ -28,7 +28,8 @@ class TestAsyncJA3Fingerprints:
             response = await client.get(
                 f"{_TRACKME_URL}/api/clean",
                 ja3=chrome_ja3,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                enable_connection_reuse=False,
             )
 
             assert response.status_code == 200
@@ -44,7 +45,8 @@ class TestAsyncJA3Fingerprints:
             response = await client.get(
                 f"{_TRACKME_URL}/api/clean",
                 ja3=firefox_ja3,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+                enable_connection_reuse=False,
             )
 
             assert response.status_code == 200
@@ -58,7 +60,8 @@ class TestAsyncJA3Fingerprints:
             response = await client.get(
                 f"{_TRACKME_URL}/api/clean",
                 ja3=safari_ja3,
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+                enable_connection_reuse=False,
             )
 
             assert response.status_code == 200
@@ -71,7 +74,8 @@ class TestAsyncJA3Fingerprints:
         response = await cycletls.aget(
             f"{_TRACKME_URL}/api/clean",
             ja3=chrome_ja3,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            enable_connection_reuse=False,
         )
 
         assert response.status_code == 200
@@ -155,7 +159,8 @@ class TestAsyncJA4Fingerprints:
             response = await client.get(
                 f"{_TRACKME_URL}/api/all",
                 ja4r=ja4r,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                enable_connection_reuse=False,
             )
 
             assert response.status_code == 200

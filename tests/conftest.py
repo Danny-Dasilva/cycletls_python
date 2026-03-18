@@ -20,8 +20,17 @@ def cycletls_client():
     """
     Session-scoped CycleTLS client fixture.
     Creates a single client instance for all tests.
+
+    Connection reuse is disabled by default so that TrackMe-style servers
+    (which close connections after every response) don't leave a stale cached
+    connection in the global Go transport pool for the next test.
     """
     client = CycleTLS()
+    _orig = client.request
+    def _no_reuse(method, url, **kwargs):
+        kwargs.setdefault("enable_connection_reuse", False)
+        return _orig(method, url, **kwargs)
+    client.request = _no_reuse
     yield client
     client.close()
 

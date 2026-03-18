@@ -9,8 +9,13 @@ pytestmark = pytest.mark.live
 
 @pytest.fixture
 def cycle():
-    """Create a CycleTLS instance for testing"""
+    """Create a CycleTLS instance for testing with connection reuse disabled."""
     with CycleTLS() as client:
+        _orig = client.request
+        def _no_reuse(method, url, **kwargs):
+            kwargs.setdefault("enable_connection_reuse", False)
+            return _orig(method, url, **kwargs)
+        client.request = _no_reuse
         yield client
 
 
