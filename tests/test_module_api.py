@@ -5,9 +5,12 @@ Tests the module-level convenience functions (cycletls.get(), cycletls.post(), e
 and configuration management (set_default(), get_default(), reset_defaults()).
 """
 
+import os
 import pytest
 import cycletls
 from cycletls import HTTPError
+
+_TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
 pytestmark = pytest.mark.live
 
@@ -321,7 +324,7 @@ class TestTLSFingerprintingWithModuleAPI:
         """Test using JA3 fingerprint as default"""
         cycletls.set_default(ja3=chrome_ja3)
 
-        response = cycletls.get("https://tls.peet.ws/api/clean")
+        response = cycletls.get(f"{_TRACKME_URL}/api/clean")
 
         assert response.status_code == 200
         data = response.json()
@@ -329,7 +332,7 @@ class TestTLSFingerprintingWithModuleAPI:
 
     def test_ja3_fingerprint_per_request(self, firefox_ja3):
         """Test using JA3 fingerprint per-request"""
-        response = cycletls.get("https://tls.peet.ws/api/clean", ja3=firefox_ja3)
+        response = cycletls.get(f"{_TRACKME_URL}/api/clean", ja3=firefox_ja3)
 
         assert response.status_code == 200
         data = response.json()

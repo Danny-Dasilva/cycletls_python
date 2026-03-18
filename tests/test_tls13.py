@@ -11,9 +11,12 @@ Based on CycleTLS Go integration tests (tls_13_test.go), these tests verify:
 Uses various HTTPS sites that support TLS 1.3 for testing.
 """
 
+import os
 import pytest
 import json
 from test_utils import assert_valid_response
+
+_TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
 pytestmark = pytest.mark.live
 
@@ -195,7 +198,7 @@ class TestTLS12Fallback:
         # Using reliable endpoints only (howsmyssl.com is flaky)
         endpoints = [
             "https://httpbin.org/get",
-            "https://tls.peet.ws/api/clean",
+            f"{_TRACKME_URL}/api/clean",
         ]
 
         for endpoint in endpoints:
@@ -255,7 +258,7 @@ class TestTLS13WithJa3er:
         """Test that TLS 1.3 fingerprint is correctly applied."""
         # Use tls.peet.ws instead of ja3er.com (more reliable)
         response = cycletls_client.get(
-            "https://tls.peet.ws/api/clean",
+            f"{_TRACKME_URL}/api/clean",
             ja3=chrome_ja3,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
             timeout=30

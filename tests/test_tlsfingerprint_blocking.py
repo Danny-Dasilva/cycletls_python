@@ -23,14 +23,15 @@ Based on CycleTLS TypeScript tests:
 - tests/http2-fingerprint.test.js
 - tests/tlsfingerprint/basic.test.ts
 """
+import os
 import pytest
 from cycletls import CycleTLS
 
 # Mark all tests in this module as blocking (CI-critical)
 pytestmark = [pytest.mark.blocking, pytest.mark.live]
 
-# Primary test URL - tls.peet.ws is most reliable
-PEET_WS_URL = "https://tls.peet.ws"
+# Primary test URL — override with TRACKME_URL to point at a local TrackMe instance
+PEET_WS_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
 
 # ==============================================================================

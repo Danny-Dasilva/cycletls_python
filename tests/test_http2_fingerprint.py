@@ -12,9 +12,12 @@ HTTP/2 fingerprints allow customization of HTTP/2 connection settings to mimic
 different browsers and avoid detection.
 """
 
+import os
 import pytest
 import json
 from test_utils import assert_valid_response, assert_valid_json_response
+
+_TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
 
 class TestHTTP2FingerprintBasic:
@@ -27,7 +30,7 @@ class TestHTTP2FingerprintBasic:
         firefox_http2 = "1:65536;2:0;4:131072;5:16384|12517377|0|m,p,a,s"
 
         response = cycletls_client.get(
-            'https://tls.peet.ws/api/all',
+            f"{_TRACKME_URL}/api/all",
             http2_fingerprint=firefox_http2,
             user_agent='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0',
             timeout=30
@@ -60,7 +63,7 @@ class TestHTTP2FingerprintBasic:
         chrome_http2 = "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p"
 
         response = cycletls_client.get(
-            'https://tls.peet.ws/api/all',
+            f"{_TRACKME_URL}/api/all",
             http2_fingerprint=chrome_http2,
             user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
             timeout=30

@@ -6,6 +6,9 @@ import pytest
 import sys
 import os
 
+# TrackMe base URL — override with TRACKME_URL env var to point at a local instance
+_TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
+
 # Add parent directory to path to import cycletls
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -37,13 +40,19 @@ def cycletls_client_function():
 @pytest.fixture
 def test_url():
     """Base test URL for most tests."""
-    return "https://tls.peet.ws/api/clean"
+    return f"{_TRACKME_URL}/api/clean"
 
 
 @pytest.fixture
 def ja3_test_url():
     """TLS fingerprint test URL (replacement for defunct ja3er.com)."""
-    return "https://tls.peet.ws/api/clean"
+    return f"{_TRACKME_URL}/api/clean"
+
+
+@pytest.fixture(scope="session")
+def trackme_url():
+    """TrackMe base URL. Set TRACKME_URL env var to point at a local instance."""
+    return _TRACKME_URL
 
 
 @pytest.fixture

@@ -1,10 +1,10 @@
 """
-JA3 Fingerprint Validation Tests against tlsfingerprint.com
+JA3 Fingerprint Validation Tests against tls.peet.ws
 
 Tests that CycleTLS correctly applies JA3 fingerprints by verifying the observed
-fingerprint at tlsfingerprint.com changes when different JA3 configurations are used.
+fingerprint at tls.peet.ws changes when different JA3 configurations are used.
 
-Note: Unlike ja3er.com which echoes back the JA3 we send, tlsfingerprint.com
+Note: Unlike ja3er.com which echoes back the JA3 we send, tls.peet.ws
 computes the JA3 from the actual TLS handshake. This provides more realistic
 testing of fingerprint application.
 
@@ -13,14 +13,15 @@ Skip with: pytest -m "not live"
 
 Based on: test_ja3_fingerprints.py
 """
+import os
 import pytest
 from cycletls import CycleTLS
 
 # Mark all tests in this module as live tests
 pytestmark = pytest.mark.live
 
-# Base URL for tlsfingerprint.com
-BASE_URL = "https://tlsfingerprint.com"
+# Base URL — override with TRACKME_URL to point at a local TrackMe instance
+BASE_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
 # Same test data as test_ja3_fingerprints.py
 JA3_FINGERPRINTS = [
@@ -47,7 +48,7 @@ JA3_FINGERPRINTS = [
 
 def extract_ja3_from_response(data: dict) -> tuple:
     """
-    Extract JA3 hash and string from tlsfingerprint.com response.
+    Extract JA3 hash and string from tls.peet.ws response.
 
     Response format:
     {
@@ -78,7 +79,7 @@ class TestJA3FingerprintApplication:
     """Test that JA3 fingerprints are correctly applied"""
 
     def test_response_contains_ja3_data(self, cycle_client):
-        """Test that tlsfingerprint.com returns JA3 data"""
+        """Test that tls.peet.ws returns JA3 data"""
         response = cycle_client.get(f"{BASE_URL}/api/all")
 
         assert response.status_code == 200
@@ -197,7 +198,7 @@ class TestJA3FingerprintDifferentiation:
 
 
 class TestChromeFingerprintsTLSFingerprint:
-    """Test Chrome browser fingerprints against tlsfingerprint.com"""
+    """Test Chrome browser fingerprints against tls.peet.ws"""
 
     def test_chrome_83(self, cycle_client):
         """Test Chrome 83 fingerprint produces valid response"""
@@ -228,7 +229,7 @@ class TestChromeFingerprintsTLSFingerprint:
 
 
 class TestFirefoxFingerprintsTLSFingerprint:
-    """Test Firefox browser fingerprints against tlsfingerprint.com"""
+    """Test Firefox browser fingerprints against tls.peet.ws"""
 
     def test_firefox_65(self, cycle_client):
         """Test Firefox 65 fingerprint produces valid response"""
@@ -259,7 +260,7 @@ class TestFirefoxFingerprintsTLSFingerprint:
 
 
 class TestSafariFingerprintsTLSFingerprint:
-    """Test Safari browser fingerprints against tlsfingerprint.com"""
+    """Test Safari browser fingerprints against tls.peet.ws"""
 
     def test_ios_17_safari(self, cycle_client):
         """Test iOS 17 Safari fingerprint produces valid response"""
@@ -289,7 +290,7 @@ class TestSafariFingerprintsTLSFingerprint:
 
 
 class TestAdditionalTLSData:
-    """Test additional TLS fingerprint data from tlsfingerprint.com"""
+    """Test additional TLS fingerprint data from tls.peet.ws"""
 
     def test_ja4_data_returned(self, cycle_client):
         """Test that JA4 fingerprint data is also returned"""
@@ -297,7 +298,7 @@ class TestAdditionalTLSData:
         assert response.status_code == 200
         data = response.json()
 
-        # tlsfingerprint.com also returns JA4 data
+        # tls.peet.ws also returns JA4 data
         assert "tls" in data
         tls = data["tls"]
 

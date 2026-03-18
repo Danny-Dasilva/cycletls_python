@@ -3,8 +3,11 @@ Tests for force_http1 functionality.
 Based on CycleTLS/tests/forceHTTP1.test.ts
 """
 
+import os
 import pytest
 from cycletls import CycleTLS
+
+_TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
 
 @pytest.fixture
@@ -29,7 +32,7 @@ def chrome_user_agent():
 
 def test_http2_by_default(client, chrome_ja3, chrome_user_agent):
     """Test that HTTP/2 is used by default when server supports it"""
-    url = "https://tls.peet.ws/api/all"
+    url = f"{_TRACKME_URL}/api/all"
 
     result = client.get(
         url,
@@ -48,7 +51,7 @@ def test_http2_by_default(client, chrome_ja3, chrome_user_agent):
 
 def test_force_http1_on_http2_server(client, chrome_ja3, chrome_user_agent):
     """Test that HTTP/1.1 is forced when force_http1 is True"""
-    url = "https://tls.peet.ws/api/all"
+    url = f"{_TRACKME_URL}/api/all"
 
     result = client.get(
         url,
