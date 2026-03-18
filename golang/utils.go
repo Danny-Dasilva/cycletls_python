@@ -281,27 +281,48 @@ func StringToTLS13CompatibleSpec(ja3 string, userAgent string, forceHTTP1 bool) 
 	return StringToSpec(tls13CompatibleJA3, userAgent, forceHTTP1)
 }
 
-// convertJA3ForTLS13 converts a JA3 string to use TLS 1.3 compatible curves
+// convertJA3ForTLS13 converts a JA3 string to use TLS 1.3 compatible groups.
+// It upgrades the TLS version token from 1.2 (771) to 1.3 (772) and filters the
+// supported_groups field to only include groups that are valid per RFC 8446 §4.2.7,
+// preserving the original ordering and all compatible groups (P-256, P-384, P-521,
+// X25519, X448, FFDHE groups, post-quantum hybrids).
 func convertJA3ForTLS13(ja3 string) string {
 	tokens := strings.Split(ja3, ",")
 	if len(tokens) != 5 {
 		return ja3 // Return original if malformed
 	}
 
-	// Replace TLS version (position 0) with TLS 1.3 (772) if it's TLS 1.2 (771)
+	// Upgrade TLS version from 1.2 (771) to 1.3 (772)
 	if tokens[0] == "771" {
-		tokens[0] = "772" // Upgrade TLS 1.2 to TLS 1.3
+		tokens[0] = "772"
 	}
 
-	// Replace curves (position 3) with TLS 1.3 compatible ones: X25519 (29) and secp256r1 (23)
-	tokens[3] = "29-23" // X25519 and secp256r1
+	// Filter the curves/groups field to only TLS 1.3 compatible NamedGroups,
+	// preserving the original order and all compatible entries.
+	var compatible []string
+	for _, c := range strings.Split(tokens[3], "-") {
+		if c == "" {
+			continue
+		}
+		cid, err := strconv.ParseUint(c, 10, 16)
+		if err == nil && isTLS13CompatibleCurve(uint16(cid)) {
+			compatible = append(compatible, c)
+		}
+	}
+	if len(compatible) > 0 {
+		tokens[3] = strings.Join(compatible, "-")
+	} else {
+		tokens[3] = "29-23" // fallback: X25519 + secp256r1
+	}
 
 	return strings.Join(tokens, ",")
 }
 
 // isTLS13CompatibleCurve checks if a curve ID is compatible with TLS 1.3
 func isTLS13CompatibleCurve(curveID uint16) bool {
-	// TLS 1.3 compatible curves based on RFC 8446 and common implementations
+	// TLS 1.3 compatible NamedGroups per RFC 8446 §4.2.7 and common implementations.
+	// Includes both ECDHE groups and FFDHE groups (RFC 7919) which are valid in
+	// the supported_groups extension even though TLS 1.3 uses only ECDHE for key exchange.
 	switch curveID {
 	case 23: // secp256r1 (P-256)
 		return true
@@ -312,6 +333,18 @@ func isTLS13CompatibleCurve(curveID uint16) bool {
 	case 29: // X25519
 		return true
 	case 30: // X448
+		return true
+
+	// FFDHE groups (RFC 7919) — Firefox and other browsers advertise these
+	case 256: // ffdhe2048
+		return true
+	case 257: // ffdhe3072
+		return true
+	case 258: // ffdhe4096
+		return true
+	case 259: // ffdhe6144
+		return true
+	case 260: // ffdhe8192
 		return true
 
 	// Post-quantum hybrid curves (emerging standard)
