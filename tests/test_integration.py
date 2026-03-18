@@ -25,6 +25,8 @@ from test_utils import (
 
 _TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
+pytestmark = pytest.mark.live
+
 
 class TestBasicRequests:
     """Test basic HTTP GET requests."""

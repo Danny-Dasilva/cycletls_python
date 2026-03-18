@@ -17,9 +17,13 @@ env:
 
 jobs:
   live-tests:
-    name: Live Tests (Python 3.12)
+    name: Live Tests (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.11', '3.12', '3.13']
 
     steps:
       - uses: actions/checkout@v6
@@ -30,7 +34,7 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python }}
           enable-cache: true
 
       - name: Install dependencies

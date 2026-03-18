@@ -15,6 +15,8 @@ from cycletls import AsyncCycleTLS
 
 _TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
+pytestmark = pytest.mark.live
+
 
 class TestAsyncJA3Fingerprints:
     """Test async requests with JA3 fingerprints."""

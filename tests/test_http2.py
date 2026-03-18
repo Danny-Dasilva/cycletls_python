@@ -4,6 +4,8 @@ from cycletls import CycleTLS
 
 _TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
+pytestmark = pytest.mark.live
+
 
 @pytest.fixture
 def cycle():

@@ -19,6 +19,8 @@ from test_utils import assert_valid_response, assert_valid_json_response
 
 _TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
+pytestmark = pytest.mark.live
+
 
 class TestHTTP2FingerprintBasic:
     """Test basic HTTP/2 fingerprinting functionality."""

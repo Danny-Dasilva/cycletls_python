@@ -12,6 +12,8 @@ from cycletls import CycleTLS
 
 _TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
+pytestmark = pytest.mark.live
+
 
 # Test data structure matching the Go implementation
 JA3_FINGERPRINTS = [
