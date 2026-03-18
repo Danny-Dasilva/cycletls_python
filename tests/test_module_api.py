@@ -314,6 +314,9 @@ class TestTLSFingerprintingWithModuleAPI:
     def setup_method(self):
         """Reset defaults before each test"""
         cycletls.reset_defaults()
+        # TrackMe closes connections after each request; disable reuse to avoid
+        # "use of closed network connection" from the global Go transport pool.
+        cycletls.set_default(enable_connection_reuse=False)
 
     def teardown_method(self):
         """Clean up after each test"""

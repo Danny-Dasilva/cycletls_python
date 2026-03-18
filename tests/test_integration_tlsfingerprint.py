@@ -22,8 +22,20 @@ BASE_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
 
 @pytest.fixture(scope="function")
 def cycle_client():
-    """Create a fresh CycleTLS client for each test (TrackMe closes connections after each request)"""
+    """Create a CycleTLS client with connection reuse disabled.
+
+    TrackMe closes connections after each request. With the default
+    enable_connection_reuse=True the Go transport caches the TLS connection
+    globally; the next test picks up the closed connection and gets
+    "use of closed network connection". Setting enable_connection_reuse=False
+    creates a fresh roundTripper per request, avoiding stale connections.
+    """
     with CycleTLS() as client:
+        _orig_request = client.request
+        def _no_reuse(method, url, **kwargs):
+            kwargs.setdefault("enable_connection_reuse", False)
+            return _orig_request(method, url, **kwargs)
+        client.request = _no_reuse
         yield client
 
 
