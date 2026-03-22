@@ -444,7 +444,10 @@ if _extra_file:
     try:
         FingerprintRegistry.load_from_file(_extra_file, clear=False)
     except Exception as _exc:
-        print(f"cycletls: warning: failed to load CYCLETLS_FINGERPRINTS_FILE={_extra_file!r}: {_exc}", file=sys.stderr)
+        print(
+            f"cycletls: warning: failed to load CYCLETLS_FINGERPRINTS_FILE={_extra_file!r}: {_exc}",
+            file=sys.stderr,
+        )
 
 _trackme_capture_path = os.environ.get("CYCLETLS_TRACKME_FINGERPRINT_FILE")
 if _trackme_capture_path:
@@ -461,7 +464,10 @@ for export_name, profile_name in _PROFILE_EXPORTS.items():
     if profile is not None:
         globals()[export_name] = profile
     else:
-        print(f"cycletls: warning: built-in profile '{profile_name}' not found in registry.", file=sys.stderr)
+        print(
+            f"cycletls: warning: built-in profile '{profile_name}' not found in registry.",
+            file=sys.stderr,
+        )
 
 
 _PROFILE_EXPORT_NAMES = list(_PROFILE_EXPORTS.keys())
