@@ -1,47 +1,66 @@
 """TLS fingerprint profiles and registry for CycleTLS.
 
-This module provides a plugin architecture for managing reusable TLS fingerprint
-configurations. Users can define custom browser profiles and load them from JSON files.
-
-Example:
-    >>> from cycletls.fingerprints import TLSFingerprint, FingerprintRegistry
-    >>>
-    >>> # Use a built-in profile
-    >>> profile = FingerprintRegistry.get("chrome_120")
-    >>>
-    >>> # Or create a custom profile
-    >>> custom = TLSFingerprint(
-    ...     name="my_browser",
-    ...     ja3="771,4865-4867-4866-...",
-    ...     user_agent="Custom/1.0"
-    ... )
-    >>> FingerprintRegistry.register(custom)
+This module provides a registry architecture for reusable TLS fingerprint
+configurations backed by JSON files.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import random as _random
+import re
+import sys
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Optional
 
 
+class BrowserFamily(str, Enum):
+    """Browser family for fingerprint lookup."""
+
+    BRAVE = "brave"
+    CHROME = "chrome"
+    CHROMIUM = "chromium"
+    EDGE = "edge"
+    FIREFOX = "firefox"
+    OPERA = "opera"
+    SAFARI = "safari"
+    SAMSUNG = "samsung"
+
+
+class Platform(str, Enum):
+    """Platform / operating system for fingerprint lookup."""
+
+    ANDROID = "android"
+    IOS = "ios"
+    LINUX = "linux"
+    MACOS = "mac"
+    WINDOWS = "win"
+
+
+_FAMILY_PREFIXES: dict[BrowserFamily, tuple[str, ...]] = {
+    BrowserFamily.BRAVE: ("brave",),
+    BrowserFamily.CHROME: ("chrome",),
+    BrowserFamily.CHROMIUM: ("chromium",),
+    BrowserFamily.EDGE: ("edge", "msedge"),
+    BrowserFamily.FIREFOX: ("firefox",),
+    BrowserFamily.OPERA: ("opera",),
+    BrowserFamily.SAFARI: ("safari",),
+    BrowserFamily.SAMSUNG: ("samsung",),
+}
+
+
+def _version_tuple(name: str) -> tuple[int, ...]:
+    """Extract numeric version components from a profile name for sorting."""
+    parts = re.findall(r"\d+", name)
+    return tuple(int(p) for p in parts) if parts else (0,)
+
+
 @dataclass
 class TLSFingerprint:
-    """A reusable TLS fingerprint configuration.
-
-    Attributes:
-        name: Unique identifier for this profile
-        ja3: JA3 fingerprint string
-        ja4r: Optional JA4R fingerprint string
-        http2_fingerprint: Optional HTTP/2 fingerprint (SETTINGS, WINDOW_UPDATE, etc.)
-        quic_fingerprint: Optional QUIC/HTTP3 fingerprint
-        user_agent: User-Agent header value
-        header_order: Ordered list of header names to maintain
-        disable_grease: Whether to disable GREASE extensions
-        force_http1: Force HTTP/1.1 protocol
-        force_http3: Force HTTP/3 protocol
-    """
+    """A reusable TLS fingerprint configuration."""
 
     name: str
     ja3: str
@@ -56,14 +75,6 @@ class TLSFingerprint:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TLSFingerprint:
-        """Create a TLSFingerprint from a dictionary.
-
-        Args:
-            data: Dictionary with fingerprint configuration
-
-        Returns:
-            TLSFingerprint instance
-        """
         return cls(
             name=data["name"],
             ja3=data["ja3"],
@@ -79,24 +90,11 @@ class TLSFingerprint:
 
     @classmethod
     def from_json(cls, path: str | Path) -> TLSFingerprint:
-        """Load a TLSFingerprint from a JSON file.
-
-        Args:
-            path: Path to JSON file
-
-        Returns:
-            TLSFingerprint instance
-        """
         with open(path, "r") as f:
             data = json.load(f)
         return cls.from_dict(data)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization.
-
-        Returns:
-            Dictionary representation
-        """
         result: dict[str, Any] = {
             "name": self.name,
             "ja3": self.ja3,
@@ -120,25 +118,10 @@ class TLSFingerprint:
         return result
 
     def to_json(self, path: str | Path) -> None:
-        """Save fingerprint to a JSON file.
-
-        Args:
-            path: Path to save JSON file
-        """
         with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
 
     def apply_to_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
-        """Apply this fingerprint's settings to request kwargs.
-
-        Only sets values that aren't already specified in kwargs.
-
-        Args:
-            kwargs: Request keyword arguments
-
-        Returns:
-            Updated kwargs dictionary
-        """
         if "ja3" not in kwargs:
             kwargs["ja3"] = self.ja3
         if self.ja4r is not None and "ja4r" not in kwargs:
@@ -160,39 +143,25 @@ class TLSFingerprint:
         return kwargs
 
 
+DEFAULT_FINGERPRINTS_FILE = Path(__file__).resolve().parent / "data" / "fingerprints.json"
+
+
 class FingerprintRegistry:
-    """Registry for managing fingerprint profiles.
-
-    This is a singleton class that stores all registered fingerprint profiles.
-    Profiles can be registered programmatically or loaded from JSON files.
-
-    Example:
-        >>> FingerprintRegistry.register(my_profile)
-        >>> profile = FingerprintRegistry.get("chrome_120")
-        >>> all_names = FingerprintRegistry.list()
-    """
+    """Registry for managing fingerprint profiles."""
 
     _profiles: ClassVar[dict[str, TLSFingerprint]] = {}
 
     @classmethod
     def register(cls, profile: TLSFingerprint) -> None:
-        """Register a fingerprint profile.
-
-        Args:
-            profile: TLSFingerprint to register
-        """
         cls._profiles[profile.name] = profile
 
     @classmethod
+    def register_many(cls, profiles: list[TLSFingerprint]) -> None:
+        for profile in profiles:
+            cls.register(profile)
+
+    @classmethod
     def unregister(cls, name: str) -> bool:
-        """Unregister a fingerprint profile.
-
-        Args:
-            name: Name of profile to remove
-
-        Returns:
-            True if profile was removed, False if not found
-        """
         if name in cls._profiles:
             del cls._profiles[name]
             return True
@@ -200,456 +169,309 @@ class FingerprintRegistry:
 
     @classmethod
     def get(cls, name: str) -> TLSFingerprint:
-        """Get a fingerprint profile by name.
-
-        Args:
-            name: Profile name
-
-        Returns:
-            TLSFingerprint instance
-
-        Raises:
-            KeyError: If profile not found
-        """
         if name not in cls._profiles:
             raise KeyError(f"Fingerprint profile '{name}' not found. Available: {cls.list()}")
         return cls._profiles[name]
 
     @classmethod
     def get_or_none(cls, name: str) -> Optional[TLSFingerprint]:
-        """Get a fingerprint profile by name, or None if not found.
-
-        Args:
-            name: Profile name
-
-        Returns:
-            TLSFingerprint instance or None
-        """
         return cls._profiles.get(name)
 
     @classmethod
     def list(cls) -> list[str]:
-        """List all registered profile names.
-
-        Returns:
-            List of profile names
-        """
         return list(cls._profiles.keys())
 
     @classmethod
     def all(cls) -> dict[str, TLSFingerprint]:
-        """Get all registered profiles.
-
-        Returns:
-            Dictionary of name -> TLSFingerprint
-        """
         return dict(cls._profiles)
 
     @classmethod
     def clear(cls) -> None:
-        """Remove all registered profiles."""
         cls._profiles.clear()
 
+    @classmethod
+    def _candidates(
+        cls,
+        family: Optional[BrowserFamily] = None,
+        platform: Optional[Platform] = None,
+    ) -> list[TLSFingerprint]:
+        if family is not None:
+            return cls.by_family(family, platform=platform)
+        if platform is not None:
+            suffix = f"_{platform.value}"
+            return [fp for fp in cls._profiles.values() if fp.name.endswith(suffix)]
+        return list(cls._profiles.values())
 
-# ============================================================================
-# Built-in Browser Fingerprint Profiles
-# ============================================================================
+    @classmethod
+    def by_family(
+        cls, family: BrowserFamily, platform: Optional[Platform] = None
+    ) -> list[TLSFingerprint]:
+        """Return all profiles whose name starts with any prefix for *family*.
 
-# Chrome 120 on Windows 10
-CHROME_120 = TLSFingerprint(
-    name="chrome_120",
-    ja3=(
-        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
-        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
-    ),
-    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    ),
-    header_order=[
-        "host",
-        "connection",
-        "content-length",
-        "sec-ch-ua",
-        "sec-ch-ua-mobile",
-        "sec-ch-ua-platform",
-        "upgrade-insecure-requests",
-        "user-agent",
-        "accept",
-        "sec-fetch-site",
-        "sec-fetch-mode",
-        "sec-fetch-user",
-        "sec-fetch-dest",
-        "accept-encoding",
-        "accept-language",
-        "cookie",
-    ],
-)
+        If *platform* is given, only profiles whose name ends with
+        ``_<platform.value>`` are returned.  Profiles without a platform suffix
+        are excluded when *platform* is specified.
+        """
+        prefixes = _FAMILY_PREFIXES.get(family, ())
+        candidates = [
+            fp for fp in cls._profiles.values() if any(fp.name.startswith(p) for p in prefixes)
+        ]
+        if platform is not None:
+            suffix = f"_{platform.value}"
+            candidates = [fp for fp in candidates if fp.name.endswith(suffix)]
+        return candidates
 
-# Chrome 121 on Windows 10
-CHROME_121 = TLSFingerprint(
-    name="chrome_121",
-    ja3=(
-        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
-        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0"
-    ),
-    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-    ),
-    header_order=[
-        "host",
-        "connection",
-        "content-length",
-        "sec-ch-ua",
-        "sec-ch-ua-mobile",
-        "sec-ch-ua-platform",
-        "upgrade-insecure-requests",
-        "user-agent",
-        "accept",
-        "sec-fetch-site",
-        "sec-fetch-mode",
-        "sec-fetch-user",
-        "sec-fetch-dest",
-        "accept-encoding",
-        "accept-language",
-        "cookie",
-    ],
-)
+    @classmethod
+    def latest(
+        cls,
+        family: Optional[BrowserFamily] = None,
+        platform: Optional[Platform] = None,
+    ) -> TLSFingerprint:
+        """Return the profile with the highest version number.
 
-# Firefox 121 on Windows 10
-FIREFOX_121 = TLSFingerprint(
-    name="firefox_121",
-    ja3=(
-        "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-"
-        "156-157-47-53,0-23-65281-10-11-35-16-5-34-51-43-13-45-28-21,29-23-24-25-256-257,0"
-    ),
-    http2_fingerprint=(
-        "1:65536,4:131072,5:16384|12517377|"
-        "3:0:0:201,5:0:0:1,7:0:0:1,9:0:7:1,11:0:3:1,13:0:0:241|m,p,a,s"
-    ),
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    header_order=[
-        "host",
-        "user-agent",
-        "accept",
-        "accept-language",
-        "accept-encoding",
-        "connection",
-        "cookie",
-        "upgrade-insecure-requests",
-        "sec-fetch-dest",
-        "sec-fetch-mode",
-        "sec-fetch-site",
-        "sec-fetch-user",
-    ],
-)
+        *family* and *platform* are optional filters; omit both to search the
+        entire registry.
+        """
+        candidates = cls._candidates(family, platform)
+        if not candidates:
+            raise KeyError(
+                f"No profiles found"
+                f"{f' for family {family!r}' if family else ''}"
+                f"{f' on platform {platform!r}' if platform else ''}. "
+                f"Available: {cls.list()}"
+            )
+        return max(candidates, key=lambda fp: _version_tuple(fp.name))
 
-# Safari 17 on macOS
-SAFARI_17 = TLSFingerprint(
-    name="safari_17",
-    ja3=(
-        "771,4865-4866-4867-49196-49195-52393-49200-49199-52392-49162-49161-49172-49171-"
-        "157-156-53-47-49160-49170-10,0-23-65281-10-11-16-5-13-18-51-45-43-27,29-23-24-25,0"
-    ),
-    http2_fingerprint="4:4194304,3:100|10485760|0|m,s,p,a",
-    user_agent=(
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
-        "(KHTML, like Gecko) Version/17.2 Safari/605.1.15"
-    ),
-    header_order=[
-        "host",
-        "accept",
-        "sec-fetch-site",
-        "cookie",
-        "sec-fetch-dest",
-        "sec-fetch-mode",
-        "user-agent",
-        "accept-language",
-        "accept-encoding",
-        "connection",
-    ],
-)
+    @classmethod
+    def random(
+        cls,
+        family: Optional[BrowserFamily] = None,
+        platform: Optional[Platform] = None,
+    ) -> TLSFingerprint:
+        """Return a random profile.
 
-# Edge 120 on Windows 10
-EDGE_120 = TLSFingerprint(
-    name="edge_120",
-    ja3=(
-        "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,"
-        "0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
-    ),
-    http2_fingerprint="1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,a,s,p",
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
-    ),
-    header_order=[
-        "host",
-        "connection",
-        "content-length",
-        "sec-ch-ua",
-        "sec-ch-ua-mobile",
-        "sec-ch-ua-platform",
-        "upgrade-insecure-requests",
-        "user-agent",
-        "accept",
-        "sec-fetch-site",
-        "sec-fetch-mode",
-        "sec-fetch-user",
-        "sec-fetch-dest",
-        "accept-encoding",
-        "accept-language",
-        "cookie",
-    ],
-)
+        *family* and *platform* are optional filters; omit both to pick from
+        the entire registry.
+        """
+        candidates = cls._candidates(family, platform)
+        if not candidates:
+            raise KeyError(
+                f"No profiles found"
+                f"{f' for family {family!r}' if family else ''}"
+                f"{f' on platform {platform!r}' if platform else ''}. "
+                f"Available: {cls.list()}"
+            )
+        return _random.choice(candidates)
 
-# Mobile Chrome on Android
-CHROME_ANDROID = TLSFingerprint(
-    name="chrome_android",
-    ja3=CHROME_120.ja3,
-    http2_fingerprint=CHROME_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36"
-    ),
-    header_order=[
-        "host",
-        "connection",
-        "sec-ch-ua",
-        "sec-ch-ua-mobile",
-        "sec-ch-ua-platform",
-        "upgrade-insecure-requests",
-        "user-agent",
-        "accept",
-        "sec-fetch-site",
-        "sec-fetch-mode",
-        "sec-fetch-user",
-        "sec-fetch-dest",
-        "accept-encoding",
-        "accept-language",
-        "cookie",
-    ],
-)
+    @classmethod
+    def load_from_file(cls, path: str | Path, clear: bool = False) -> list[TLSFingerprint]:
+        payload = json.loads(Path(path).read_text())
 
-# Mobile Safari on iOS
-SAFARI_IOS = TLSFingerprint(
-    name="safari_ios",
-    ja3=(
-        "771,4865-4866-4867-49196-49195-52393-49200-49199-52392-49162-49161-49172-49171-"
-        "157-156-53-47-49160-49170-10,0-23-65281-10-11-16-5-13-18-51-45-43-27,29-23-24-25,0"
-    ),
-    http2_fingerprint="4:4194304,3:100|10485760|0|m,s,p,a",
-    user_agent=(
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 "
-        "(KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
-    ),
-    header_order=[
-        "host",
-        "accept",
-        "sec-fetch-site",
-        "cookie",
-        "sec-fetch-dest",
-        "sec-fetch-mode",
-        "user-agent",
-        "accept-language",
-        "accept-encoding",
-        "connection",
-    ],
-)
+        raw_items: list[dict[str, Any]]
+        if isinstance(payload, dict) and isinstance(payload.get("fingerprints"), list):
+            raw_items = [v for v in payload["fingerprints"] if isinstance(v, dict)]
+        elif isinstance(payload, list):
+            raw_items = [v for v in payload if isinstance(v, dict)]
+        else:
+            raise ValueError(f"Unsupported fingerprint registry format in {path}")
+
+        loaded = [
+            TLSFingerprint.from_dict(item) for item in raw_items if "name" in item and "ja3" in item
+        ]
+        if clear:
+            cls.clear()
+        cls.register_many(loaded)
+        return loaded
+
+    @classmethod
+    def save_to_file(cls, path: str | Path) -> None:
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema": "cycletls_fingerprint_registry/v1",
+            "fingerprints": [fp.to_dict() for _, fp in sorted(cls._profiles.items())],
+        }
+        target.write_text(json.dumps(payload, indent=2) + "\n")
 
 
-# Chrome 122 on Windows 10
-CHROME_122 = TLSFingerprint(
-    name="chrome_122",
-    ja3=CHROME_121.ja3,
-    http2_fingerprint=CHROME_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    ),
-    header_order=CHROME_120.header_order,
-)
+def _extract_header_order_from_trackme_raw(raw: dict[str, Any]) -> list[str]:
+    http2 = raw.get("http2", {})
+    sent_frames = http2.get("sent_frames", [])
+    if not isinstance(sent_frames, list):
+        return []
 
-# Chrome 123 on Windows 10
-CHROME_123 = TLSFingerprint(
-    name="chrome_123",
-    ja3=CHROME_121.ja3,
-    http2_fingerprint=CHROME_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-    ),
-    header_order=CHROME_120.header_order,
-)
+    for frame in sent_frames:
+        if not isinstance(frame, dict) or frame.get("frame_type") != "HEADERS":
+            continue
+        headers = frame.get("headers")
+        if not isinstance(headers, list):
+            continue
 
-# Chrome 124 on Windows 10
-CHROME_124 = TLSFingerprint(
-    name="chrome_124",
-    ja3=CHROME_121.ja3,
-    http2_fingerprint=CHROME_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    header_order=CHROME_120.header_order,
-)
-
-# Chrome 125 on Windows 11
-CHROME_125 = TLSFingerprint(
-    name="chrome_125",
-    ja3=CHROME_121.ja3,
-    http2_fingerprint=CHROME_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-    ),
-    header_order=CHROME_120.header_order,
-)
-
-# Firefox 122 on Windows 10
-FIREFOX_122 = TLSFingerprint(
-    name="firefox_122",
-    ja3=FIREFOX_121.ja3,
-    http2_fingerprint=FIREFOX_121.http2_fingerprint,
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
-    header_order=FIREFOX_121.header_order,
-)
-
-# Firefox 123 on Windows 10
-FIREFOX_123 = TLSFingerprint(
-    name="firefox_123",
-    ja3=FIREFOX_121.ja3,
-    http2_fingerprint=FIREFOX_121.http2_fingerprint,
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
-    header_order=FIREFOX_121.header_order,
-)
-
-# Firefox 124 on Windows 10
-FIREFOX_124 = TLSFingerprint(
-    name="firefox_124",
-    ja3=FIREFOX_121.ja3,
-    http2_fingerprint=FIREFOX_121.http2_fingerprint,
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
-    header_order=FIREFOX_121.header_order,
-)
-
-# Edge 121 on Windows 10
-EDGE_121 = TLSFingerprint(
-    name="edge_121",
-    ja3=CHROME_121.ja3,
-    http2_fingerprint=EDGE_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
-    ),
-    header_order=EDGE_120.header_order,
-)
-
-# Edge 122 on Windows 10
-EDGE_122 = TLSFingerprint(
-    name="edge_122",
-    ja3=CHROME_121.ja3,
-    http2_fingerprint=EDGE_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0"
-    ),
-    header_order=EDGE_120.header_order,
-)
-
-# Opera 106 on Windows 10
-OPERA_106 = TLSFingerprint(
-    name="opera_106",
-    ja3=CHROME_120.ja3,
-    http2_fingerprint=CHROME_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0"
-    ),
-    header_order=CHROME_120.header_order,
-)
-
-# Brave 1.63 on Windows 10
-BRAVE_1_63 = TLSFingerprint(
-    name="brave_1_63",
-    ja3=CHROME_120.ja3,
-    http2_fingerprint=CHROME_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    ),
-    header_order=CHROME_120.header_order,
-)
-
-# Chrome on Linux
-CHROME_LINUX = TLSFingerprint(
-    name="chrome_linux",
-    ja3=CHROME_121.ja3,
-    http2_fingerprint=CHROME_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    ),
-    header_order=CHROME_120.header_order,
-)
-
-# Firefox on Linux
-FIREFOX_LINUX = TLSFingerprint(
-    name="firefox_linux",
-    ja3=FIREFOX_121.ja3,
-    http2_fingerprint=FIREFOX_121.http2_fingerprint,
-    user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0",
-    header_order=FIREFOX_121.header_order,
-)
-
-# Samsung Internet 23 on Android
-SAMSUNG_BROWSER_23 = TLSFingerprint(
-    name="samsung_browser_23",
-    ja3=CHROME_120.ja3,
-    http2_fingerprint=CHROME_120.http2_fingerprint,
-    user_agent=(
-        "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36"
-    ),
-    header_order=CHROME_ANDROID.header_order,
-)
+        ordered: list[str] = []
+        for header in headers:
+            if not isinstance(header, str) or header.startswith(":") or ":" not in header:
+                continue
+            name = header.split(":", 1)[0].strip().lower()
+            if name:
+                ordered.append(name)
+        if ordered:
+            return ordered
+    return []
 
 
-# Register all built-in profiles (auto-discover TLSFingerprint instances in module)
-def _register_builtin_profiles() -> None:
-    """Register all built-in fingerprint profiles."""
-    for obj in globals().values():
-        if isinstance(obj, TLSFingerprint):
-            FingerprintRegistry.register(obj)
+def _extract_trackme_version(browser: str, user_agent: str) -> str:
+    token_map = {
+        "firefox": r"Firefox/([0-9.]+)",
+        "chromium": r"(?:HeadlessChrome|Chrome)/([0-9.]+)",
+        "chrome": r"(?:HeadlessChrome|Chrome)/([0-9.]+)",
+    }
+    pattern = token_map.get(browser.lower())
+    if not pattern:
+        return "unknown"
+    match = re.search(pattern, user_agent)
+    return match.group(1) if match else "unknown"
 
 
-_register_builtin_profiles()
+def _build_trackme_name(browser: str, version: str) -> str:
+    safe_version = re.sub(r"[^0-9A-Za-z]+", "_", version).strip("_") or "unknown"
+    return f"{browser}_{safe_version}".lower()
+
+
+def _normalize_trackme_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    fingerprints = payload.get("fingerprints")
+    if isinstance(fingerprints, list):
+        normalized: list[dict[str, Any]] = []
+        for entry in fingerprints:
+            if not isinstance(entry, dict):
+                continue
+            normalized.append(
+                {
+                    "name": entry.get("name"),
+                    "ja3": entry.get("ja3"),
+                    "ja4r": entry.get("ja4_r") or entry.get("ja4r"),
+                    "http2_fingerprint": entry.get("http2") or entry.get("http2_fingerprint"),
+                    "user_agent": entry.get("ua") or entry.get("user_agent"),
+                    "header_order": entry.get("header_order"),
+                }
+            )
+        return normalized
+
+    normalized_old: list[dict[str, Any]] = []
+    for browser, entry in payload.items():
+        if not isinstance(entry, dict) or "error" in entry:
+            continue
+
+        raw_candidate = entry.get("raw")
+        raw: dict[str, Any] = (
+            {str(k): v for k, v in raw_candidate.items()} if isinstance(raw_candidate, dict) else {}
+        )
+        user_agent = entry.get("ua") or raw.get("user_agent") or ""
+        version = _extract_trackme_version(str(browser), str(user_agent))
+
+        normalized_old.append(
+            {
+                "name": _build_trackme_name(str(browser), version),
+                "ja3": entry.get("ja3"),
+                "ja4r": entry.get("ja4_r") or entry.get("ja4r"),
+                "http2_fingerprint": entry.get("http2") or entry.get("http2_akamai"),
+                "user_agent": user_agent,
+                "header_order": _extract_header_order_from_trackme_raw(raw),
+            }
+        )
+    return normalized_old
+
+
+def load_trackme_fingerprints(
+    path: str | Path,
+    persist_path: str | Path | None = None,
+) -> list[TLSFingerprint]:
+    payload = json.loads(Path(path).read_text())
+    entries = _normalize_trackme_payload(payload)
+
+    loaded: list[TLSFingerprint] = []
+    for entry in entries:
+        if not entry.get("name") or not entry.get("ja3"):
+            continue
+        profile = TLSFingerprint.from_dict(entry)
+        FingerprintRegistry.register(profile)
+        loaded.append(profile)
+
+    if persist_path is not None:
+        FingerprintRegistry.save_to_file(persist_path)
+
+    return loaded
+
+
+_PROFILE_EXPORTS: dict[str, str] = {
+    "CHROME_120": "chrome_120_win",
+    "CHROME_121": "chrome_121_win",
+    "CHROME_122": "chrome_122_win",
+    "CHROME_123": "chrome_123_win",
+    "CHROME_124": "chrome_124_win",
+    "CHROME_125": "chrome_125_win",
+    "FIREFOX_121": "firefox_121_win",
+    "FIREFOX_122": "firefox_122_win",
+    "FIREFOX_123": "firefox_123_win",
+    "FIREFOX_124": "firefox_124_win",
+    "SAFARI_17": "safari_17_mac",
+    "SAFARI_26": "safari_26_0_mac",
+    "EDGE_120": "edge_120_win",
+    "EDGE_121": "edge_121_win",
+    "EDGE_122": "edge_122_win",
+    "OPERA_106": "opera_106_win",
+    "BRAVE_1_63": "brave_1_63_win",
+    "CHROME_ANDROID": "chrome_android",
+    "SAFARI_IOS": "safari_ios",
+    "CHROME_LINUX": "chrome_linux",
+    "FIREFOX_LINUX": "firefox_linux",
+    "SAMSUNG_BROWSER_23": "samsung_browser_23_android",
+}
+
+
+# Initialize registry from the default JSON-backed profile list.
+if DEFAULT_FINGERPRINTS_FILE.exists():
+    FingerprintRegistry.load_from_file(DEFAULT_FINGERPRINTS_FILE, clear=True)
+else:
+    print(
+        f"cycletls: warning: default fingerprints file not found: {DEFAULT_FINGERPRINTS_FILE}. "
+        "Built-in profiles will not be available.",
+        file=sys.stderr,
+    )
+
+# Optional extra runtime file(s)
+_extra_file = os.environ.get("CYCLETLS_FINGERPRINTS_FILE")
+if _extra_file:
+    try:
+        FingerprintRegistry.load_from_file(_extra_file, clear=False)
+    except Exception as _exc:
+        print(f"cycletls: warning: failed to load CYCLETLS_FINGERPRINTS_FILE={_extra_file!r}: {_exc}", file=sys.stderr)
+
+_trackme_capture_path = os.environ.get("CYCLETLS_TRACKME_FINGERPRINT_FILE")
+if _trackme_capture_path:
+    try:
+        load_trackme_fingerprints(_trackme_capture_path, persist_path=DEFAULT_FINGERPRINTS_FILE)
+    except Exception as _exc:
+        print(
+            f"cycletls: warning: failed to load CYCLETLS_TRACKME_FINGERPRINT_FILE={_trackme_capture_path!r}: {_exc}",
+            file=sys.stderr,
+        )
+
+for export_name, profile_name in _PROFILE_EXPORTS.items():
+    profile = FingerprintRegistry.get_or_none(profile_name)
+    if profile is not None:
+        globals()[export_name] = profile
+    else:
+        print(f"cycletls: warning: built-in profile '{profile_name}' not found in registry.", file=sys.stderr)
+
+
+_PROFILE_EXPORT_NAMES = list(_PROFILE_EXPORTS.keys())
 
 
 __all__ = [
+    "BrowserFamily",
+    "Platform",
     "TLSFingerprint",
     "FingerprintRegistry",
-    "CHROME_120",
-    "CHROME_121",
-    "CHROME_122",
-    "CHROME_123",
-    "CHROME_124",
-    "CHROME_125",
-    "FIREFOX_121",
-    "FIREFOX_122",
-    "FIREFOX_123",
-    "FIREFOX_124",
-    "SAFARI_17",
-    "EDGE_120",
-    "EDGE_121",
-    "EDGE_122",
-    "OPERA_106",
-    "BRAVE_1_63",
-    "CHROME_ANDROID",
-    "SAFARI_IOS",
-    "CHROME_LINUX",
-    "FIREFOX_LINUX",
-    "SAMSUNG_BROWSER_23",
-]
+    "DEFAULT_FINGERPRINTS_FILE",
+    "load_trackme_fingerprints",
+] + _PROFILE_EXPORT_NAMES

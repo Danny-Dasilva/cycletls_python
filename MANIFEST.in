@@ -8,6 +8,7 @@ recursive-include cycletls/dist *.so *.dylib *.dll *.h
 
 # Include all Python source files
 recursive-include cycletls *.py
+recursive-include cycletls/data *.json
 
 # Exclude development and build artifacts
 recursive-exclude tests *

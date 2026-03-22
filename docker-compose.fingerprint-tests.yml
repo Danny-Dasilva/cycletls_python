@@ -1,0 +1,43 @@
+services:
+  trackme:
+    build:
+      context: ./docker/trackme
+    volumes:
+      - ./docker/trackme/certs:/app/certs:ro
+      - ./docker/trackme/config.bridge.json:/app/config.json:ro
+    networks:
+      - fingerprint-net
+    ports:
+      - "8443:8443"
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null --no-check-certificate https://localhost:8443/api/clean && echo ok || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
+
+  playwright-capture:
+    image: mcr.microsoft.com/playwright/python:v1.58.0-noble
+    depends_on:
+      trackme:
+        condition: service_healthy
+    volumes:
+      - ./scripts/capture_browser_fingerprints.py:/capture.py:ro
+      - ./tests/integration/artifacts:/fingerprints
+    networks:
+      - fingerprint-net
+    environment:
+      - TRACKME_URL=https://trackme:8443
+    # NOTE: Firefox version is pinned to what the Playwright image bundles.
+    # Playwright's Firefox driver uses the Juggler protocol which is only in
+    # Playwright's patched builds — system Firefox cannot be substituted.
+    # To get a newer Firefox, bump the image tag to a newer Playwright release.
+    command: >
+      bash -c "pip install 'playwright==1.58.0' --quiet &&
+               playwright install chrome msedge &&
+               python /capture.py --url https://trackme:8443 --output /fingerprints/captured.json --ignore-https-errors"
+
+networks:
+  fingerprint-net:
+    driver: bridge

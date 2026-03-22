@@ -1,0 +1,12 @@
+{
+  "log_to_db": false,
+  "tls_port": "8443",
+  "http_port": "8080",
+  "cert_file": "certs/chain.pem",
+  "key_file": "certs/key.pem",
+  "host": "0.0.0.0",
+  "http_redirect": "https://trackme:8443",
+  "device": "",
+  "cors_key": "X-CORS",
+  "enable_quic": false
+}

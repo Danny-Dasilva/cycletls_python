@@ -165,6 +165,7 @@ markers = [
     "unit: marks tests as unit tests",
     "live: marks tests that run against live tlsfingerprint.com (deselect with '-m \"not live\"')",
     "blocking: marks tests as CI-blocking - failures will fail the CI pipeline",
+    "fingerprint: marks tests that verify real browser fingerprint replication via Playwright + TrackMe",
 ]
 
 [tool.coverage.run]
@@ -191,6 +192,7 @@ directory = "htmlcov"
 
 [dependency-groups]
 dev = [
+    "playwright>=1.58.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
     "ruff>=0.14.14",

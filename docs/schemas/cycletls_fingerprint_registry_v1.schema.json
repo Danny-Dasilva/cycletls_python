@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Danny-Dasilva/cycletls_python/docs/schemas/cycletls_fingerprint_registry_v1.schema.json",
+  "title": "CycleTLS Fingerprint Registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "fingerprints"],
+  "properties": {
+    "schema": {
+      "const": "cycletls_fingerprint_registry/v1"
+    },
+    "fingerprints": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tlsFingerprint"
+      }
+    }
+  },
+  "$defs": {
+    "tlsFingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "ja3"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "ja3": {"type": "string", "minLength": 1},
+        "ja4r": {"type": "string"},
+        "http2_fingerprint": {"type": "string"},
+        "quic_fingerprint": {"type": "string"},
+        "user_agent": {"type": "string"},
+        "header_order": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "disable_grease": {"type": "boolean"},
+        "force_http1": {"type": "boolean"},
+        "force_http3": {"type": "boolean"}
+      }
+    }
+  }
+}

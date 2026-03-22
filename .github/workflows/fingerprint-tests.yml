@@ -1,0 +1,294 @@
+name: Browser Fingerprint Replication Tests
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fingerprint-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+env:
+  PYTHON_PATH: ./
+
+jobs:
+  android-emulation:
+    name: Android Chrome Fingerprint Capture (API 34)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Install Playwright (for Android ADB support)
+        run: uv run playwright install chromium --with-deps
+
+      - name: Generate TLS certificates for TrackMe
+        run: |
+          mkdir -p docker/trackme/certs
+          openssl req -x509 -newkey rsa:2048 \
+            -keyout docker/trackme/certs/key.pem \
+            -out docker/trackme/certs/chain.pem \
+            -days 1 -nodes \
+            -subj "/CN=trackme" \
+            -addext "subjectAltName=DNS:trackme,DNS:localhost,IP:127.0.0.1,IP:10.0.2.2"
+
+      - name: Start TrackMe (bridge network, port-mapped to host)
+        run: |
+          docker compose -f docker-compose.fingerprint-tests.yml up -d --build trackme
+          echo "Waiting for TrackMe to become healthy..."
+          if ! timeout 120 bash -c \
+            'until docker inspect --format "{{.State.Health.Status}}" \
+               $(docker compose -f docker-compose.fingerprint-tests.yml ps -q trackme) \
+               2>/dev/null | grep -q healthy; do sleep 3; done'; then
+            echo "TrackMe did not become ready. Logs:"
+            docker compose -f docker-compose.fingerprint-tests.yml logs trackme
+            exit 1
+          fi
+          echo "TrackMe is ready at https://10.0.2.2:8443 from the emulator."
+
+      - name: Start Android emulator and capture Chrome fingerprint
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_7
+          script: |
+            mkdir -p tests/integration/artifacts
+            uv run python scripts/capture_browser_fingerprints.py \
+              --android-only \
+              --url https://10.0.2.2:8443 \
+              --output tests/integration/artifacts/captured-android.json \
+              --ignore-https-errors
+
+      - name: Upload Android fingerprint artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-fingerprints
+          path: tests/integration/artifacts/captured-android.json
+          if-no-files-found: warn
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.fingerprint-tests.yml down -v || true
+
+  playwright-channels:
+    name: Playwright Channels (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ['3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+
+      - name: Install dependencies
+        shell: bash
+        run: uv sync --locked --dev
+
+      - name: Install Playwright browsers and channels (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          uv run playwright install --with-deps chromium firefox webkit
+          uv run playwright install chrome msedge
+
+      - name: Install Playwright browsers and channels (macOS/Windows)
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          uv run playwright install chromium firefox webkit
+          uv run playwright install chrome msedge
+
+      - name: Validate channel availability (chrome, msedge, safari)
+        shell: bash
+        run: |
+          mkdir -p tests/integration/artifacts
+          uv run python scripts/capture_browser_fingerprints.py \
+            --discover-only \
+            --require-browsers chrome,msedge,safari \
+            --output tests/integration/artifacts/captured-${{ runner.os }}.json
+
+      - name: Upload channel discovery artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-channels-${{ runner.os }}-py${{ matrix.python }}
+          path: tests/integration/artifacts/captured-${{ runner.os }}.json
+          if-no-files-found: warn
+
+  fingerprint-tests:
+    name: Fingerprint Replication (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    needs: [playwright-channels, android-emulation]
+    # Run as long as the desktop capture succeeded; android is optional (continue-on-error)
+    if: ${{ always() && needs.playwright-channels.result == 'success' }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CycleTLS (Go build)
+        uses: ./.github/actions/setup-cycletls
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --all-extras --dev
+
+      - name: Generate TLS certificates for TrackMe
+        run: |
+          mkdir -p docker/trackme/certs
+          openssl req -x509 -newkey rsa:2048 \
+            -keyout docker/trackme/certs/key.pem \
+            -out docker/trackme/certs/chain.pem \
+            -days 1 -nodes \
+            -subj "/CN=trackme" \
+            -addext "subjectAltName=DNS:trackme,DNS:localhost,IP:127.0.0.1"
+          # Combine system CAs with test CA so Go/CycleTLS trusts the self-signed cert
+          cat /etc/ssl/certs/ca-certificates.crt docker/trackme/certs/chain.pem \
+            > /tmp/combined-test-cas.crt
+
+      - name: Build and start TrackMe (bridge network for Playwright capture)
+        run: |
+          docker compose -f docker-compose.fingerprint-tests.yml up -d --build trackme
+          echo "Waiting for TrackMe to become healthy..."
+          if ! timeout 120 bash -c \
+            'until docker inspect --format "{{.State.Health.Status}}" \
+               $(docker compose -f docker-compose.fingerprint-tests.yml ps -q trackme) \
+               2>/dev/null | grep -q healthy; do sleep 3; done'; then
+            echo "TrackMe did not become ready. Logs:"
+            docker compose -f docker-compose.fingerprint-tests.yml logs trackme
+            exit 1
+          fi
+          echo "TrackMe is ready."
+
+      - name: Capture real browser fingerprints via Playwright
+        run: |
+          docker compose -f docker-compose.fingerprint-tests.yml run --rm playwright-capture
+          echo "Playwright capture finished."
+
+      - name: Download Android fingerprints
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: android-fingerprints
+          path: tests/integration/artifacts/
+
+      - name: Merge Android fingerprints into desktop capture
+        run: |
+          python - <<'EOF'
+          import json, pathlib, sys
+          desktop_path = pathlib.Path("tests/integration/artifacts/captured.json")
+          android_path = pathlib.Path("tests/integration/artifacts/captured-android.json")
+          if not android_path.exists():
+              print("No android fingerprints artifact — skipping merge.")
+              sys.exit(0)
+          desktop = json.loads(desktop_path.read_text())
+          android = json.loads(android_path.read_text())
+          added = android.get("fingerprints", [])
+          if not added:
+              print("Android artifact contains no fingerprints — skipping merge.")
+              sys.exit(0)
+          existing_names = {fp.get("name") for fp in desktop.get("fingerprints", [])}
+          new_fps = [fp for fp in added if fp.get("name") not in existing_names]
+          desktop["fingerprints"].extend(new_fps)
+          desktop_path.write_text(json.dumps(desktop, indent=2))
+          print(f"Merged {len(new_fps)} Android fingerprint(s): {[fp['name'] for fp in new_fps]}")
+          EOF
+
+      - name: Show captured fingerprints
+        run: |
+          echo "--- Captured fingerprints ---"
+          cat tests/integration/artifacts/captured.json
+
+      - name: Switch TrackMe to host-network mode for CycleTLS tests
+        run: |
+          docker compose -f docker-compose.fingerprint-tests.yml rm -f -s trackme
+          docker compose -f docker-compose.test.yml up -d --build
+          echo "Waiting for TrackMe (host-mode) to become healthy..."
+          if ! timeout 90 bash -c \
+            'until docker inspect --format "{{.State.Health.Status}}" \
+               cycletls_python-trackme-1 2>/dev/null | grep -q healthy; do sleep 2; done'; then
+            echo "TrackMe did not become ready. Logs:"
+            docker logs cycletls_python-trackme-1
+            exit 1
+          fi
+          echo "TrackMe (host-mode) is ready."
+
+      - name: Run fingerprint replication tests
+        env:
+          TRACKME_URL: https://localhost:8443
+          SSL_CERT_FILE: /tmp/combined-test-cas.crt
+          FINGERPRINT_FILE: tests/integration/artifacts/captured.json
+        run: |
+          uv run pytest -v --color=yes -m "fingerprint" \
+            tests/integration/test_browser_fingerprint_replication.py
+
+      - name: Commit updated fingerprint registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet -- cycletls/data/fingerprints.json; then
+            echo "No fingerprint registry changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cycletls/data/fingerprints.json
+          git commit -m "chore: update fingerprint registry from CI capture"
+          git push
+
+      - name: Upload captured fingerprints as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captured-browser-fingerprints-py${{ matrix.python }}
+          path: tests/integration/artifacts/captured.json
+          if-no-files-found: warn
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose -f docker-compose.fingerprint-tests.yml down -v || true
+          docker compose -f docker-compose.test.yml down || true

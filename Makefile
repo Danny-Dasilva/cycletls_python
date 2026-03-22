@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 .PHONY : docs
 docs :
 	rm -rf docs/build/
@@ -9,6 +11,90 @@ run-checks :
 	uv run ruff format --check cycletls
 	uv run pyright cycletls
 	uv run pytest -v --color=yes tests/
+
+# Generate self-signed TLS certs for TrackMe (skips if chain.pem already exists)
+.PHONY : trackme-certs
+trackme-certs :
+	@if [ -f docker/trackme/certs/chain.pem ]; then \
+		echo "Certs already exist (docker/trackme/certs/chain.pem). Delete to regenerate."; \
+	else \
+		mkdir -p docker/trackme/certs; \
+		openssl req -x509 -newkey rsa:2048 \
+			-keyout docker/trackme/certs/key.pem \
+			-out docker/trackme/certs/chain.pem \
+			-days 365 -nodes \
+			-subj "/CN=trackme" \
+			-addext "subjectAltName=DNS:trackme,DNS:localhost,IP:127.0.0.1,IP:10.0.2.2"; \
+		echo "Certs generated."; \
+	fi
+
+# Run fingerprint replication tests locally (desktop browsers only, no Android).
+# Steps mirror the CI fingerprint-tests job:
+#   1. Start TrackMe on a bridge network (reachable by the Playwright Docker container)
+#   2. Capture real browser fingerprints via Playwright
+#   3. Switch TrackMe to host-network mode (reachable by CycleTLS on localhost)
+#   4. Run the fingerprint integration tests
+#   5. Clean up
+#
+# Requires: Docker, uv, Go shared lib (run `make build-go-lib` first if missing)
+FINGERPRINT_ARTIFACTS_DIR ?= tests/integration/artifacts
+SSL_CERT_BUNDLE ?= /tmp/cycletls-test-cas.crt
+
+.PHONY : fingerprint-tests
+fingerprint-tests : trackme-certs
+	@echo "==> Building combined CA bundle..."
+	cat /etc/ssl/certs/ca-certificates.crt docker/trackme/certs/chain.pem > $(SSL_CERT_BUNDLE)
+	mkdir -p $(FINGERPRINT_ARTIFACTS_DIR)
+
+	@echo "==> Starting TrackMe (bridge network)..."
+	docker compose -f docker-compose.fingerprint-tests.yml up -d --build trackme
+	@echo "Waiting for TrackMe to become healthy (up to 120s)..."
+	@for i in $$(seq 1 40); do \
+		ID=$$(docker compose -f docker-compose.fingerprint-tests.yml ps -q trackme 2>/dev/null); \
+		STATUS=$$(docker inspect --format '{{.State.Health.Status}}' $$ID 2>/dev/null || true); \
+		if [ "$$STATUS" = "healthy" ]; then echo "TrackMe is ready."; break; fi; \
+		if [ $$i -eq 40 ]; then \
+			echo "TrackMe did not become ready. Logs:"; \
+			docker compose -f docker-compose.fingerprint-tests.yml logs trackme; \
+			docker compose -f docker-compose.fingerprint-tests.yml down -v; \
+			exit 1; \
+		fi; \
+		sleep 3; \
+	done
+
+	@echo "==> Capturing browser fingerprints via Playwright..."
+	docker compose -f docker-compose.fingerprint-tests.yml run --rm playwright-capture
+	@echo "Playwright capture done."
+	@echo "--- Captured fingerprints ---"
+	@cat $(FINGERPRINT_ARTIFACTS_DIR)/captured.json
+
+	@echo "==> Switching TrackMe to host-network mode..."
+	docker compose -f docker-compose.fingerprint-tests.yml rm -f -s trackme
+	docker compose -f docker-compose.test.yml up -d --build
+	@echo "Waiting for TrackMe (host-mode) to become healthy (up to 90s)..."
+	@for i in $$(seq 1 30); do \
+		STATUS=$$(docker inspect --format '{{.State.Health.Status}}' cycletls_python-trackme-1 2>/dev/null || true); \
+		if [ "$$STATUS" = "healthy" ]; then echo "TrackMe (host-mode) is ready."; break; fi; \
+		if [ $$i -eq 30 ]; then \
+			echo "TrackMe (host-mode) did not become ready. Logs:"; \
+			docker logs cycletls_python-trackme-1; \
+			docker compose -f docker-compose.fingerprint-tests.yml down -v; \
+			docker compose -f docker-compose.test.yml down; \
+			exit 1; \
+		fi; \
+		sleep 3; \
+	done
+
+	@echo "==> Running fingerprint replication tests..."
+	TRACKME_URL=https://localhost:8443 \
+	SSL_CERT_FILE=$(SSL_CERT_BUNDLE) \
+	FINGERPRINT_FILE=$(FINGERPRINT_ARTIFACTS_DIR)/captured.json \
+	uv run pytest -v --color=yes -m "fingerprint" \
+		tests/integration/test_browser_fingerprint_replication.py; \
+	EXIT_CODE=$$?; \
+	docker compose -f docker-compose.fingerprint-tests.yml down -v || true; \
+	docker compose -f docker-compose.test.yml down || true; \
+	exit $$EXIT_CODE
 
 # Local package publishing
 # Configure via environment variables:

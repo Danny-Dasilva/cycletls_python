@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Danny-Dasilva/cycletls_python/docs/schemas/trackme_browser_fingerprints_v1.schema.json",
+  "title": "TrackMe Browser Fingerprints v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "fingerprints"],
+  "properties": {
+    "schema": {
+      "const": "trackme_browser_fingerprints/v1"
+    },
+    "captured_at": {"type": "string", "format": "date-time"},
+    "source": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "type": {"type": "string"},
+        "url": {"type": "string"}
+      }
+    },
+    "errors": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "fingerprints": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/capturedFingerprint"
+      }
+    }
+  },
+  "$defs": {
+    "capturedFingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "browser", "version", "ja3", "ua", "header_order"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "browser": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "ja3": {"type": "string", "minLength": 1},
+        "ja4_r": {"type": "string"},
+        "http2": {"type": "string"},
+        "ua": {"type": "string", "minLength": 1},
+        "header_order": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    }
+  }
+}

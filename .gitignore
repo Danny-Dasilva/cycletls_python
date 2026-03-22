@@ -70,3 +70,6 @@ site/
 
 # Generated test certificates for local TrackMe instance
 docker/trackme/certs/
+
+# Generated browser fingerprint captures
+tests/integration/artifacts/*.json

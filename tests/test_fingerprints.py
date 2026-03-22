@@ -7,20 +7,22 @@ from pathlib import Path
 import pytest
 
 from cycletls.fingerprints import (
-    TLSFingerprint,
-    FingerprintRegistry,
     CHROME_120,
-    CHROME_121,
+    CHROME_ANDROID,
+    DEFAULT_FINGERPRINTS_FILE,
     FIREFOX_121,
     SAFARI_17,
-    EDGE_120,
-    CHROME_ANDROID,
     SAFARI_IOS,
+    BrowserFamily,
+    FingerprintRegistry,
+    Platform,
+    TLSFingerprint,
+    load_trackme_fingerprints,
 )
 from cycletls.plugins import (
-    load_fingerprints_from_dir,
-    load_fingerprint_from_file,
     create_fingerprint_template,
+    load_fingerprint_from_file,
+    load_fingerprints_from_dir,
 )
 
 
@@ -142,18 +144,18 @@ class TestFingerprintRegistry:
     def test_builtin_profiles_registered(self):
         """Test that built-in profiles are auto-registered."""
         profiles = FingerprintRegistry.list()
-        assert "chrome_120" in profiles
-        assert "chrome_121" in profiles
-        assert "firefox_121" in profiles
-        assert "safari_17" in profiles
-        assert "edge_120" in profiles
+        assert "chrome_120_win" in profiles
+        assert "chrome_121_win" in profiles
+        assert "firefox_121_win" in profiles
+        assert "safari_17_mac" in profiles
+        assert "edge_120_win" in profiles
         assert "chrome_android" in profiles
         assert "safari_ios" in profiles
 
     def test_get_builtin_profile(self):
         """Test getting a built-in profile."""
-        chrome = FingerprintRegistry.get("chrome_120")
-        assert chrome.name == "chrome_120"
+        chrome = FingerprintRegistry.get("chrome_120_win")
+        assert chrome.name == "chrome_120_win"
         assert chrome.ja3.startswith("771")
         assert "Chrome" in chrome.user_agent
 
@@ -165,7 +167,7 @@ class TestFingerprintRegistry:
     def test_get_or_none(self):
         """Test get_or_none returns None for missing profiles."""
         assert FingerprintRegistry.get_or_none("nonexistent") is None
-        assert FingerprintRegistry.get_or_none("chrome_120") is not None
+        assert FingerprintRegistry.get_or_none("chrome_120_win") is not None
 
     def test_register_and_unregister(self):
         """Test registering and unregistering custom profiles."""
@@ -192,8 +194,28 @@ class TestFingerprintRegistry:
         """Test getting all profiles."""
         all_profiles = FingerprintRegistry.all()
         assert isinstance(all_profiles, dict)
-        assert "chrome_120" in all_profiles
-        assert all_profiles["chrome_120"].name == "chrome_120"
+        assert "chrome_120_win" in all_profiles
+        assert all_profiles["chrome_120_win"].name == "chrome_120_win"
+
+    def test_registry_json_roundtrip(self):
+        """Registry should load/save all profiles in one JSON file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = Path(tmpdir) / "registry.json"
+            FingerprintRegistry.save_to_file(out)
+            assert out.exists()
+
+            before = set(FingerprintRegistry.list())
+            FingerprintRegistry.clear()
+            try:
+                assert FingerprintRegistry.list() == []
+
+                loaded = FingerprintRegistry.load_from_file(out, clear=True)
+                assert loaded
+                after = set(FingerprintRegistry.list())
+                assert before == after
+                assert "chrome_120_win" in after
+            finally:
+                FingerprintRegistry.load_from_file(DEFAULT_FINGERPRINTS_FILE, clear=True)
 
 
 class TestBuiltinProfiles:
@@ -201,7 +223,7 @@ class TestBuiltinProfiles:
 
     def test_chrome_120(self):
         """Test Chrome 120 profile."""
-        assert CHROME_120.name == "chrome_120"
+        assert CHROME_120.name == "chrome_120_win"
         assert "Chrome/120" in CHROME_120.user_agent
         assert CHROME_120.http2_fingerprint is not None
         assert CHROME_120.header_order is not None
@@ -209,12 +231,12 @@ class TestBuiltinProfiles:
 
     def test_firefox_121(self):
         """Test Firefox 121 profile."""
-        assert FIREFOX_121.name == "firefox_121"
+        assert FIREFOX_121.name == "firefox_121_win"
         assert "Firefox/121" in FIREFOX_121.user_agent
 
     def test_safari_17(self):
         """Test Safari 17 profile."""
-        assert SAFARI_17.name == "safari_17"
+        assert SAFARI_17.name == "safari_17_mac"
         assert "Safari" in SAFARI_17.user_agent
 
     def test_mobile_profiles(self):
@@ -228,20 +250,20 @@ class TestBuiltinProfiles:
         assert len(names) >= 20, f"Expected >= 20 profiles, got {len(names)}"
 
     @pytest.mark.parametrize("name,ua_substr", [
-        ("chrome_122", "Chrome/122"),
-        ("chrome_123", "Chrome/123"),
-        ("chrome_124", "Chrome/124"),
-        ("chrome_125", "Chrome/125"),
-        ("firefox_122", "Firefox/122"),
-        ("firefox_123", "Firefox/123"),
-        ("firefox_124", "Firefox/124"),
-        ("edge_121", "Edg/121"),
-        ("edge_122", "Edg/122"),
-        ("opera_106", "OPR/106"),
-        ("brave_1_63", "Chrome/122"),
+        ("chrome_122_win", "Chrome/122"),
+        ("chrome_123_win", "Chrome/123"),
+        ("chrome_124_win", "Chrome/124"),
+        ("chrome_125_win", "Chrome/125"),
+        ("firefox_122_win", "Firefox/122"),
+        ("firefox_123_win", "Firefox/123"),
+        ("firefox_124_win", "Firefox/124"),
+        ("edge_121_win", "Edg/121"),
+        ("edge_122_win", "Edg/122"),
+        ("opera_106_win", "OPR/106"),
+        ("brave_1_63_win", "Chrome/122"),
         ("chrome_linux", "Linux"),
         ("firefox_linux", "Linux"),
-        ("samsung_browser_23", "SamsungBrowser"),
+        ("samsung_browser_23_android", "SamsungBrowser"),
     ])
     def test_new_profile_registered_with_correct_ua(self, name, ua_substr):
         """New profiles should be registered with correct user agents."""
@@ -249,6 +271,109 @@ class TestBuiltinProfiles:
         assert profile.name == name
         assert profile.ja3, f"{name} missing ja3"
         assert ua_substr in profile.user_agent, f"{name} UA should contain '{ua_substr}'"
+
+
+class TestBrowserFamilyAndPlatform:
+    """Tests for BrowserFamily/Platform enums and registry lookup methods."""
+
+    _PLATFORM_CHROME_LINUX = "chrome_9999_0_0_linux"
+    _PLATFORM_FIREFOX_LINUX = "firefox_9999_0_linux"
+
+    def setup_method(self):
+        FingerprintRegistry.register(
+            TLSFingerprint(name=self._PLATFORM_CHROME_LINUX, ja3="771,4865,0,29,0")
+        )
+        FingerprintRegistry.register(
+            TLSFingerprint(name=self._PLATFORM_FIREFOX_LINUX, ja3="771,4865,0,29,0")
+        )
+
+    def teardown_method(self):
+        FingerprintRegistry.unregister(self._PLATFORM_CHROME_LINUX)
+        FingerprintRegistry.unregister(self._PLATFORM_FIREFOX_LINUX)
+
+    # --- enum values ---
+
+    def test_browser_family_enum_values(self):
+        assert BrowserFamily.CHROME.value == "chrome"
+        assert BrowserFamily.EDGE.value == "edge"
+        assert BrowserFamily.FIREFOX.value == "firefox"
+        assert BrowserFamily.SAFARI.value == "safari"
+        assert BrowserFamily.BRAVE.value == "brave"
+        assert BrowserFamily.CHROMIUM.value == "chromium"
+        assert BrowserFamily.OPERA.value == "opera"
+        assert BrowserFamily.SAMSUNG.value == "samsung"
+
+    def test_platform_enum_values(self):
+        assert Platform.LINUX.value == "linux"
+        assert Platform.WINDOWS.value == "win"
+        assert Platform.MACOS.value == "mac"
+        assert Platform.ANDROID.value == "android"
+        assert Platform.IOS.value == "ios"
+
+    # --- by_family ---
+
+    def test_by_family_chrome_includes_builtin(self):
+        profiles = FingerprintRegistry.by_family(BrowserFamily.CHROME)
+        names = [fp.name for fp in profiles]
+        assert "chrome_120_win" in names
+
+    def test_by_family_edge_matches_both_edge_and_msedge(self):
+        profiles = FingerprintRegistry.by_family(BrowserFamily.EDGE)
+        names = [fp.name for fp in profiles]
+        assert any(n.startswith("edge") for n in names)
+        assert any(n.startswith("msedge") for n in names)
+
+    def test_by_family_with_platform_filter_returns_only_matching(self):
+        linux = FingerprintRegistry.by_family(BrowserFamily.CHROME, platform=Platform.LINUX)
+        assert any(fp.name == self._PLATFORM_CHROME_LINUX for fp in linux)
+        win = FingerprintRegistry.by_family(BrowserFamily.CHROME, platform=Platform.WINDOWS)
+        assert not any(fp.name == self._PLATFORM_CHROME_LINUX for fp in win)
+
+    def test_by_family_platform_excludes_untagged_profiles(self):
+        # Built-in "chrome_120" has no platform suffix — excluded when platform is given
+        linux = FingerprintRegistry.by_family(BrowserFamily.CHROME, platform=Platform.LINUX)
+        assert not any(fp.name == "chrome_120" for fp in linux)
+
+    def test_by_family_returns_list(self):
+        assert isinstance(FingerprintRegistry.by_family(BrowserFamily.SAMSUNG), list)
+
+    # --- latest ---
+
+    def test_latest_by_family_returns_highest_version(self):
+        latest = FingerprintRegistry.latest(BrowserFamily.FIREFOX)
+        assert latest.name.startswith("firefox")
+        # Our injected profile has a very high synthetic version
+        assert latest.name == self._PLATFORM_FIREFOX_LINUX
+
+    def test_latest_no_filters_returns_some_profile(self):
+        latest = FingerprintRegistry.latest()
+        assert isinstance(latest, TLSFingerprint)
+
+    def test_latest_with_platform_filters_correctly(self):
+        latest = FingerprintRegistry.latest(BrowserFamily.CHROME, platform=Platform.LINUX)
+        assert latest.name == self._PLATFORM_CHROME_LINUX
+
+    def test_latest_raises_when_no_match(self):
+        with pytest.raises(KeyError, match="No profiles found"):
+            FingerprintRegistry.latest(BrowserFamily.SAFARI, platform=Platform.WINDOWS)
+
+    # --- random ---
+
+    def test_random_by_family_returns_family_member(self):
+        result = FingerprintRegistry.random(BrowserFamily.CHROME)
+        assert result.name.startswith("chrome") or result.name.startswith("chrome")
+
+    def test_random_no_filters_returns_some_profile(self):
+        result = FingerprintRegistry.random()
+        assert isinstance(result, TLSFingerprint)
+
+    def test_random_with_platform_only_returns_platform_tagged(self):
+        result = FingerprintRegistry.random(platform=Platform.LINUX)
+        assert result.name.endswith("_linux")
+
+    def test_random_raises_when_no_match(self):
+        with pytest.raises(KeyError, match="No profiles found"):
+            FingerprintRegistry.random(BrowserFamily.SAFARI, platform=Platform.WINDOWS)
 
 
 class TestPluginLoading:
@@ -318,8 +443,39 @@ class TestPluginLoading:
             assert fp.ja3.startswith("771")
             assert fp.user_agent is not None
 
-            # Cleanup
-            Path(f.name).unlink()
+
+class TestTrackMeCaptureLoading:
+    """Tests for loading normalized TrackMe capture files."""
+
+    def test_load_trackme_fingerprints(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir) / "captured.json"
+            file_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "trackme_browser_fingerprints/v1",
+                        "fingerprints": [
+                            {
+                                "name": "chromium_134_0_6998_35",
+                                "ja3": "771,4865-4866-4867,0-23-65281-10-11,29-23-24,0",
+                                "http2": "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p",
+                                "ua": "Mozilla/5.0 Test Chrome/134.0.6998.35",
+                                "header_order": ["user-agent", "accept"],
+                            }
+                        ],
+                    }
+                )
+            )
+
+            loaded = load_trackme_fingerprints(file_path)
+            assert len(loaded) == 1
+            profile = FingerprintRegistry.get("chromium_134_0_6998_35")
+            assert profile.ja3.startswith("771")
+            assert profile.http2_fingerprint is not None
+            assert profile.user_agent and "Chrome/134.0.6998.35" in profile.user_agent
+            assert profile.header_order == ["user-agent", "accept"]
+
+            FingerprintRegistry.unregister("chromium_134_0_6998_35")
 
 
 class TestIntegration:
@@ -328,7 +484,7 @@ class TestIntegration:
     def test_fingerprint_in_api_kwargs(self):
         """Test that fingerprint can be passed to request kwargs."""
         # This is a unit test of the apply logic, not an actual HTTP test
-        chrome = FingerprintRegistry.get("chrome_120")
+        chrome = FingerprintRegistry.get("chrome_120_win")
 
         kwargs = {"timeout": 30}
         chrome.apply_to_kwargs(kwargs)
@@ -339,7 +495,7 @@ class TestIntegration:
 
     def test_fingerprint_does_not_override_explicit(self):
         """Test that fingerprint doesn't override explicitly set values."""
-        chrome = FingerprintRegistry.get("chrome_120")
+        chrome = FingerprintRegistry.get("chrome_120_win")
 
         kwargs = {
             "ja3": "explicit_ja3",
