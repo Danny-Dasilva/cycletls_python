@@ -83,10 +83,13 @@ class TestAsyncConcurrent:
             assert len(responses) == 10
             assert all(r.status_code == 200 for r in responses)
 
+    @pytest.mark.live
     @pytest.mark.asyncio
     async def test_large_concurrent_batch(self, httpbin_url):
         """Test large batch of concurrent requests."""
-        # Test with 50 concurrent requests
+        # Marked @live: 50 concurrent requests against httpbin.org regularly
+        # trip the public service's rate limit / connection ceiling, producing
+        # context-deadline timeouts that aren't a cycletls bug.
         num_requests = 50
         urls = [f"{httpbin_url}/get?batch_id={i}" for i in range(num_requests)]
 
