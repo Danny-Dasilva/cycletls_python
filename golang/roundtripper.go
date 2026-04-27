@@ -177,7 +177,7 @@ func (rt *roundTripper) getTransport(req *http.Request, addr string) error {
 			MaxIdleConns:          100,
 			MaxConnsPerHost:       100,
 			MaxIdleConnsPerHost:   100, // Go default is 2, which causes 98% of connections to close
-			IdleConnTimeout:       90 * time.Second,
+			IdleConnTimeout:       60 * time.Second,
 			DisableKeepAlives:     false,
 		}
 		return nil
@@ -354,7 +354,7 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 			MaxIdleConns:         100,
 			MaxConnsPerHost:      100,
 			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
-			IdleConnTimeout:      90 * time.Second,
+			IdleConnTimeout:      60 * time.Second,
 			DisableKeepAlives:    false, // Enable keep-alives for connection reuse
 		}
 	}
@@ -456,7 +456,7 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 			MaxIdleConns:         100,
 			MaxConnsPerHost:      100,
 			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
-			IdleConnTimeout:      90 * time.Second,
+			IdleConnTimeout:      60 * time.Second,
 			DisableKeepAlives:    false, // Enable keep-alives for connection reuse
 		}
 	}
@@ -535,7 +535,7 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 			MaxIdleConns:         100,
 			MaxConnsPerHost:      100,
 			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
-			IdleConnTimeout:      90 * time.Second,
+			IdleConnTimeout:      60 * time.Second,
 			DisableKeepAlives:    false, // Enable keep-alives for connection reuse
 		}
 	}
