@@ -4,6 +4,7 @@ Based on CycleTLS/tests/insecureSkipVerify.test.ts
 """
 
 import pytest
+
 from cycletls import CycleTLS
 
 # badssl.com is an external service that occasionally drops connections (EOF).
@@ -97,6 +98,7 @@ def test_self_signed_certificate_error_without_skip_verify(client, firefox_ja3, 
     assert any(word in error_msg for word in ['certificate', 'verify', 'self-signed', 'authority', 'x509'])
 
 
+@pytest.mark.live
 def test_self_signed_certificate_accepted_with_skip_verify(client, firefox_ja3, firefox_user_agent):
     """Test that self-signed certificate is accepted when insecure_skip_verify is True"""
     url = "https://self-signed.badssl.com"
@@ -221,7 +223,11 @@ def test_connection_refused_error_handling(client, firefox_ja3, firefox_user_age
 
 @pytest.mark.parametrize("url,expected_error_keywords", [
     ("https://expired.badssl.com", ["certificate", "expired"]),
-    ("https://self-signed.badssl.com", ["certificate", "self-signed", "authority"]),
+    pytest.param(
+        "https://self-signed.badssl.com",
+        ["certificate", "self-signed", "authority"],
+        marks=pytest.mark.live,
+    ),
     ("https://wrong.host.badssl.com", ["certificate", "hostname", "name"]),
     ("https://untrusted-root.badssl.com", ["certificate", "untrusted", "authority"]),
 ])
