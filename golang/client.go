@@ -94,6 +94,14 @@ type Browser struct {
 	ForceHTTP1         bool
 	ForceHTTP3         bool
 
+	// DisableKeepAlives, when true, disables HTTP keep-alives at the
+	// inner http.Transport layer for every request that uses this Browser.
+	// Set this when the caller passes enable_connection_reuse=false from
+	// Python so that connection reuse really is disabled — bypassing the
+	// global client cache alone is not sufficient because the underlying
+	// transport otherwise still pools idle connections per address.
+	DisableKeepAlives bool
+
 	// TLS 1.3 specific options
 	TLS13AutoRetry bool
 
@@ -243,10 +251,19 @@ func generateClientKey(browser Browser, timeout int, disableRedirect bool, proxy
 	return key
 }
 
-// getOrCreateClient retrieves a client from the pool or creates a new one
+// getOrCreateClient retrieves a client from the pool or creates a new one.
+//
+// When enableConnectionReuse is false the caller wants no connection reuse
+// at all, so we both bypass the global client pool *and* propagate
+// DisableKeepAlives onto the Browser. Without the second step the inner
+// http.Transport would still pool idle conns per address — see the badssl
+// triage report at .claude/cache/agents/source-tracer/output.md for the
+// failure mode this prevents.
 func getOrCreateClient(browser Browser, timeout int, disableRedirect bool, userAgent string, enableConnectionReuse bool, proxyURL ...string) (fhttp.Client, error) {
-	// If connection reuse is disabled, always create a new client
+	// If connection reuse is disabled, always create a new client and tell
+	// the inner http.Transport to disable keep-alives.
 	if !enableConnectionReuse {
+		browser.DisableKeepAlives = true
 		return createNewClient(browser, timeout, disableRedirect, userAgent, proxyURL...)
 	}
 

@@ -48,6 +48,12 @@ type roundTripper struct {
 	ForceHTTP1         bool
 	ForceHTTP3         bool
 
+	// DisableKeepAlives, when true, sets DisableKeepAlives on every
+	// inner http.Transport that this roundTripper constructs. Wired
+	// from Browser.DisableKeepAlives, which getOrCreateClient sets when
+	// the caller passes enable_connection_reuse=false.
+	DisableKeepAlives bool
+
 	// TLS 1.3 specific options
 	TLS13AutoRetry bool
 
@@ -178,7 +184,7 @@ func (rt *roundTripper) getTransport(req *http.Request, addr string) error {
 			MaxConnsPerHost:       100,
 			MaxIdleConnsPerHost:   100, // Go default is 2, which causes 98% of connections to close
 			IdleConnTimeout:       60 * time.Second,
-			DisableKeepAlives:     false,
+			DisableKeepAlives:     rt.DisableKeepAlives,
 		}
 		return nil
 	case "https":
@@ -355,7 +361,7 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 			MaxConnsPerHost:      100,
 			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
 			IdleConnTimeout:      60 * time.Second,
-			DisableKeepAlives:    false, // Enable keep-alives for connection reuse
+			DisableKeepAlives:    rt.DisableKeepAlives, // Bound to enable_connection_reuse=False
 		}
 	}
 
@@ -457,7 +463,7 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 			MaxConnsPerHost:      100,
 			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
 			IdleConnTimeout:      60 * time.Second,
-			DisableKeepAlives:    false, // Enable keep-alives for connection reuse
+			DisableKeepAlives:    rt.DisableKeepAlives, // Bound to enable_connection_reuse=False
 		}
 	}
 
@@ -536,7 +542,7 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 			MaxConnsPerHost:      100,
 			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
 			IdleConnTimeout:      60 * time.Second,
-			DisableKeepAlives:    false, // Enable keep-alives for connection reuse
+			DisableKeepAlives:    rt.DisableKeepAlives, // Bound to enable_connection_reuse=False
 		}
 	}
 
@@ -637,6 +643,7 @@ func newRoundTripper(browser Browser, dialer ...proxy.ContextDialer) http.RoundT
 		InsecureSkipVerify: browser.InsecureSkipVerify,
 		ForceHTTP1:         browser.ForceHTTP1,
 		ForceHTTP3:         browser.ForceHTTP3,
+		DisableKeepAlives:  browser.DisableKeepAlives,
 
 		// TLS 1.3 specific options
 		TLS13AutoRetry: browser.TLS13AutoRetry,

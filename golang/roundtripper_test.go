@@ -77,6 +77,76 @@ func TestNoStaleNinetySecondIdleConnTimeout(t *testing.T) {
 	}
 }
 
+// TestDisableKeepAlivesPropagatedFromBrowser asserts that the
+// DisableKeepAlives field set on the Browser struct flows through
+// newRoundTripper to the roundTripper instance.
+//
+// Background: when callers pass enable_connection_reuse=False from Python,
+// getOrCreateClient bypasses the global client cache but historically did
+// nothing else — every constructed http.Transport hardcoded
+// DisableKeepAlives: false, so the inner transport still pooled connections
+// across the same request. The flag was a half-fix.
+//
+// Wiring DisableKeepAlives onto Browser → roundTripper is the precondition
+// for the http.Transport sites picking it up; this test pins that wiring.
+func TestDisableKeepAlivesPropagatedFromBrowser(t *testing.T) {
+	rt := newRoundTripper(Browser{DisableKeepAlives: true})
+
+	rrt, ok := rt.(*roundTripper)
+	if !ok {
+		t.Fatalf("newRoundTripper returned unexpected concrete type %T", rt)
+	}
+	if !rrt.DisableKeepAlives {
+		t.Fatalf("expected DisableKeepAlives=true on roundTripper; got false")
+	}
+}
+
+// TestHTTP1TransportRespectsDisableKeepAlives constructs the HTTP-scheme
+// transport (the simplest of the 4 paths — it does not require a real TLS
+// handshake) and asserts that DisableKeepAlives is honoured.
+func TestHTTP1TransportRespectsDisableKeepAlives(t *testing.T) {
+	rt := newRoundTripper(Browser{DisableKeepAlives: true}).(*roundTripper)
+
+	// The "http" scheme branch in getTransport constructs an http.Transport
+	// directly without doing any I/O. We bypass dialTLS by going through the
+	// branch under test.
+	req, _ := http.NewRequest("GET", "http://example.test/", nil)
+	if err := rt.getTransport(req, "example.test:80"); err != nil {
+		t.Fatalf("getTransport(http) unexpectedly returned error: %v", err)
+	}
+	tr, ok := rt.cachedTransports["example.test:80"].(*http.Transport)
+	if !ok {
+		t.Fatalf("cachedTransport is not *http.Transport: %T", rt.cachedTransports["example.test:80"])
+	}
+	if !tr.DisableKeepAlives {
+		t.Fatalf("expected DisableKeepAlives=true on the constructed http.Transport; got false")
+	}
+}
+
+// TestSourcePropagatesDisableKeepAlivesToAllFourTransports pins the
+// invariant that all 4 http.Transport literals in roundtripper.go carry a
+// DisableKeepAlives entry that is bound to rt.DisableKeepAlives — not the
+// hardcoded false. We assert this at the source level because three of the
+// four constructions are nested inside dialTLS / TLS-retry paths that
+// require live network I/O to reach.
+func TestSourcePropagatesDisableKeepAlivesToAllFourTransports(t *testing.T) {
+	src := readRoundTripperSource(t)
+
+	// All DisableKeepAlives lines under an http.Transport literal should
+	// reference rt.DisableKeepAlives (not the literal `false`).
+	hardcoded := regexp.MustCompile(`DisableKeepAlives:\s*false\b`)
+	if hardcoded.MatchString(src) {
+		t.Errorf("found hardcoded DisableKeepAlives: false — must be bound to rt.DisableKeepAlives so enable_connection_reuse=False propagates through")
+	}
+
+	// And there must be at least 4 references to rt.DisableKeepAlives, one
+	// per http.Transport literal.
+	bound := regexp.MustCompile(`DisableKeepAlives:\s*rt\.DisableKeepAlives\b`)
+	if got := len(bound.FindAllString(src, -1)); got < 4 {
+		t.Errorf("expected at least 4 DisableKeepAlives: rt.DisableKeepAlives bindings (HTTP scheme + HTTP/1 + 2 retry paths); got %d", got)
+	}
+}
+
 // (sanity check) the http import is referenced so that gofmt/imports does
 // not strip it if other tests are removed in the future.
 var _ = http.MethodGet
