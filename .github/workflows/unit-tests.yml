@@ -25,6 +25,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python: ['3.10', '3.11', '3.12', '3.13']
+        # macOS runners are scarce on free tier; only run macOS for the latest
+        # Python version. Linux covers the full Python matrix.
+        exclude:
+          - os: macos-latest
+            python: '3.10'
+          - os: macos-latest
+            python: '3.11'
+          - os: macos-latest
+            python: '3.12'
 
     steps:
       - uses: actions/checkout@v4
