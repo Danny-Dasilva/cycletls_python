@@ -40,7 +40,7 @@ jobs:
             run: cd docs && uv run make html
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup CycleTLS (Go build)
         uses: ./.github/actions/setup-cycletls

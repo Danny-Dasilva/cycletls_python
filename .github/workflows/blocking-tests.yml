@@ -26,7 +26,7 @@ jobs:
         python: ['3.10', '3.11', '3.12', '3.13']
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup CycleTLS (Go build)
         uses: ./.github/actions/setup-cycletls
