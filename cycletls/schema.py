@@ -563,14 +563,21 @@ def _raise_for_error_response(data: dict) -> None:
     ):
         raise TLSError(f"TLS error: {error_msg}")
 
-    # Also check for TLS patterns without specific status code
+    # Also check for TLS patterns without specific status code.
+    #
+    # Note: ``error_msg`` includes the request URL, so any keyword used here
+    # must be specific enough that it cannot collide with a hostname. The
+    # bare token ``"ssl"`` was previously included and caused every non-TLS
+    # error against hosts whose name contained ``ssl`` (e.g.
+    # ``self-signed.badssl.com``) to be misclassified as :class:`TLSError`.
+    # Go's actual TLS error vocabulary uses ``tls:``/``x509:`` prefixes and
+    # the literal word ``certificate``, which are covered below.
     if _matches_any(
         error_lower,
         (
             "certificate",
             "x509:",
             "tls: failed to verify",
-            "ssl",
         ),
     ):
         raise TLSError(f"TLS error: {error_msg}")
