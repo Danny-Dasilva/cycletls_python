@@ -1,8 +1,10 @@
 import os
+
 import pytest
+
 from cycletls import CycleTLS
 
-_TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
+_TLSFP_URL = os.environ.get("TLSFP_URL", "https://tls.peet.ws")
 
 pytestmark = pytest.mark.live
 
@@ -40,7 +42,7 @@ class TestHTTP2:
         # Use tls.peet.ws as it's more reliable than ja3er.com
         # Test HTTP/2 (default)
         response_http2 = cycle.get(
-            f"{_TRACKME_URL}/api/all",
+            f"{_TLSFP_URL}/api/all",
             force_http1=False,
             ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0",
             timeout=30
@@ -48,7 +50,7 @@ class TestHTTP2:
 
         # Test HTTP/1.1 (forced)
         response_http1 = cycle.get(
-            f"{_TRACKME_URL}/api/all",
+            f"{_TLSFP_URL}/api/all",
             force_http1=True,
             ja3="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0",
             timeout=30

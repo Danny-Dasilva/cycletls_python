@@ -14,16 +14,16 @@ Based on CycleTLS TypeScript integration tests, these tests verify:
 All tests use httpbin.org or ja3er.com as test endpoints.
 """
 
-import os
-import pytest
 import json
+import os
+
+import pytest
 from test_utils import (
-    assert_valid_response,
     assert_valid_json_response,
-    extract_json_field,
+    assert_valid_response,
 )
 
-_TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
+_TLSFP_URL = os.environ.get("TLSFP_URL", "https://tls.peet.ws")
 
 pytestmark = pytest.mark.live
 
@@ -43,7 +43,7 @@ class TestBasicRequests:
     def test_get_with_ja3er(self, cycletls_client):
         """Test GET request to TLS fingerprint service to verify JA3 fingerprinting."""
         # Use tls.peet.ws instead of ja3er.com which is unreliable
-        response = cycletls_client.get(f"{_TRACKME_URL}/api/clean", timeout=30)
+        response = cycletls_client.get(f"{_TLSFP_URL}/api/clean", timeout=30)
         assert_valid_response(response, expected_status=200)
 
         # Verify JA3 data is present
@@ -97,7 +97,7 @@ class TestUserAgent:
 
         # Use tls.peet.ws instead of ja3er.com which is unreliable
         response = cycletls_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             user_agent=custom_ua,
             ja3=firefox_ja3,
             timeout=30

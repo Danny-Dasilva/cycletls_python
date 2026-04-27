@@ -2,17 +2,20 @@
 pytest configuration and shared fixtures for CycleTLS tests.
 """
 
-import pytest
-import sys
 import os
+import sys
 
-# TrackMe base URL — override with TRACKME_URL env var to point at a local instance
-_TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
+import pytest
+
+# tlsfingerprint.com base URL — override with TLSFP_URL env var to point at a local instance.
+# Default is the production endpoint (https://tls.peet.ws); CI sets TLSFP_URL to a local Docker
+# container running Danny-Dasilva/tlsfingerprint.com (the source of tls.peet.ws).
+_TLSFP_URL = os.environ.get("TLSFP_URL", "https://tls.peet.ws")
 
 # Add parent directory to path to import cycletls
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from cycletls import CycleTLS, AsyncCycleTLS
+from cycletls import AsyncCycleTLS, CycleTLS
 
 
 @pytest.fixture(scope="session")
@@ -21,7 +24,7 @@ def cycletls_client():
     Session-scoped CycleTLS client fixture.
     Creates a single client instance for all tests.
 
-    Connection reuse is disabled by default so that TrackMe-style servers
+    Connection reuse is disabled by default so that tlsfingerprint.com-style servers
     (which close connections after every response) don't leave a stale cached
     connection in the global Go transport pool for the next test.
     """
@@ -49,19 +52,19 @@ def cycletls_client_function():
 @pytest.fixture
 def test_url():
     """Base test URL for most tests."""
-    return f"{_TRACKME_URL}/api/clean"
+    return f"{_TLSFP_URL}/api/clean"
 
 
 @pytest.fixture
 def ja3_test_url():
     """TLS fingerprint test URL (replacement for defunct ja3er.com)."""
-    return f"{_TRACKME_URL}/api/clean"
+    return f"{_TLSFP_URL}/api/clean"
 
 
 @pytest.fixture(scope="session")
-def trackme_url():
-    """TrackMe base URL. Set TRACKME_URL env var to point at a local instance."""
-    return _TRACKME_URL
+def tlsfp_url():
+    """tlsfingerprint.com base URL. Set TLSFP_URL env var to point at a local instance."""
+    return _TLSFP_URL
 
 
 @pytest.fixture

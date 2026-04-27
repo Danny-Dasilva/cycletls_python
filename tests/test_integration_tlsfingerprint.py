@@ -10,22 +10,24 @@ Skip with: pytest -m "not live"
 Based on: test_integration.py
 """
 import os
+
 import pytest
+
 from cycletls import CycleTLS
 from cycletls.exceptions import Timeout as CycleTLSTimeout
 
 # Mark all tests in this module as live tests
 pytestmark = pytest.mark.live
 
-# Base URL — override with TRACKME_URL to point at a local TrackMe instance
-BASE_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
+# Base URL — override with TLSFP_URL to point at a local tlsfingerprint.com Docker instance
+BASE_URL = os.environ.get("TLSFP_URL", "https://tls.peet.ws")
 
 
 @pytest.fixture(scope="function")
 def cycle_client():
     """Create a CycleTLS client with connection reuse disabled.
 
-    TrackMe closes connections after each request. With the default
+    tlsfingerprint.com closes connections after each request. With the default
     enable_connection_reuse=True the Go transport caches the TLS connection
     globally; the next test picks up the closed connection and gets
     "use of closed network connection". Setting enable_connection_reuse=False
@@ -89,9 +91,9 @@ class TestHTTPMethods:
             assert response.status_code in [200, 405], \
                 f"POST should return 200 or 405, got {response.status_code}"
         except CycleTLSTimeout:
-            # Local TrackMe rejects non-GET methods via HTTP/2 RST_STREAM,
+            # Local tlsfingerprint.com rejects non-GET methods via HTTP/2 RST_STREAM,
             # causing the Go client to time out. Treat this as acceptable.
-            pytest.skip("TrackMe does not support POST (HTTP/2 RST_STREAM)")
+            pytest.skip("tlsfingerprint.com server does not support POST (HTTP/2 RST_STREAM)")
 
     def test_head_method(self, cycle_client):
         """Test HEAD request method"""

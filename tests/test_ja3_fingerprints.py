@@ -7,10 +7,12 @@ that CycleTLS correctly implements TLS fingerprinting for different browsers.
 Based on: /Users/dannydasilva/Documents/personal/CycleTLS/cycletls/tests/integration/main_ja3_test.go
 """
 import os
+
 import pytest
+
 from cycletls import CycleTLS
 
-_TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
+_TLSFP_URL = os.environ.get("TLSFP_URL", "https://tls.peet.ws")
 
 pytestmark = pytest.mark.live
 
@@ -136,7 +138,7 @@ class TestJA3Fingerprints:
         match the expected values for each browser fingerprint.
         """
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,  # Different JA3 fingerprints require new connections
@@ -164,7 +166,7 @@ class TestChromeFingerprints:
         """Test Chrome 58 fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "Chrome 58")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -178,7 +180,7 @@ class TestChromeFingerprints:
         """Test Chrome 62 fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "Chrome 62")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -192,7 +194,7 @@ class TestChromeFingerprints:
         """Test Chrome 70 fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "Chrome 70")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -206,7 +208,7 @@ class TestChromeFingerprints:
         """Test Chrome 72 fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "Chrome 72")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -220,7 +222,7 @@ class TestChromeFingerprints:
         """Test Chrome 83 fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "Chrome 83")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -238,7 +240,7 @@ class TestFirefoxFingerprints:
         """Test Firefox 55 fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "Firefox 55")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -252,7 +254,7 @@ class TestFirefoxFingerprints:
         """Test Firefox 56 fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "Firefox 56")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -266,7 +268,7 @@ class TestFirefoxFingerprints:
         """Test Firefox 63 fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "Firefox 63")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -280,7 +282,7 @@ class TestFirefoxFingerprints:
         """Test Firefox 65 fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "Firefox 65")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -298,7 +300,7 @@ class TestSafariFingerprints:
         """Test iOS 11 Safari fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "iOS 11 Safari")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -312,7 +314,7 @@ class TestSafariFingerprints:
         """Test iOS 12 Safari fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "iOS 12 Safari")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -326,7 +328,7 @@ class TestSafariFingerprints:
         """Test iOS 17 Safari fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "iOS 17 Safari")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -340,7 +342,7 @@ class TestSafariFingerprints:
         """Test macOS Safari fingerprint"""
         fingerprint = next(fp for fp in JA3_FINGERPRINTS if fp["name"] == "macOS Safari")
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -359,7 +361,7 @@ class TestJA3StringValidation:
         # Test with a known good fingerprint
         fingerprint = JA3_FINGERPRINTS[0]
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,
@@ -379,7 +381,7 @@ class TestJA3StringValidation:
         expected_hash = "b32309a26951912be7dba376398abc3b"
 
         response = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=custom_ja3,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.106 Safari/537.36",
             enable_connection_reuse=False,
@@ -396,14 +398,14 @@ class TestJA3StringValidation:
 
         # Make two requests with the same JA3 - here connection reuse is OK since same fingerprint
         response1 = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,  # Still disable for test isolation
         )
 
         response2 = cycle_client.get(
-            f"{_TRACKME_URL}/api/clean",
+            f"{_TLSFP_URL}/api/clean",
             ja3=fingerprint["ja3"],
             user_agent=fingerprint["user_agent"],
             enable_connection_reuse=False,

@@ -24,14 +24,16 @@ Based on CycleTLS TypeScript tests:
 - tests/tlsfingerprint/basic.test.ts
 """
 import os
+
 import pytest
+
 from cycletls import CycleTLS
 
 # Mark all tests in this module as blocking (CI-critical)
 pytestmark = [pytest.mark.blocking, pytest.mark.live]
 
-# Primary test URL — override with TRACKME_URL to point at a local TrackMe instance
-PEET_WS_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
+# Primary test URL — override with TLSFP_URL to point at a local tlsfingerprint.com Docker instance
+PEET_WS_URL = os.environ.get("TLSFP_URL", "https://tls.peet.ws")
 
 
 # ==============================================================================
@@ -573,7 +575,7 @@ class TestFingerprintConsistencyBlocking:
         # All JA4_r values should match
         ja4r_values = [resp.json()["tls"]["ja4_r"] for resp in responses]
         assert all(v == ja4r_values[0] for v in ja4r_values), (
-            f"JA4_r values should be consistent across requests:\n"
+            "JA4_r values should be consistent across requests:\n"
             + "\n".join(f"Request {i+1}: {v}" for i, v in enumerate(ja4r_values))
         )
 

@@ -13,10 +13,12 @@ in the Python API. This functionality may be internal to the Go backend.
 """
 
 import os
+
 import pytest
+
 from cycletls import CycleTLS
 
-_TRACKME_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
+_TLSFP_URL = os.environ.get("TLSFP_URL", "https://tls.peet.ws")
 
 pytestmark = pytest.mark.live
 
@@ -34,7 +36,7 @@ class TestChromeFrameHeaders:
 
         try:
             response = client.get(
-                f"{_TRACKME_URL}/api/all",
+                f"{_TLSFP_URL}/api/all",
                 ja3=chrome_ja3,
                 user_agent=chrome_ua
             )
@@ -100,7 +102,7 @@ class TestChromeFrameHeaders:
 
         try:
             response = client.get(
-                f"{_TRACKME_URL}/api/all",
+                f"{_TLSFP_URL}/api/all",
                 ja3=chrome_ja3
             )
 
@@ -140,7 +142,7 @@ class TestFirefoxFrameHeaders:
 
         try:
             response = client.get(
-                f"{_TRACKME_URL}/api/all",
+                f"{_TLSFP_URL}/api/all",
                 ja3=firefox_ja3,
                 user_agent=firefox_ua
             )
@@ -201,12 +203,12 @@ class TestFirefoxFrameHeaders:
 
         try:
             chrome_response = chrome_client.get(
-                f"{_TRACKME_URL}/api/all",
+                f"{_TLSFP_URL}/api/all",
                 ja3=chrome_ja3
             )
 
             firefox_response = firefox_client.get(
-                f"{_TRACKME_URL}/api/all",
+                f"{_TLSFP_URL}/api/all",
                 ja3=firefox_ja3
             )
 
@@ -252,7 +254,7 @@ class TestFrameTypes:
 
         try:
             response = client.get(
-                f"{_TRACKME_URL}/api/all",
+                f"{_TLSFP_URL}/api/all",
                 force_http1=False  # Ensure HTTP/2
             )
 
@@ -280,7 +282,7 @@ class TestFrameTypes:
         client = CycleTLS()
 
         try:
-            response = client.get(f"{_TRACKME_URL}/api/all")
+            response = client.get(f"{_TLSFP_URL}/api/all")
 
             data = response.json()
 
@@ -306,7 +308,7 @@ class TestFrameTypes:
         client = CycleTLS()
 
         try:
-            response = client.get(f"{_TRACKME_URL}/api/all")
+            response = client.get(f"{_TLSFP_URL}/api/all")
 
             data = response.json()
 
@@ -407,7 +409,7 @@ class TestHTTP2Fingerprinting:
         client = CycleTLS()
 
         try:
-            response = client.get(f"{_TRACKME_URL}/api/all")
+            response = client.get(f"{_TLSFP_URL}/api/all")
 
             data = response.json()
 
@@ -434,7 +436,7 @@ class TestBrowserSpecificFingerprints:
 
         try:
             response = client.get(
-                f"{_TRACKME_URL}/api/all",
+                f"{_TLSFP_URL}/api/all",
                 ja3=chrome_ja3
             )
 
@@ -466,7 +468,7 @@ class TestBrowserSpecificFingerprints:
 
         try:
             response = client.get(
-                f"{_TRACKME_URL}/api/all",
+                f"{_TLSFP_URL}/api/all",
                 ja3=firefox_ja3
             )
 

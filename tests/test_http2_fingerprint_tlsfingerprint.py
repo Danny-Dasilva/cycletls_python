@@ -10,14 +10,16 @@ Skip with: pytest -m "not live"
 Based on: test_http2_fingerprint.py, test_frame_headers.py
 """
 import os
+
 import pytest
+
 from cycletls import CycleTLS
 
 # Mark all tests in this module as live tests
 pytestmark = pytest.mark.live
 
-# Base URL — override with TRACKME_URL to point at a local TrackMe instance
-BASE_URL = os.environ.get("TRACKME_URL", "https://tls.peet.ws")
+# Base URL — override with TLSFP_URL to point at a local tlsfingerprint.com Docker instance
+BASE_URL = os.environ.get("TLSFP_URL", "https://tls.peet.ws")
 
 
 def extract_http2_from_response(data: dict) -> dict:
@@ -42,7 +44,7 @@ def extract_http2_from_response(data: dict) -> dict:
 def cycle_client():
     """Create a CycleTLS client with connection reuse disabled.
 
-    TrackMe closes connections after each request. With the default
+    tlsfingerprint.com closes connections after each request. With the default
     enable_connection_reuse=True the Go transport caches the TLS connection
     globally; the next test picks up the closed connection and gets
     "use of closed network connection". Setting enable_connection_reuse=False
