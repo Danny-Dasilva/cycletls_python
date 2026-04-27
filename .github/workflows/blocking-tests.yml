@@ -40,5 +40,46 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --all-extras --dev
 
+      - name: Checkout Danny-Dasilva/tlsfingerprint.com
+        uses: actions/checkout@v4
+        with:
+          repository: Danny-Dasilva/tlsfingerprint.com
+          ref: master
+          path: .tlsfingerprint-server
+
+      - name: Generate TLS certificates and config
+        working-directory: .tlsfingerprint-server
+        run: |
+          mkdir -p certs
+          openssl req -x509 -newkey rsa:4096 \
+            -keyout certs/key.pem \
+            -out certs/chain.pem \
+            -sha256 -days 365 -nodes \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=IP:127.0.0.1,DNS:localhost"
+          jq '.log_to_db = false | .mongo_url = "" | .device = ""' \
+            config.example.json > config.json
+          cat /etc/ssl/certs/ca-certificates.crt certs/chain.pem > /tmp/combined-test-cas.crt
+
+      - name: Build and start tlsfingerprint.com server
+        working-directory: .tlsfingerprint-server
+        run: |
+          docker compose up -d --build
+          echo "Waiting for tlsfingerprint.com server to become ready..."
+          if ! timeout 90 bash -c 'until curl -sk --max-time 3 https://localhost/api/clean -o /dev/null; do sleep 2; done'; then
+            echo "Server did not become ready in time. Container logs:"
+            docker compose logs
+            exit 1
+          fi
+          echo "tlsfingerprint.com server is ready."
+
       - name: Run blocking tests
+        env:
+          TLSFP_URL: https://localhost
+          SSL_CERT_FILE: /tmp/combined-test-cas.crt
         run: uv run pytest -v --color=yes -m "blocking" tests/
+
+      - name: Tear down tlsfingerprint.com server
+        if: always()
+        working-directory: .tlsfingerprint-server
+        run: docker compose down -v || true

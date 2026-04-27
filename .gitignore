@@ -67,3 +67,6 @@ site/
 
 # Continuous Claude cache (local only)
 .claude/cache/
+
+# Local checkout of Danny-Dasilva/tlsfingerprint.com used by live-tests workflow
+.tlsfingerprint-server/
