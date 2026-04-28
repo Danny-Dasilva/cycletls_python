@@ -8,7 +8,7 @@ require (
 	github.com/Danny-Dasilva/fhttp v0.0.0-20240217042913-eeeb0b347ce1
 	github.com/andybalholm/brotli v1.2.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/quic-go/quic-go v0.53.0
+	github.com/quic-go/quic-go v0.59.0
 	github.com/refraction-networking/uquic v0.0.6
 	github.com/refraction-networking/utls v1.8.2
 	github.com/vmihailenco/msgpack/v5 v5.4.1
@@ -24,7 +24,7 @@ require (
 	github.com/google/pprof v0.0.0-20250630185457-6e76a2b096b5 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/onsi/ginkgo/v2 v2.23.4 // indirect
-	github.com/quic-go/qpack v0.5.1 // indirect
+	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/mock v0.5.2 // indirect
