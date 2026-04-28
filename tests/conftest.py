@@ -25,16 +25,21 @@ def cycletls_client():
     Session-scoped CycleTLS client fixture.
     Creates a single client instance for all tests.
 
-    Connection reuse is disabled by default so that tlsfingerprint.com-style servers
-    (which close connections after every response) don't leave a stale cached
-    connection in the global Go transport pool for the next test.
+    Connection reuse is disabled ONLY for requests against the local
+    tlsfingerprint.com server (which closes the TLS connection after every
+    response, leaving a stale cached connection in the global Go transport
+    pool for the next test). Requests against httpbin.org and other public
+    endpoints rely on HTTP/1.1 keep-alive working normally; force-disabling
+    reuse there causes "server closed idle connection" / EOF errors on
+    multi-request flows (e.g. cookie set+get, redirect chains).
     """
     client = CycleTLS()
     _orig = client.request
-    def _no_reuse(method, url, **kwargs):
-        kwargs.setdefault("enable_connection_reuse", False)
+    def _no_reuse_for_tlsfp(method, url, **kwargs):
+        if _TLSFP_URL in url:
+            kwargs.setdefault("enable_connection_reuse", False)
         return _orig(method, url, **kwargs)
-    client.request = _no_reuse
+    client.request = _no_reuse_for_tlsfp
     yield client
     client.close()
 

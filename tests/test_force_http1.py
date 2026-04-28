@@ -16,13 +16,22 @@ pytestmark = pytest.mark.live
 
 @pytest.fixture
 def client():
-    """Create a CycleTLS client instance with connection reuse disabled."""
+    """Create a CycleTLS client instance.
+
+    Connection reuse is disabled ONLY for requests against the local
+    tlsfingerprint.com server (which closes the TLS connection after each
+    response). Requests against httpbin.org rely on HTTP/1.1 keep-alive
+    and break when reuse is force-disabled (httpbin closes idle conns
+    aggressively, causing "server closed idle connection" / EOF errors
+    on the next request).
+    """
     cycle = CycleTLS()
     _orig = cycle.request
-    def _no_reuse(method, url, **kwargs):
-        kwargs.setdefault("enable_connection_reuse", False)
+    def _no_reuse_for_tlsfp(method, url, **kwargs):
+        if _TLSFP_URL in url:
+            kwargs.setdefault("enable_connection_reuse", False)
         return _orig(method, url, **kwargs)
-    cycle.request = _no_reuse
+    cycle.request = _no_reuse_for_tlsfp
     yield cycle
     cycle.close()
 
