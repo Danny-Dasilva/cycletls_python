@@ -10,7 +10,7 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/quic-go/quic-go v0.53.0
 	github.com/refraction-networking/uquic v0.0.6
-	github.com/refraction-networking/utls v1.8.0
+	github.com/refraction-networking/utls v1.8.2
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	golang.org/x/net v0.42.0
 	h12.io/socks v1.0.3
