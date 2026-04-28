@@ -7,6 +7,7 @@ custom JA4_r parameters, and comparison with JA3 fingerprints.
 Based on: /Users/dannydasilva/Documents/personal/CycleTLS/tests/ja4-fingerprint.test.js
 """
 import os
+import re
 
 import pytest
 
@@ -15,6 +16,132 @@ from cycletls import CycleTLS
 _TLSFP_URL = os.environ.get("TLSFP_URL", "https://tls.peet.ws")
 
 pytestmark = pytest.mark.live
+
+
+# JA4_r header format: t<TLS_ver>d<cipher_count><ext_count><ALPN>
+# Per the JA4 spec, cipher_count and ext_count are 2-digit zero-padded.
+# Production tls.peet.ws emits an unpadded form (e.g. "t12d128h2" for 12+8),
+# while local tlsfingerprint.com Docker emits the spec form ("t12d1208h2").
+# Both are accepted: tests validate STRUCTURE rather than exact prefixes.
+_JA4R_HEADER_RE = re.compile(r"^t(?P<ver>\d{2})d(?P<counts>\d+)(?P<alpn>h2|h1|http)$")
+
+
+def _parse_ja4r(s: str) -> dict:
+    """
+    Parse a JA4_r string into its structural components.
+
+    JA4_r format: t<ver>d<cipher_count><ext_count><ALPN>_<ciphers>_<extensions>_<sigalgs>
+
+    The cipher_count and ext_count fields in the header may be either:
+      - Unpadded (e.g. "128" -- 12 ciphers + 8 extensions, the format
+        currently produced by the production tls.peet.ws server)
+      - Zero-padded to 2 digits each (e.g. "1208" -- 12 + 08, per the JA4
+        spec, the format produced by the local tlsfingerprint.com Docker
+        server)
+
+    Note: the cipher_count and ext_count *header* fields refer to the
+    counts seen on the wire and may include SNI (0x0000) and ALPN (0x0010),
+    while the rendered extension list excludes those. So header counts will
+    NOT always equal `len(extensions)`. This helper returns the header
+    counts as ints (best-effort interpretation, preferring the spec
+    zero-padded form when ambiguous) and the observed list lengths
+    separately.
+
+    Returns a dict with keys:
+      tls_version, alpn, header_cipher_count, header_ext_count,
+      ciphers, extensions, sig_algs, header, raw.
+    """
+    parts = s.split("_")
+    assert len(parts) == 4, f"JA4_r should have 4 underscore-separated parts, got {len(parts)}: {s}"
+
+    header, ciphers_s, exts_s, sigs_s = parts
+    m = _JA4R_HEADER_RE.match(header)
+    assert m, f"JA4_r header malformed: {header!r}"
+
+    ciphers = [c for c in ciphers_s.split(",") if c]
+    extensions = [e for e in exts_s.split(",") if e]
+    sig_algs = [a for a in sigs_s.split(",") if a]
+
+    counts = m.group("counts")
+    # Decode the counts field. Spec form is 2-digit padded each (4 chars).
+    # Production tls.peet.ws strips leading zeros, so a 3-char "128" can
+    # mean 12 ciphers + 8 extensions OR 1 cipher + 28 extensions. We
+    # disambiguate by preferring the interpretation whose cipher count
+    # matches the observed cipher list length (which is invariant across
+    # servers).
+    header_cc, header_ec = _decode_counts(counts, len(ciphers))
+
+    return {
+        "tls_version": m.group("ver"),
+        "alpn": m.group("alpn"),
+        "header_cipher_count": header_cc,
+        "header_ext_count": header_ec,
+        "ciphers": ciphers,
+        "extensions": extensions,
+        "sig_algs": sig_algs,
+        "header": header,
+        "raw": s,
+    }
+
+
+def _decode_counts(counts: str, observed_cipher_count: int) -> tuple[int, int]:
+    """
+    Decode the concatenated cipher_count + ext_count field from a JA4_r
+    header. Returns (cipher_count, ext_count).
+
+    Strategy: enumerate every (cc, ec) split where cc is a prefix of
+    `counts`, prefer the split where cc equals the observed cipher count
+    (this disambiguates unpadded production output). Otherwise fall back
+    to the spec form (2-digit padded each, length 4).
+    """
+    candidates: list[tuple[int, int]] = []
+    for split in range(1, len(counts)):
+        try:
+            cc = int(counts[:split])
+            ec = int(counts[split:])
+        except ValueError:
+            continue
+        candidates.append((cc, ec))
+
+    # Prefer the candidate whose cipher count matches what we actually saw.
+    for cc, ec in candidates:
+        if cc == observed_cipher_count:
+            return cc, ec
+
+    # Fall back to the spec form (4-char zero-padded) if available.
+    if len(counts) == 4:
+        return int(counts[:2]), int(counts[2:])
+
+    # Last resort: assume single-digit cipher count.
+    if candidates:
+        return candidates[0]
+    raise AssertionError(f"Could not decode JA4_r counts field: {counts!r}")
+
+
+def _assert_ja4r_equivalent(actual: str, expected: str) -> None:
+    """
+    Assert two JA4_r strings are structurally equivalent.
+
+    Header padding for cipher_count/ext_count may differ between servers
+    (production unpadded vs spec-compliant zero-padded), but the body
+    (ciphers, extensions, signature algorithms) and TLS version + ALPN
+    must match exactly.
+    """
+    a = _parse_ja4r(actual)
+    e = _parse_ja4r(expected)
+    assert a["tls_version"] == e["tls_version"], (
+        f"TLS version mismatch: actual={a['tls_version']} expected={e['tls_version']}"
+    )
+    assert a["alpn"] == e["alpn"], f"ALPN mismatch: actual={a['alpn']} expected={e['alpn']}"
+    assert a["ciphers"] == e["ciphers"], (
+        f"Cipher list mismatch:\nactual:   {a['ciphers']}\nexpected: {e['ciphers']}"
+    )
+    assert a["extensions"] == e["extensions"], (
+        f"Extension list mismatch:\nactual:   {a['extensions']}\nexpected: {e['extensions']}"
+    )
+    assert a["sig_algs"] == e["sig_algs"], (
+        f"Signature algorithm list mismatch:\nactual:   {a['sig_algs']}\nexpected: {e['sig_algs']}"
+    )
 
 
 @pytest.fixture(scope="module")
@@ -64,13 +191,18 @@ class TestJA4Fingerprints:
         # Check for Delegated Credentials (0022)
         assert "0022" in result["tls"]["ja4_r"], "JA4_r should contain Delegated Credentials (0022)"
 
-        # Check header format - should remain t13d1717h2 (17 extensions, ALPN auto-removed)
-        assert result["tls"]["ja4_r"].startswith("t13d1717h2"), \
-            f"JA4_r should start with 't13d1717h2', got {result['tls']['ja4_r'][:11]}"
+        # Validate structure: TLS 1.3, h2 ALPN, 17 ciphers + 17 extensions.
+        # Accept both unpadded ("t13d1717h2") and zero-padded ("t13d1717h2"
+        # which already happens to coincide here) header forms.
+        parsed = _parse_ja4r(result["tls"]["ja4_r"])
+        assert parsed["tls_version"] == "13"
+        assert parsed["alpn"] == "h2"
+        assert parsed["header_cipher_count"] == 17
+        assert parsed["header_ext_count"] == 17
 
-        # Verify expected output (ALPN auto-removed since h2 in header)
-        assert result["tls"]["ja4_r"] == firefox_ja4r, \
-            f"JA4_r mismatch:\nExpected: {firefox_ja4r}\nGot: {result['tls']['ja4_r']}"
+        # Verify the cipher / extension / signature-algorithm bodies match
+        # exactly. Header padding is allowed to differ between servers.
+        _assert_ja4r_equivalent(result["tls"]["ja4_r"], firefox_ja4r)
 
     def test_chrome_ja4r_exact_match(self, cycle_client):
         """
@@ -103,13 +235,16 @@ class TestJA4Fingerprints:
         # Check for ECH extension (fe0d)
         assert "fe0d" in result["tls"]["ja4_r"], "JA4_r should contain ECH extension (fe0d)"
 
-        # Check header format
-        assert result["tls"]["ja4_r"].startswith("t13d1516h2"), \
-            f"JA4_r should start with 't13d1516h2', got {result['tls']['ja4_r'][:11]}"
+        # Validate structure: TLS 1.3, h2 ALPN, 15 ciphers + 16 extensions.
+        parsed = _parse_ja4r(result["tls"]["ja4_r"])
+        assert parsed["tls_version"] == "13"
+        assert parsed["alpn"] == "h2"
+        assert parsed["header_cipher_count"] == 15
+        assert parsed["header_ext_count"] == 16
 
-        # Verify exact match (ALPN is auto-handled with h2)
-        assert result["tls"]["ja4_r"] == chrome_ja4r, \
-            f"JA4_r mismatch:\nExpected: {chrome_ja4r}\nGot: {result['tls']['ja4_r']}"
+        # Verify body match (ALPN is auto-handled with h2). Header padding
+        # may differ across servers but ciphers/extensions/sigalgs are stable.
+        _assert_ja4r_equivalent(result["tls"]["ja4_r"], chrome_ja4r)
 
     def test_chrome_138_ja4r_exact_match(self, cycle_client):
         """
@@ -141,13 +276,15 @@ class TestJA4Fingerprints:
         # Check for ECH extension (fe0d)
         assert "fe0d" in result["tls"]["ja4_r"], "JA4_r should contain ECH extension (fe0d)"
 
-        # Check header format
-        assert result["tls"]["ja4_r"].startswith("t13d1516h2"), \
-            f"JA4_r should start with 't13d1516h2', got {result['tls']['ja4_r'][:11]}"
+        # Validate structure: TLS 1.3, h2 ALPN, 15 ciphers + 16 extensions.
+        parsed = _parse_ja4r(result["tls"]["ja4_r"])
+        assert parsed["tls_version"] == "13"
+        assert parsed["alpn"] == "h2"
+        assert parsed["header_cipher_count"] == 15
+        assert parsed["header_ext_count"] == 16
 
-        # Verify exact match
-        assert result["tls"]["ja4_r"] == chrome138_ja4r, \
-            f"JA4_r mismatch:\nExpected: {chrome138_ja4r}\nGot: {result['tls']['ja4_r']}"
+        # Body equivalence: cipher / extension / sigalg lists match exactly.
+        _assert_ja4r_equivalent(result["tls"]["ja4_r"], chrome138_ja4r)
 
     def test_chrome_139_ja4r_exact_match(self, cycle_client):
         """
@@ -179,13 +316,15 @@ class TestJA4Fingerprints:
         # Check for ECH extension (fe0d)
         assert "fe0d" in result["tls"]["ja4_r"], "JA4_r should contain ECH extension (fe0d)"
 
-        # Check header format
-        assert result["tls"]["ja4_r"].startswith("t13d1516h2"), \
-            f"JA4_r should start with 't13d1516h2', got {result['tls']['ja4_r'][:11]}"
+        # Validate structure: TLS 1.3, h2 ALPN, 15 ciphers + 16 extensions.
+        parsed = _parse_ja4r(result["tls"]["ja4_r"])
+        assert parsed["tls_version"] == "13"
+        assert parsed["alpn"] == "h2"
+        assert parsed["header_cipher_count"] == 15
+        assert parsed["header_ext_count"] == 16
 
-        # Verify exact match
-        assert result["tls"]["ja4_r"] == chrome139_ja4r, \
-            f"JA4_r mismatch:\nExpected: {chrome139_ja4r}\nGot: {result['tls']['ja4_r']}"
+        # Body equivalence: cipher / extension / sigalg lists match exactly.
+        _assert_ja4r_equivalent(result["tls"]["ja4_r"], chrome139_ja4r)
 
     def test_tls12_ja4r_exact_match(self, cycle_client):
         """
@@ -212,13 +351,21 @@ class TestJA4Fingerprints:
         assert "ja4_r" in result["tls"], "TLS data should contain 'ja4_r' field"
         assert result.get("http_version") == "h2", f"Expected HTTP/2, got {result.get('http_version')}"
 
-        # TLS 1.2 response should be t12d128h2 (8 extensions with h2, ALPN auto-handled)
-        assert result["tls"]["ja4_r"].startswith("t12d128h2"), \
-            f"JA4_r should start with 't12d128h2', got {result['tls']['ja4_r'][:10]}"
+        # Validate structure: TLS 1.2, h2 ALPN, 12 ciphers + 8 extensions.
+        # Production tls.peet.ws emits the unpadded "t12d128h2" form, while
+        # local tlsfingerprint.com Docker emits the spec-compliant
+        # zero-padded "t12d1208h2" form. Both are accepted.
+        parsed = _parse_ja4r(result["tls"]["ja4_r"])
+        assert parsed["tls_version"] == "12", (
+            f"Expected TLS 1.2, got version {parsed['tls_version']!r} "
+            f"in {result['tls']['ja4_r']!r}"
+        )
+        assert parsed["alpn"] == "h2"
+        assert parsed["header_cipher_count"] == 12
+        assert parsed["header_ext_count"] == 8
 
-        # Verify exact match
-        assert result["tls"]["ja4_r"] == tls12_ja4r, \
-            f"JA4_r mismatch:\nExpected: {tls12_ja4r}\nGot: {result['tls']['ja4_r']}"
+        # Body equivalence: cipher / extension / sigalg lists match exactly.
+        _assert_ja4r_equivalent(result["tls"]["ja4_r"], tls12_ja4r)
 
 
 class TestJA4RawFormatParsing:
@@ -390,9 +537,10 @@ class TestCustomJA4RParameter:
         assert response.status_code == 200
         result = response.json()
 
-        # Verify the custom JA4_r was used
-        assert result["tls"]["ja4_r"] == custom_ja4r, \
-            "Response should contain the custom JA4_r parameter"
+        # Verify the custom JA4_r was used (header padding may differ between
+        # production tls.peet.ws and the local Docker server, so compare the
+        # cipher / extension / sigalg bodies rather than the exact string).
+        _assert_ja4r_equivalent(result["tls"]["ja4_r"], custom_ja4r)
 
     def test_ja4r_with_disable_grease(self, cycle_client):
         """Test JA4_r with GREASE disabled"""
@@ -455,8 +603,10 @@ class TestCustomJA4RParameter:
         data1 = response1.json()
         data2 = response2.json()
 
-        # Verify consistency
+        # Verify consistency: the same server should produce identical
+        # JA4_r strings across requests. Both responses should also be
+        # structurally equivalent to the input fingerprint (header padding
+        # may differ between servers but ciphers/extensions/sigalgs are stable).
         assert data1["tls"]["ja4_r"] == data2["tls"]["ja4_r"], \
             "Multiple requests with same JA4_r should return consistent results"
-        assert data1["tls"]["ja4_r"] == chrome_ja4r, \
-            "JA4_r should match the input parameter"
+        _assert_ja4r_equivalent(data1["tls"]["ja4_r"], chrome_ja4r)
