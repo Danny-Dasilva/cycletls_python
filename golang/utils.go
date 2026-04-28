@@ -933,7 +933,7 @@ func genMap(disableGrease bool) (extMap map[string]utls.TLSExtension) {
 		"16": &utls.ALPNExtension{
 			AlpnProtocols: []string{"h2", "http/1.1"},
 		},
-		"17": &utls.GenericExtension{Id: 17}, // status_request_v2
+		"17": &utls.StatusRequestV2Extension{}, // status_request_v2 (17)
 		"18": &utls.SCTExtension{},
 		"21": &utls.UtlsPaddingExtension{GetPaddingLen: utls.BoringPaddingStyle},
 		"22": &utls.GenericExtension{Id: 22}, // encrypt_then_mac
@@ -999,11 +999,12 @@ func genMap(disableGrease bool) (extMap map[string]utls.TLSExtension) {
 				"h2",
 			},
 		},
-		"17613": &utls.GenericExtension{
-			Id:   17613,
-			Data: []byte{0x00, 0x03, 0x02, 0x68, 0x32},
+		"17613": &utls.ApplicationSettingsExtensionNew{
+			SupportedProtocols: []string{
+				"h2",
+			},
 		},
-		"30032": &utls.GenericExtension{Id: 0x7550, Data: []byte{0}}, // Channel ID extension
+		"30032": &utls.FakeChannelIDExtension{}, // Channel ID extension (30032 / 0x7550, new ID)
 		"65281": &utls.RenegotiationInfoExtension{
 			Renegotiation: utls.RenegotiateOnceAsClient,
 		},
