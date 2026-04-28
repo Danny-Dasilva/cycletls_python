@@ -27,6 +27,14 @@ import os
 
 import pytest
 
+# Structural JA4_r matchers (see tests/conftest.py for full rationale).
+# Production tls.peet.ws strips leading zeros from the cipher_count/ext_count
+# header field (e.g. "t12d128h2" for 12 ciphers + 8 extensions), while the
+# local tlsfingerprint.com Docker image used by CI emits the spec-compliant
+# zero-padded form ("t12d1208h2"). We assert structural equivalence rather
+# than exact string equality so tests pass against either backend.
+from conftest import assert_ja4r_equivalent
+
 from cycletls import CycleTLS
 
 # Mark all tests in this module as blocking (CI-critical)
@@ -234,11 +242,10 @@ class TestJA4FingerprintBlocking:
         data = response.json()
 
         observed_ja4r = data["tls"]["ja4_r"]
-        assert observed_ja4r == self.CHROME_JA4R, (
-            f"JA4_r mismatch:\n"
-            f"Expected: {self.CHROME_JA4R}\n"
-            f"Observed: {observed_ja4r}"
-        )
+        # Structural match: header padding may differ between production and
+        # local tlsfingerprint.com servers, but ciphers/extensions/sigalgs
+        # must match exactly.
+        assert_ja4r_equivalent(observed_ja4r, self.CHROME_JA4R)
 
     def test_ja4r_firefox_fingerprint_exact_match(self, cycle_client):
         """
@@ -260,11 +267,8 @@ class TestJA4FingerprintBlocking:
         data = response.json()
 
         observed_ja4r = data["tls"]["ja4_r"]
-        assert observed_ja4r == self.FIREFOX_JA4R, (
-            f"JA4_r mismatch:\n"
-            f"Expected: {self.FIREFOX_JA4R}\n"
-            f"Observed: {observed_ja4r}"
-        )
+        # Structural match: see CHROME variant above.
+        assert_ja4r_equivalent(observed_ja4r, self.FIREFOX_JA4R)
 
     def test_ja4r_tls12_fingerprint_exact_match(self, cycle_client):
         """
@@ -286,11 +290,10 @@ class TestJA4FingerprintBlocking:
         data = response.json()
 
         observed_ja4r = data["tls"]["ja4_r"]
-        assert observed_ja4r == self.TLS12_JA4R, (
-            f"JA4_r mismatch:\n"
-            f"Expected: {self.TLS12_JA4R}\n"
-            f"Observed: {observed_ja4r}"
-        )
+        # TLS 1.2 is the case where production vs local server header padding
+        # actually diverges: production emits "t12d128h2" (12+8 unpadded),
+        # local Docker emits "t12d1208h2" (12+08 spec-padded). Body is stable.
+        assert_ja4r_equivalent(observed_ja4r, self.TLS12_JA4R)
 
     def test_ja4r_header_format_chrome(self, cycle_client):
         """
@@ -508,7 +511,8 @@ class TestCombinedFingerprintsBlocking:
         # Verify TLS fingerprint
         assert "tls" in data, "Response should contain TLS data"
         assert "ja4_r" in data["tls"], "TLS data should contain ja4_r"
-        assert data["tls"]["ja4_r"] == self.CHROME_JA4R, "JA4_r should match"
+        # Structural match: header padding may differ between servers.
+        assert_ja4r_equivalent(data["tls"]["ja4_r"], self.CHROME_JA4R)
 
         # Verify HTTP/2 fingerprint
         assert "http2" in data, "Response should contain HTTP/2 data"
@@ -579,12 +583,9 @@ class TestFingerprintConsistencyBlocking:
             + "\n".join(f"Request {i+1}: {v}" for i, v in enumerate(ja4r_values))
         )
 
-        # All should match expected value
-        assert ja4r_values[0] == self.CHROME_JA4R, (
-            f"JA4_r should match expected value:\n"
-            f"Expected: {self.CHROME_JA4R}\n"
-            f"Observed: {ja4r_values[0]}"
-        )
+        # All should match expected value (structural match: header padding
+        # may differ between production and local servers).
+        assert_ja4r_equivalent(ja4r_values[0], self.CHROME_JA4R)
 
 
 # ==============================================================================
