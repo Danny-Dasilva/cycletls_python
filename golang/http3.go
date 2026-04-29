@@ -409,8 +409,19 @@ func (rt *roundTripper) http3Dial(ctx context.Context, remoteAddr, port string, 
 		return nil, fmt.Errorf("HTTP/3 proxy support not yet implemented")
 	}
 
-	// Direct UDP connection
-	conn, err := net.ListenPacket("udp", "")
+	// Direct UDP connection.
+	//
+	// When rt.LocalAddress is set, bind the UDP socket to that local IP so
+	// HTTP/3 honors the same local-address semantics as the TCP-based dial
+	// paths. Empty laddr (the default) lets the kernel choose, matching the
+	// previous behavior for the unset case.
+	listenAddr := ""
+	if rt.LocalAddress != "" {
+		if ip := net.ParseIP(rt.LocalAddress); ip != nil {
+			listenAddr = net.JoinHostPort(ip.String(), "0")
+		}
+	}
+	conn, err := net.ListenPacket("udp", listenAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create UDP packet connection: %w", err)
 	}

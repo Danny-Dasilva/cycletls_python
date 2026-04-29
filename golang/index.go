@@ -121,8 +121,18 @@ type Options struct {
 	UserAgent string `json:"userAgent" msgpack:"userAgent"`
 
 	// Connection options
-	Proxy              string   `json:"proxy" msgpack:"proxy"`
-	LocalAddress       string   `json:"localAddress" msgpack:"localAddress"` // Bind outgoing TCP connections to this local IP address
+	Proxy string `json:"proxy" msgpack:"proxy"`
+	// LocalAddress, when non-empty, binds outgoing TCP/UDP sockets to the
+	// given local IP via SO_BINDTODEVICE-style net.Dialer.LocalAddr.
+	//
+	// IMPORTANT: when a Proxy is also set, the bind applies to the
+	// client->proxy hop only. The proxy opens its own socket to the
+	// destination, so the destination server never sees this IP. The proxy
+	// host (and any on-path observer between the client and the proxy)
+	// always observes LocalAddress. Use this for routing/interface
+	// control (multi-homed hosts, residential IP rotation through your own
+	// egress proxy, etc.), NOT as an anonymizer against the proxy itself.
+	LocalAddress       string   `json:"localAddress" msgpack:"localAddress"`
 	ServerName         string   `json:"serverName" msgpack:"serverName"` // Custom TLS SNI override
 	Cookies            []Cookie `json:"cookies" msgpack:"cookies"`
 	Timeout            int      `json:"timeout" msgpack:"timeout"`
@@ -183,23 +193,23 @@ var debugLogger = log.New(os.Stdout, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfi
 
 // WebSocket connection management
 type WebSocketConnection struct {
-	Conn         *websocket.Conn
-	RequestID    string
-	URL          string
-	ReadyState   int // 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
-	mu           sync.RWMutex
-	commandChan  chan WebSocketCommand
-	closeChan    chan struct{}
-	chanWrite    *safeChannelWriter
-	protocol     string // Negotiated subprotocol
-	extensions   string // Negotiated extensions
+	Conn        *websocket.Conn
+	RequestID   string
+	URL         string
+	ReadyState  int // 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+	mu          sync.RWMutex
+	commandChan chan WebSocketCommand
+	closeChan   chan struct{}
+	chanWrite   *safeChannelWriter
+	protocol    string // Negotiated subprotocol
+	extensions  string // Negotiated extensions
 }
 
 type WebSocketCommand struct {
-	Type       string // "send", "close", "ping", "pong"
-	Data       []byte
-	IsBinary   bool
-	CloseCode  int
+	Type        string // "send", "close", "ping", "pong"
+	Data        []byte
+	IsBinary    bool
+	CloseCode   int
 	CloseReason string
 }
 
@@ -860,9 +870,9 @@ func dispatcherAsync(res fullRequest, chanWrite *safeChannelWriter) {
 					b.WriteString(message)
 
 					if !chanWrite.write(b.Bytes()) {
-			log.Printf("Failed to write to channel: channel closed")
-			return
-		}
+						log.Printf("Failed to write to channel: channel closed")
+						return
+					}
 					break loop
 				}
 
@@ -886,9 +896,9 @@ func dispatcherAsync(res fullRequest, chanWrite *safeChannelWriter) {
 						b.Write(chunkBuffer[:n])
 
 						if !chanWrite.write(b.Bytes()) {
-			log.Printf("Failed to write to channel: channel closed")
-			return
-		}
+							log.Printf("Failed to write to channel: channel closed")
+							return
+						}
 					}
 					// EOF reached, exit the loop
 					break loop
@@ -916,9 +926,9 @@ func dispatcherAsync(res fullRequest, chanWrite *safeChannelWriter) {
 				b.Write(chunkBuffer[:n])
 
 				if !chanWrite.write(b.Bytes()) {
-			log.Printf("Failed to write to channel: channel closed")
-			return
-		}
+					log.Printf("Failed to write to channel: channel closed")
+					return
+				}
 			}
 		}
 	}
@@ -1088,9 +1098,9 @@ sseLoop:
 			b.Write(eventBytes)
 
 			if !chanWrite.write(b.Bytes()) {
-			log.Printf("Failed to write to channel: channel closed")
-			return
-		}
+				log.Printf("Failed to write to channel: channel closed")
+				return
+			}
 		}
 	}
 
@@ -1143,15 +1153,15 @@ func dispatchWebSocketAsync(res fullRequest, chanWrite *safeChannelWriter) {
 
 	// Create WebSocket connection object
 	wsConn := &WebSocketConnection{
-		Conn:       conn,
-		RequestID:  res.options.RequestID,
-		URL:        res.options.Options.URL,
-		ReadyState: 1, // OPEN
+		Conn:        conn,
+		RequestID:   res.options.RequestID,
+		URL:         res.options.Options.URL,
+		ReadyState:  1, // OPEN
 		commandChan: make(chan WebSocketCommand, 100),
-		closeChan:  make(chan struct{}),
-		chanWrite:  chanWrite,
-		protocol:   negotiatedProtocol,
-		extensions: negotiatedExtensions,
+		closeChan:   make(chan struct{}),
+		chanWrite:   chanWrite,
+		protocol:    negotiatedProtocol,
+		extensions:  negotiatedExtensions,
 	}
 
 	// Register the WebSocket connection

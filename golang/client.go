@@ -95,6 +95,16 @@ type Browser struct {
 	ForceHTTP1         bool
 	ForceHTTP3         bool
 
+	// LocalAddress, when non-empty, is the local IP the kernel binds the
+	// outbound TCP socket to (via net.Dialer.LocalAddr). When a proxy is in
+	// the path, the bind applies to the client->proxy hop only — the proxy
+	// opens its own socket to the destination, so the destination server
+	// never observes this IP. Treat this as routing/interface control, NOT
+	// as an anonymizer against the proxy itself: the proxy host always sees
+	// LocalAddress (and any on-path observer between client and proxy does
+	// too).
+	LocalAddress string
+
 	// DisableKeepAlives, when true, disables HTTP keep-alives at the
 	// inner http.Transport layer for every request that uses this Browser.
 	// Set this when the caller passes enable_connection_reuse=false from
@@ -319,6 +329,9 @@ func getOrCreateClient(browser Browser, timeout int, disableRedirect bool, userA
 
 // createNewClient creates a new HTTP client (internal function)
 func createNewClient(browser Browser, timeout int, disableRedirect bool, userAgent string, localAddress string, proxyURL ...string) (fhttp.Client, error) {
+	// Stamp localAddress onto the Browser so downstream consumers (the
+	// roundTripper, in particular the HTTP/3 UDP listener) can honor it.
+	browser.LocalAddress = localAddress
 	var dialer proxy.ContextDialer
 	if len(proxyURL) > 0 && len(proxyURL[0]) > 0 {
 		var err error

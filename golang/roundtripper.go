@@ -25,8 +25,8 @@ type roundTripper struct {
 	sync.Mutex
 
 	// Per-address mutexes for preventing concurrent transport creation
-	addressMutexes    map[string]*sync.Mutex
-	addressMutexLock  sync.Mutex
+	addressMutexes   map[string]*sync.Mutex
+	addressMutexLock sync.Mutex
 
 	// TLS fingerprinting options
 	JA3              string
@@ -47,6 +47,11 @@ type roundTripper struct {
 	Cookies            []Cookie
 	ForceHTTP1         bool
 	ForceHTTP3         bool
+
+	// LocalAddress is the local IP to bind outbound sockets to. Used by
+	// http3Dial for the UDP ListenPacket address; for TCP dials it is
+	// applied via the net.Dialer in client.go / connect.go.
+	LocalAddress string
 
 	// DisableKeepAlives, when true, sets DisableKeepAlives on every
 	// inner http.Transport that this roundTripper constructs. Wired
@@ -179,12 +184,12 @@ func (rt *roundTripper) getTransport(req *http.Request, addr string) error {
 	case "http":
 		// Allow connection reuse with optimized connection pooling
 		rt.cachedTransports[addr] = &http.Transport{
-			DialContext:           rt.dialer.DialContext,
-			MaxIdleConns:          100,
-			MaxConnsPerHost:       100,
-			MaxIdleConnsPerHost:   100, // Go default is 2, which causes 98% of connections to close
-			IdleConnTimeout:       60 * time.Second,
-			DisableKeepAlives:     rt.DisableKeepAlives,
+			DialContext:         rt.dialer.DialContext,
+			MaxIdleConns:        100,
+			MaxConnsPerHost:     100,
+			MaxIdleConnsPerHost: 100, // Go default is 2, which causes 98% of connections to close
+			IdleConnTimeout:     60 * time.Second,
+			DisableKeepAlives:   rt.DisableKeepAlives,
 		}
 		return nil
 	case "https":
@@ -356,12 +361,12 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 	default:
 		// HTTP/1.x transport - optimized for connection reuse
 		rt.cachedTransports[addr] = &http.Transport{
-			DialTLSContext:       rt.dialTLS,
-			MaxIdleConns:         100,
-			MaxConnsPerHost:      100,
-			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
-			IdleConnTimeout:      60 * time.Second,
-			DisableKeepAlives:    rt.DisableKeepAlives, // Bound to enable_connection_reuse=False
+			DialTLSContext:      rt.dialTLS,
+			MaxIdleConns:        100,
+			MaxConnsPerHost:     100,
+			MaxIdleConnsPerHost: 100, // Go default is 2, which causes 98% of connections to close
+			IdleConnTimeout:     60 * time.Second,
+			DisableKeepAlives:   rt.DisableKeepAlives, // Bound to enable_connection_reuse=False
 		}
 	}
 
@@ -458,12 +463,12 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 	default:
 		// HTTP/1.x transport - optimized for connection reuse
 		rt.cachedTransports[addr] = &http.Transport{
-			DialTLSContext:       rt.dialTLS,
-			MaxIdleConns:         100,
-			MaxConnsPerHost:      100,
-			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
-			IdleConnTimeout:      60 * time.Second,
-			DisableKeepAlives:    rt.DisableKeepAlives, // Bound to enable_connection_reuse=False
+			DialTLSContext:      rt.dialTLS,
+			MaxIdleConns:        100,
+			MaxConnsPerHost:     100,
+			MaxIdleConnsPerHost: 100, // Go default is 2, which causes 98% of connections to close
+			IdleConnTimeout:     60 * time.Second,
+			DisableKeepAlives:   rt.DisableKeepAlives, // Bound to enable_connection_reuse=False
 		}
 	}
 
@@ -537,12 +542,12 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 	default:
 		// HTTP/1.x transport - optimized for connection reuse
 		rt.cachedTransports[addr] = &http.Transport{
-			DialTLSContext:       rt.dialTLS,
-			MaxIdleConns:         100,
-			MaxConnsPerHost:      100,
-			MaxIdleConnsPerHost:  100, // Go default is 2, which causes 98% of connections to close
-			IdleConnTimeout:      60 * time.Second,
-			DisableKeepAlives:    rt.DisableKeepAlives, // Bound to enable_connection_reuse=False
+			DialTLSContext:      rt.dialTLS,
+			MaxIdleConns:        100,
+			MaxConnsPerHost:     100,
+			MaxIdleConnsPerHost: 100, // Go default is 2, which causes 98% of connections to close
+			IdleConnTimeout:     60 * time.Second,
+			DisableKeepAlives:   rt.DisableKeepAlives, // Bound to enable_connection_reuse=False
 		}
 	}
 
@@ -568,15 +573,15 @@ func (rt *roundTripper) getDialTLSAddr(req *http.Request) string {
 func (rt *roundTripper) getAddressMutex(addr string) *sync.Mutex {
 	rt.addressMutexLock.Lock()
 	defer rt.addressMutexLock.Unlock()
-	
+
 	if rt.addressMutexes == nil {
 		rt.addressMutexes = make(map[string]*sync.Mutex)
 	}
-	
+
 	if mu, exists := rt.addressMutexes[addr]; exists {
 		return mu
 	}
-	
+
 	mu := &sync.Mutex{}
 	rt.addressMutexes[addr] = mu
 	return mu
@@ -643,6 +648,7 @@ func newRoundTripper(browser Browser, dialer ...proxy.ContextDialer) http.RoundT
 		InsecureSkipVerify: browser.InsecureSkipVerify,
 		ForceHTTP1:         browser.ForceHTTP1,
 		ForceHTTP3:         browser.ForceHTTP3,
+		LocalAddress:       browser.LocalAddress,
 		DisableKeepAlives:  browser.DisableKeepAlives,
 
 		// TLS 1.3 specific options
