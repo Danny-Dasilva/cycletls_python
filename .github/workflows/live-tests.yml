@@ -41,7 +41,7 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Checkout Danny-Dasilva/tlsfingerprint.com
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: Danny-Dasilva/tlsfingerprint.com
           ref: master
