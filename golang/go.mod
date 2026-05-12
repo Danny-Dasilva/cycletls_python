@@ -8,7 +8,7 @@ require (
 	github.com/Danny-Dasilva/fhttp v0.0.0-20240217042913-eeeb0b347ce1
 	github.com/andybalholm/brotli v1.2.1
 	github.com/gorilla/websocket v1.5.3
-	github.com/quic-go/quic-go v0.59.0
+	github.com/quic-go/quic-go v0.59.1
 	github.com/refraction-networking/uquic v0.0.6
 	github.com/refraction-networking/utls v1.8.2
 	github.com/vmihailenco/msgpack/v5 v5.4.1
