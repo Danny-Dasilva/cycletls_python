@@ -8,11 +8,11 @@ require (
 	github.com/Danny-Dasilva/fhttp v0.0.0-20240217042913-eeeb0b347ce1
 	github.com/andybalholm/brotli v1.2.1
 	github.com/gorilla/websocket v1.5.3
-	github.com/quic-go/quic-go v0.59.0
+	github.com/quic-go/quic-go v0.61.0
 	github.com/refraction-networking/uquic v0.0.6
 	github.com/refraction-networking/utls v1.8.2
 	github.com/vmihailenco/msgpack/v5 v5.4.1
-	golang.org/x/net v0.53.0
+	golang.org/x/net v0.56.0
 	h12.io/socks v1.0.3
 )
 
@@ -28,13 +28,13 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/mock v0.5.2 // indirect
-	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/exp v0.0.0-20250718183923-645b1fa84792 // indirect
-	golang.org/x/mod v0.34.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
-	golang.org/x/tools v0.43.0 // indirect
+	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/tools v0.47.0 // indirect
 )
 
 replace github.com/Danny-Dasilva/CycleTLS/cycletls => ./
