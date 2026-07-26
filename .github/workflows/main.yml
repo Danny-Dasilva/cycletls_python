@@ -49,7 +49,7 @@ jobs:
         uses: ./.github/actions/setup-cycletls
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v8.3.2
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           python-version: '3.12'
           enable-cache: true
