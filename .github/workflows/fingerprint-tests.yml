@@ -248,7 +248,7 @@ jobs:
         uses: ./.github/actions/setup-cycletls
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
