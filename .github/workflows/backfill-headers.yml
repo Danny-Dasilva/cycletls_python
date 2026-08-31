@@ -23,6 +23,12 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       has_work: ${{ steps.matrix.outputs.has_work }}
+      docker_matrix: ${{ steps.matrix.outputs.docker_matrix }}
+      docker_has_work: ${{ steps.matrix.outputs.docker_has_work }}
+      playwright_matrix: ${{ steps.matrix.outputs.playwright_matrix }}
+      playwright_has_work: ${{ steps.matrix.outputs.playwright_has_work }}
+      android_matrix: ${{ steps.matrix.outputs.android_matrix }}
+      android_has_work: ${{ steps.matrix.outputs.android_has_work }}
     steps:
       - uses: actions/checkout@v7
 
@@ -38,6 +44,14 @@ jobs:
               "chrome": ["151.0", "150.0", "149.0", "148.0", "147.0"],
               "edge": ["151.0", "150.0", "149.0", "148.0", "147.0"],
               "firefox": ["153.0", "152.0", "151.0", "150.0", "149.0", "148.0"],
+          }
+
+          # Map a Safari/webkit version to the Playwright release that ships it.
+          # Playwright controls the exact browser build it uses, so we must pin it.
+          PLAYWRIGHT_VERSIONS = {
+              "26.0": "1.58.0",
+              "26.4": "1.60.0",
+              "26.5": "1.61.0",
           }
 
           def image_for(image_browser: str, tag_version: str) -> str:
@@ -59,12 +73,17 @@ jobs:
                   return f"selenium/standalone-{image_browser}:{known[0]}-20260808"
               return f"selenium/standalone-{image_browser}:nightly"
 
+          def safe_name(base: str) -> str:
+              return re.sub(r"[^0-9A-Za-z]+", "-", base).strip("-")
+
           registry_path = "cycletls/data/fingerprints.json"
           registry = json.load(open(registry_path))
           missing = [fp for fp in registry["fingerprints"] if "headers" not in fp]
 
           seen = set()
-          include = []
+          docker_include = []
+          playwright_include = []
+          android_include = []
 
           for fp in missing:
               name = fp["name"]
@@ -78,68 +97,118 @@ jobs:
               m = re.search(r"(?:Chrome|Chromium|HeadlessChrome|Firefox|Edg|Version|wv)/([0-9.]+)", ua)
               version = m.group(1) if m else "latest"
 
-              # Map registry browser to selenium image/browser override.
-              # Safari and Android Chrome need their own runners (macOS / Android
-              # emulator) and are out of scope for the Docker-only matrix.
-              if base.startswith("chrome_android_"):
-                  continue
+              if base.startswith("safari_"):
+                  tag_version = ".".join(version.split(".")[:2])
+                  playwright_version = PLAYWRIGHT_VERSIONS.get(tag_version, "1.61.0")
+                  playwright_include.append({
+                      "base": base,
+                      "version": version,
+                      "playwright_version": playwright_version,
+                      "artifact": f"capture-{safe_name(base)}",
+                  })
+              elif base.startswith("chrome_android_"):
+                  android_include.append({
+                      "base": base,
+                      "version": version,
+                      "artifact": f"capture-{safe_name(base)}",
+                  })
               elif base.startswith("chrome_"):
                   image_browser = "chrome"
                   selenium_browser = "chrome"
                   registry_browser = "chrome"
+                  tag_version = ".".join(version.split(".")[:2])
+                  image = image_for(image_browser, tag_version)
+                  docker_include.append({
+                      "base": base,
+                      "image": image,
+                      "selenium_browser": selenium_browser,
+                      "registry_browser": registry_browser,
+                      "version": version,
+                      "artifact": f"capture-{safe_name(base)}",
+                  })
               elif base.startswith("chromium_"):
                   image_browser = "chrome"
                   selenium_browser = "chrome"
                   registry_browser = "chromium"
+                  tag_version = ".".join(version.split(".")[:2])
+                  image = image_for(image_browser, tag_version)
+                  docker_include.append({
+                      "base": base,
+                      "image": image,
+                      "selenium_browser": selenium_browser,
+                      "registry_browser": registry_browser,
+                      "version": version,
+                      "artifact": f"capture-{safe_name(base)}",
+                  })
               elif base.startswith("msedge_"):
                   image_browser = "edge"
                   selenium_browser = "MicrosoftEdge"
                   registry_browser = "msedge"
+                  tag_version = ".".join(version.split(".")[:2])
+                  image = image_for(image_browser, tag_version)
+                  docker_include.append({
+                      "base": base,
+                      "image": image,
+                      "selenium_browser": selenium_browser,
+                      "registry_browser": registry_browser,
+                      "version": version,
+                      "artifact": f"capture-{safe_name(base)}",
+                  })
               elif base.startswith("firefox_"):
                   image_browser = "firefox"
                   selenium_browser = "firefox"
                   registry_browser = "firefox"
+                  tag_version = ".".join(version.split(".")[:2])
+                  image = image_for(image_browser, tag_version)
+                  docker_include.append({
+                      "base": base,
+                      "image": image,
+                      "selenium_browser": selenium_browser,
+                      "registry_browser": registry_browser,
+                      "version": version,
+                      "artifact": f"capture-{safe_name(base)}",
+                  })
               else:
-                  # Safari, Android Chrome, etc. require different runners.
+                  print(f"[skip] unsupported missing profile: {base}")
                   continue
 
-              # selenium/standalone-* tags use the first two version components,
-              # e.g. 149.0.0.0 -> 149.0
-              tag_version = ".".join(version.split(".")[:2])
-              image = image_for(image_browser, tag_version)
+          docker_matrix = {"include": docker_include}
+          playwright_matrix = {"include": playwright_include}
+          android_matrix = {"include": android_include}
 
-              safe = re.sub(r"[^0-9A-Za-z]+", "-", base).strip("-")
-              include.append({
-                  "base": base,
-                  "image": image,
-                  "selenium_browser": selenium_browser,
-                  "registry_browser": registry_browser,
-                  "version": version,
-                  "artifact": f"capture-{safe}",
-              })
-
-          output = {
-              "include": include,
-          }
+          docker_has_work = "true" if docker_include else "false"
+          playwright_has_work = "true" if playwright_include else "false"
+          android_has_work = "true" if android_include else "false"
+          has_work = "true" if (docker_include or playwright_include or android_include) else "false"
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              fh.write(f"matrix={json.dumps(output)}\n")
-              fh.write(f"has_work={'true' if include else 'false'}\n")
+              fh.write(f"matrix={json.dumps(docker_matrix)}\n")
+              fh.write(f"docker_matrix={json.dumps(docker_matrix)}\n")
+              fh.write(f"docker_has_work={docker_has_work}\n")
+              fh.write(f"playwright_matrix={json.dumps(playwright_matrix)}\n")
+              fh.write(f"playwright_has_work={playwright_has_work}\n")
+              fh.write(f"android_matrix={json.dumps(android_matrix)}\n")
+              fh.write(f"android_has_work={android_has_work}\n")
+              fh.write(f"has_work={has_work}\n")
 
-          print(f"Generated {len(include)} capture job(s)")
-          for item in include:
-              print(f"  - {item['base']}: {item['image']} -> {item['registry_browser']} {item['version']}")
+          print(f"Generated capture jobs: {len(docker_include)} docker, {len(playwright_include)} playwright, {len(android_include)} android")
+          for item in docker_include:
+              print(f"  docker: {item['base']}: {item['image']} -> {item['registry_browser']} {item['version']}")
+          for item in playwright_include:
+              print(f"  playwright: {item['base']}: playwright=={item['playwright_version']} -> {item['version']}")
+          for item in android_include:
+              print(f"  android: {item['base']}: {item['version']}")
           EOF
 
   capture-docker:
     name: Capture ${{ matrix.base }} headers
     needs: discover
     runs-on: ubuntu-latest
-    if: needs.discover.outputs.has_work == 'true'
+    if: needs.discover.outputs.docker_has_work == 'true'
     continue-on-error: true
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.discover.outputs.docker_matrix) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -191,11 +260,123 @@ jobs:
         if: always()
         run: docker stop selenium-${{ matrix.base }} || true; docker rm -f selenium-${{ matrix.base }} || true
 
+  capture-playwright:
+    name: Capture ${{ matrix.base }} headers (Playwright)
+    needs: discover
+    runs-on: ubuntu-latest
+    if: needs.discover.outputs.playwright_has_work == 'true'
+    continue-on-error: true
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.playwright_matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --locked --dev --no-install-project
+
+      - name: Install Playwright WebKit
+        run: |
+          uv pip install --force-reinstall playwright==${{ matrix.playwright_version }}
+          uv run --no-project python -m playwright install --with-deps webkit
+
+      - name: Capture fingerprint
+        env:
+          SERVER_URL: ${{ github.event.inputs.server_url }}
+        run: |
+          uv run --no-project python scripts/capture_browser_fingerprints.py \
+            --require-browsers safari \
+            --url "$SERVER_URL" \
+            --output /tmp/capture.json
+
+      - name: Upload capture artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: /tmp/capture.json
+          if-no-files-found: warn
+
+  capture-android:
+    name: Capture ${{ matrix.base }} headers (Android)
+    needs: discover
+    runs-on: ubuntu-latest
+    if: needs.discover.outputs.android_has_work == 'true'
+    continue-on-error: true
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.android_matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --locked --dev --no-install-project
+
+      - name: Install Playwright Chromium
+        run: uv run --no-project python -m playwright install --with-deps chromium
+
+      - name: Start Android emulator and capture Chrome fingerprint
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          emulator-boot-timeout: 300
+          script: |
+            set -eux
+            echo "==> Emulator booted. Waiting 30 s for Play Services to settle..."
+            sleep 30
+            echo "==> ADB devices:"
+            adb devices
+            echo "==> Chrome package version:"
+            adb shell dumpsys package com.android.chrome | grep versionName || true
+            uv run --no-project python scripts/capture_browser_fingerprints.py \
+              --android-only \
+              --url "${{ github.event.inputs.server_url }}" \
+              --output /tmp/capture.json
+
+      - name: Upload capture artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: /tmp/capture.json
+          if-no-files-found: warn
+
   merge-and-backfill:
     name: Merge captures and backfill registry
-    needs: capture-docker
+    needs: [discover, capture-docker, capture-playwright, capture-android]
     runs-on: ubuntu-latest
-    if: needs.discover.outputs.has_work == 'true'
+    if: always() && needs.discover.outputs.has_work == 'true'
     steps:
       - uses: actions/checkout@v7
 
@@ -244,6 +425,6 @@ jobs:
           title: "chore: backfill missing fingerprint headers"
           body: |
             This automated PR backfills `headers` (and `header_order` where missing)
-            for browser profiles that were missing them, using versioned
-            `selenium/standalone-*` Docker images.
+            for browser profiles that were missing them, using Selenium/Playwright
+            and an Android emulator where needed.
           delete-branch: true
