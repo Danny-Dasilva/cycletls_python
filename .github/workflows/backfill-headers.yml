@@ -32,6 +32,33 @@ jobs:
           python - <<'EOF'
           import json, re, os
 
+          # Known selenium/standalone-* image versions available on Docker Hub.
+          # Used to fall back to a nearby image when an exact version is not published.
+          KNOWN_IMAGE_VERSIONS = {
+              "chrome": ["151.0", "150.0", "149.0", "148.0", "147.0"],
+              "edge": ["151.0", "150.0", "149.0", "148.0", "147.0"],
+              "firefox": ["153.0", "152.0", "151.0", "150.0", "149.0", "148.0"],
+          }
+
+          def image_for(image_browser: str, tag_version: str) -> str:
+              known = KNOWN_IMAGE_VERSIONS.get(image_browser, [])
+              # Prefer an exact major.minor match.
+              if tag_version in known:
+                  return f"selenium/standalone-{image_browser}:{tag_version}-20260808"
+              # Fall back to the closest older version that is known to exist.
+              parts = tag_version.split(".")
+              major = int(parts[0])
+              minor = int(parts[1]) if len(parts) > 1 else 0
+              candidates = [v for v in known]
+              candidates.sort(key=lambda v: tuple(int(x) for x in v.split(".")), reverse=True)
+              for cand in candidates:
+                  cmajor, cminor = (int(x) for x in cand.split("."))
+                  if (cmajor, cminor) <= (major, minor):
+                      return f"selenium/standalone-{image_browser}:{cand}-20260808"
+              if known:
+                  return f"selenium/standalone-{image_browser}:{known[0]}-20260808"
+              return f"selenium/standalone-{image_browser}:nightly"
+
           registry_path = "cycletls/data/fingerprints.json"
           registry = json.load(open(registry_path))
           missing = [fp for fp in registry["fingerprints"] if "headers" not in fp]
@@ -75,7 +102,7 @@ jobs:
               # selenium/standalone-* tags use the first two version components,
               # e.g. 149.0.0.0 -> 149.0
               tag_version = ".".join(version.split(".")[:2])
-              image = f"selenium/standalone-{image_browser}:{tag_version}-20260808"
+              image = image_for(image_browser, tag_version)
 
               safe = re.sub(r"[^0-9A-Za-z]+", "-", base).strip("-")
               include.append({
@@ -132,11 +159,13 @@ jobs:
             sleep 2
           done
 
+      - name: Install Python dependencies
+        run: uv sync --locked --dev
+
       - name: Capture fingerprint
         env:
           SERVER_URL: ${{ github.event.inputs.server_url }}
         run: |
-          uv pip install selenium
           uv run python scripts/capture_browser_fingerprints.py \
             --selenium-url http://localhost:4444/wd/hub \
             --selenium-browser ${{ matrix.selenium_browser }} \
@@ -174,6 +203,9 @@ jobs:
         uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --locked --dev
 
       - name: Download capture artifacts
         uses: actions/download-artifact@v7
