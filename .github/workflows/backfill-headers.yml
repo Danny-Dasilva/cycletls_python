@@ -398,13 +398,11 @@ jobs:
 
       - name: Backfill registry
         run: |
-          for dir in /tmp/captures/capture-*; do
-            if [ -f "$dir/capture.json" ]; then
-              echo "Backfilling from $dir/capture.json"
-              uv run --no-project python scripts/backfill_headers.py \
-                --registry cycletls/data/fingerprints.json \
-                --capture "$dir/capture.json"
-            fi
+          for capture_file in $(find /tmp/captures -type f -name capture.json); do
+            echo "Backfilling from $capture_file"
+            uv run --no-project python scripts/backfill_headers.py \
+              --registry cycletls/data/fingerprints.json \
+              --capture "$capture_file"
           done
 
       - name: Show changes
