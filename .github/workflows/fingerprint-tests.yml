@@ -473,6 +473,13 @@ jobs:
               print("No new fingerprints to add.")
           EOF
 
+      - name: Backfill missing headers from captured fingerprints
+        if: steps.detect_new_fingerprints.outputs.has_new == 'true'
+        run: |
+          python scripts/backfill_headers.py \
+            --registry cycletls/data/fingerprints.json \
+            --capture tests/integration/artifacts/captured.json
+
       - name: Check for existing fingerprint PR
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.detect_new_fingerprints.outputs.has_new == 'true'
         id: check_existing_pr
