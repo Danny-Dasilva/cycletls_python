@@ -3202,7 +3202,15 @@
         "sec-fetch-dest",
         "sec-fetch-mode",
         "sec-fetch-site"
-      ]
+      ],
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "en-US",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none"
+      }
     },
     {
       "name": "safari_26_4_mac",
@@ -3218,7 +3226,15 @@
         "user-agent",
         "accept-language",
         "sec-fetch-dest"
-      ]
+      ],
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "en-US",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none"
+      }
     },
     {
       "name": "safari_26_4_win",
@@ -3234,7 +3250,15 @@
         "sec-fetch-site",
         "user-agent",
         "accept-language"
-      ]
+      ],
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "en-US",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none"
+      }
     },
     {
       "name": "safari_26_5_linux",
@@ -3250,7 +3274,15 @@
         "sec-fetch-dest",
         "sec-fetch-mode",
         "sec-fetch-site"
-      ]
+      ],
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "en-US",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none"
+      }
     },
     {
       "name": "safari_26_5_mac",
@@ -3267,7 +3299,15 @@
         "user-agent",
         "priority",
         "accept-language"
-      ]
+      ],
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "en-US",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none"
+      }
     },
     {
       "name": "safari_26_5_win",
@@ -3283,7 +3323,15 @@
         "sec-fetch-site",
         "user-agent",
         "accept-language"
-      ]
+      ],
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "en-US",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none"
+      }
     },
     {
       "name": "safari_ios",
