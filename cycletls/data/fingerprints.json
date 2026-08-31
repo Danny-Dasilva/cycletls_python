@@ -1985,7 +1985,19 @@
         "sec-fetch-user",
         "priority",
         "te"
-      ]
+      ],
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "upgrade-insecure-requests": "1",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none",
+        "sec-fetch-user": "?1",
+        "priority": "u=0, i",
+        "te": "trailers"
+      }
     },
     {
       "name": "firefox_153_0_mac",
@@ -2005,7 +2017,19 @@
         "sec-fetch-user",
         "priority",
         "te"
-      ]
+      ],
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "upgrade-insecure-requests": "1",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none",
+        "sec-fetch-user": "?1",
+        "priority": "u=0, i",
+        "te": "trailers"
+      }
     },
     {
       "name": "firefox_153_0_win",
@@ -2025,7 +2049,19 @@
         "sec-fetch-user",
         "priority",
         "te"
-      ]
+      ],
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "upgrade-insecure-requests": "1",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none",
+        "sec-fetch-user": "?1",
+        "priority": "u=0, i",
+        "te": "trailers"
+      }
     },
     {
       "name": "firefox_linux",

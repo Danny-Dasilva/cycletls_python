@@ -883,6 +883,127 @@ def _main_android(args, output_path: Path) -> int:
     return 0
 
 
+def _capture_selenium(selenium_url: str, browser_name: str, url: str) -> dict:
+    """Capture a fingerprint from a Selenium WebDriver server."""
+    try:
+        from selenium import webdriver  # type: ignore[import]
+        from selenium.webdriver.common.by import By  # type: ignore[import]
+        from selenium.webdriver.support import expected_conditions as EC  # type: ignore[import]
+        from selenium.webdriver.support.ui import WebDriverWait  # type: ignore[import]
+    except ImportError as exc:
+        raise RuntimeError("selenium package is required for --selenium-url") from exc
+
+    label = f"selenium:{browser_name}:{selenium_url}"
+    browser_name_lower = browser_name.lower()
+
+    if browser_name_lower in ("chrome", "chromium", "googlechrome"):
+        from selenium.webdriver.chrome.options import Options as ChromeOptions
+
+        options = ChromeOptions()
+        options.add_argument("--disable-blink-features=PrettyPrintJSONDocument")
+    elif browser_name_lower in ("edge", "microsoftedge"):
+        from selenium.webdriver.edge.options import Options as EdgeOptions
+
+        options = EdgeOptions()
+        options.add_argument("--disable-blink-features=PrettyPrintJSONDocument")
+    elif browser_name_lower in ("firefox", "ff"):
+        from selenium.webdriver.firefox.options import Options as FirefoxOptions
+
+        options = FirefoxOptions()
+        options.set_preference("devtools.jsonview.enabled", False)
+    elif browser_name_lower in ("safari", "webkit"):
+        from selenium.webdriver.safari.options import Options as SafariOptions
+
+        options = SafariOptions()
+    else:
+        raise RuntimeError(f"Unsupported --selenium-browser: {browser_name}")
+
+    driver = webdriver.Remote(command_executor=selenium_url, options=options)
+    try:
+        api_url = f"{url}/api/all"
+        print(f"[{label}] Fetching {api_url} ...", flush=True)
+        driver.get(api_url)
+        WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        body = driver.execute_script("return document.body.innerText")
+        data = json.loads(body)
+    finally:
+        driver.quit()
+
+    tls = data.get("tls", {})
+    http2 = data.get("http2", {})
+    user_agent = data.get("user_agent") or ""
+
+    profile_browser = _detect_browser_from_ua(user_agent)
+    version = _extract_browser_version(profile_browser, user_agent)
+    platform = _detect_platform_from_ua(user_agent)
+
+    ordered, headers = _parse_sent_headers(data)
+    result = {
+        "name": _profile_name(profile_browser, version, platform),
+        "browser": profile_browser,
+        "version": version,
+        "ja3": tls.get("ja3"),
+        "ja4_r": tls.get("ja4_r"),
+        "http2": http2.get("akamai_fingerprint"),
+        "ua": user_agent,
+        "header_order": ordered,
+        "headers": _sanitize_header_values(headers),
+    }
+
+    print(
+        f"[{label}] name={result['name']} ja3={bool(result['ja3'])} "
+        f"http2={bool(result['http2'])} headers={len(result['header_order'])}",
+        flush=True,
+    )
+    return result
+
+
+def _main_selenium(args, output_path: Path) -> int:
+    """Capture fingerprints from a Selenium WebDriver server."""
+    fingerprints: list[dict] = []
+    errors: dict[str, str] = {}
+
+    if not args.selenium_browser:
+        print(
+            "ERROR: --selenium-browser is required when using --selenium-url",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 1
+
+    try:
+        fp = _capture_selenium(args.selenium_url, args.selenium_browser, args.url)
+        fingerprints.append(fp)
+    except Exception as exc:  # noqa: BLE001
+        print(f"ERROR capturing {args.selenium_url}: {exc}", file=sys.stderr, flush=True)
+        errors[args.selenium_url] = str(exc)
+
+    payload = {
+        "schema": "trackme_browser_fingerprints/v1",
+        "captured_at": datetime.now(UTC).isoformat(),
+        "source": {
+            "type": "trackme",
+            "url": args.url,
+            "discovery": {
+                "type": "selenium",
+                "selenium_url": args.selenium_url,
+                "selenium_browser": args.selenium_browser,
+            },
+        },
+        "fingerprints": fingerprints,
+    }
+    if errors:
+        payload["errors"] = errors
+
+    output_path.write_text(json.dumps(payload, indent=2))
+    print(f"\nWrote Selenium fingerprints to {output_path}", flush=True)
+
+    if errors:
+        print(f"Failed captures: {sorted(errors)}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _main_cdp(args, output_path: Path) -> int:
     """Capture a single fingerprint from a remote Chromium browser over CDP."""
     fingerprints: list[dict] = []
@@ -962,6 +1083,17 @@ def main() -> int:
         help="Connect to an already-running Chromium browser over the Chrome DevTools Protocol "
         "(e.g. http://localhost:9222). Useful with Dockerized browser images.",
     )
+    parser.add_argument(
+        "--selenium-url",
+        default="",
+        help="Connect to a Selenium WebDriver server (e.g. http://localhost:4444/wd/hub). "
+        "Useful with selenium/standalone-firefox, standalone-chrome, etc.",
+    )
+    parser.add_argument(
+        "--selenium-browser",
+        default="",
+        help="Browser type for Selenium: firefox, chrome, edge, MicrosoftEdge, safari.",
+    )
     args = parser.parse_args()
 
     if args.adb_serial:
@@ -972,6 +1104,9 @@ def main() -> int:
 
     if args.android_only:
         return _main_android(args, output_path)
+
+    if args.selenium_url:
+        return _main_selenium(args, output_path)
 
     if args.cdp_url:
         return _main_cdp(args, output_path)
