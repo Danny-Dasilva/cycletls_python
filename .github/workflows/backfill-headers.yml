@@ -165,13 +165,13 @@ jobs:
           done
 
       - name: Install Python dependencies
-        run: uv sync --locked --dev
+        run: uv sync --locked --dev --no-install-project
 
       - name: Capture fingerprint
         env:
           SERVER_URL: ${{ github.event.inputs.server_url }}
         run: |
-          uv run python scripts/capture_browser_fingerprints.py \
+          uv run --no-project python scripts/capture_browser_fingerprints.py \
             --selenium-url http://localhost:4444/wd/hub \
             --selenium-browser ${{ matrix.selenium_browser }} \
             --browser-override ${{ matrix.registry_browser }} \
@@ -210,7 +210,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python dependencies
-        run: uv sync --locked --dev
+        run: uv sync --locked --dev --no-install-project
 
       - name: Download capture artifacts
         uses: actions/download-artifact@v7
@@ -223,7 +223,7 @@ jobs:
           for dir in /tmp/captures/capture-*; do
             if [ -f "$dir/capture.json" ]; then
               echo "Backfilling from $dir/capture.json"
-              uv run python scripts/backfill_headers.py \
+              uv run --no-project python scripts/backfill_headers.py \
                 --registry cycletls/data/fingerprints.json \
                 --capture "$dir/capture.json"
             fi
