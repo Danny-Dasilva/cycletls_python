@@ -79,7 +79,11 @@ jobs:
               version = m.group(1) if m else "latest"
 
               # Map registry browser to selenium image/browser override.
-              if base.startswith("chrome_"):
+              # Safari and Android Chrome need their own runners (macOS / Android
+              # emulator) and are out of scope for the Docker-only matrix.
+              if base.startswith("chrome_android_"):
+                  continue
+              elif base.startswith("chrome_"):
                   image_browser = "chrome"
                   selenium_browser = "chrome"
                   registry_browser = "chrome"
@@ -132,6 +136,7 @@ jobs:
     needs: discover
     runs-on: ubuntu-latest
     if: needs.discover.outputs.has_work == 'true'
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
