@@ -137,9 +137,7 @@ class Request:
     headers: dict = field(default_factory=dict)
 
     # TLS Fingerprinting options
-    # fmt: off
-    ja3: str = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0"  # noqa: E501
-    # fmt: on
+    ja3: Optional[str] = None
     ja4r: Optional[str] = None
     http2_fingerprint: Optional[str] = None
     quic_fingerprint: Optional[str] = None
@@ -202,19 +200,9 @@ class Request:
             "enableConnectionReuse": self.enable_connection_reuse,
         }
 
-        # Handle TLS fingerprint options: only use ja3 if no other fingerprint option is set
-        # This matches the TypeScript reference behavior where ja4r takes precedence over default ja3
-        has_other_fingerprint = (
-            self.ja4r is not None
-            or self.http2_fingerprint is not None
-            or self.quic_fingerprint is not None
-        )
-        if has_other_fingerprint:
-            # When another fingerprint option is set, only include ja3 if explicitly non-default
-            # Use empty string to let Go know not to use ja3
-            result["ja3"] = ""
-        else:
-            # No other fingerprint option, use ja3 (default or user-provided)
+        # Handle TLS fingerprint options: ja4r takes precedence over ja3 when both are set.
+        # http2_fingerprint and quic_fingerprint are independent and should not suppress ja3.
+        if self.ja4r is None and self.ja3 is not None:
             result["ja3"] = self.ja3
 
         # Add optional fields only if set (minimize conditionals)
