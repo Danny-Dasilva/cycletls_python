@@ -68,6 +68,21 @@ type roundTripper struct {
 	cachedTransports  map[string]http.RoundTripper
 
 	dialer proxy.ContextDialer
+
+	// Parsed HTTP/2 fingerprint, populated lazily because newRoundTripper
+	// cannot return an error.
+	h2FingerprintOnce   sync.Once
+	parsedH2Fingerprint *HTTP2Fingerprint
+	h2FingerprintErr    error
+}
+
+func (rt *roundTripper) getH2Fingerprint() (*HTTP2Fingerprint, error) {
+	rt.h2FingerprintOnce.Do(func() {
+		if rt.HTTP2Fingerprint != "" {
+			rt.parsedH2Fingerprint, rt.h2FingerprintErr = NewHTTP2Fingerprint(rt.HTTP2Fingerprint)
+		}
+	})
+	return rt.parsedH2Fingerprint, rt.h2FingerprintErr
 }
 
 func (rt *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -97,8 +112,21 @@ func (rt *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 		req.Header = ConvertHttpHeader(MarshalHeader(req.Header, rt.HeaderOrder))
 
 		// Note: rt.HeaderOrder contains regular headers like "cache-control", "accept", etc.
-		// Do NOT overwrite http.PHeaderOrderKey which contains pseudo-headers like ":method", ":path"
-		// The pseudo-header order is already set correctly in index.go based on UserAgent parsing
+		// The pseudo-header order is set below from the HTTP/2 fingerprint or UserAgent.
+	}
+
+	// Apply HTTP/2 pseudo-header order from the fingerprint when one is provided,
+	// overriding the UserAgent-based order set by the caller.
+	if rt.HTTP2Fingerprint != "" {
+		h2fp, err := rt.getH2Fingerprint()
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse HTTP/2 fingerprint: %w", err)
+		}
+		if h2fp != nil {
+			if pseudoOrder := h2fp.PseudoHeaderOrder(); len(pseudoOrder) > 0 {
+				req.Header[http.PHeaderOrderKey] = pseudoOrder
+			}
+		}
 	}
 
 	// Get address for dialing
@@ -338,8 +366,7 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 		// Use HTTP/2 fingerprint if specified
 		var http2Transport http2.Transport
 		if rt.HTTP2Fingerprint != "" {
-			// Parse and apply HTTP/2 fingerprint
-			h2Fingerprint, err := NewHTTP2Fingerprint(rt.HTTP2Fingerprint)
+			h2Fingerprint, err := rt.getH2Fingerprint()
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse HTTP/2 fingerprint: %v", err)
 			}
@@ -347,11 +374,15 @@ func (rt *roundTripper) dialTLS(ctx context.Context, network, addr string) (net.
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
 				PushHandler: &http2.DefaultPushHandler{},
-				Navigator:   parsedUserAgent.UserAgent,
 			}
 
-			// Apply HTTP/2 fingerprint settings
-			h2Fingerprint.Apply(&http2Transport)
+			// Apply HTTP/2 fingerprint settings and use the fingerprint to
+			// guess the remaining fhttp defaults (e.g. stream ID when no
+			// explicit priority frames are provided).
+			if h2Fingerprint != nil {
+				h2Fingerprint.Apply(&http2Transport)
+				http2Transport.Navigator = h2Fingerprint.Navigator()
+			}
 		} else {
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
@@ -446,7 +477,7 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 
 		var http2Transport http2.Transport
 		if rt.HTTP2Fingerprint != "" {
-			h2Fingerprint, err := NewHTTP2Fingerprint(rt.HTTP2Fingerprint)
+			h2Fingerprint, err := rt.getH2Fingerprint()
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse HTTP/2 fingerprint for TLS 1.3 retry: %v", err)
 			}
@@ -454,10 +485,12 @@ func (rt *roundTripper) retryWithTLS13CompatibleCurves(ctx context.Context, netw
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
 				PushHandler: &http2.DefaultPushHandler{},
-				Navigator:   parsedUserAgent.UserAgent,
 			}
 
-			h2Fingerprint.Apply(&http2Transport)
+			if h2Fingerprint != nil {
+				h2Fingerprint.Apply(&http2Transport)
+				http2Transport.Navigator = h2Fingerprint.Navigator()
+			}
 		} else {
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
@@ -536,7 +569,7 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 
 		var http2Transport http2.Transport
 		if rt.HTTP2Fingerprint != "" {
-			h2Fingerprint, err := NewHTTP2Fingerprint(rt.HTTP2Fingerprint)
+			h2Fingerprint, err := rt.getH2Fingerprint()
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse HTTP/2 fingerprint for TLS 1.2 fallback: %v", err)
 			}
@@ -544,10 +577,12 @@ func (rt *roundTripper) retryWithOriginalTLS12JA3(ctx context.Context, network, 
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
 				PushHandler: &http2.DefaultPushHandler{},
-				Navigator:   parsedUserAgent.UserAgent,
 			}
 
-			h2Fingerprint.Apply(&http2Transport)
+			if h2Fingerprint != nil {
+				h2Fingerprint.Apply(&http2Transport)
+				http2Transport.Navigator = h2Fingerprint.Navigator()
+			}
 		} else {
 			http2Transport = http2.Transport{
 				DialTLS:     rt.dialTLSHTTP2,
