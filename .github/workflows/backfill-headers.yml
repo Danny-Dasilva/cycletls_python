@@ -1,0 +1,212 @@
+name: Backfill missing fingerprint headers
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run captures but do not open a PR"
+        required: false
+        default: "false"
+      server_url:
+        description: "Base URL of the tlsfingerprint server"
+        required: false
+        default: "https://tlsfingerprint.com"
+
+concurrency:
+  group: backfill-headers
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    name: Discover missing headers
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has_work: ${{ steps.matrix.outputs.has_work }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Generate capture matrix
+        id: matrix
+        run: |
+          python - <<'EOF'
+          import json, re, os
+
+          registry_path = "cycletls/data/fingerprints.json"
+          registry = json.load(open(registry_path))
+          missing = [fp for fp in registry["fingerprints"] if "headers" not in fp]
+
+          seen = set()
+          include = []
+
+          for fp in missing:
+              name = fp["name"]
+              parts = name.rsplit("_", 1)
+              base = parts[0] if len(parts) == 2 else name
+              if base in seen:
+                  continue
+              seen.add(base)
+
+              ua = fp.get("user_agent", "")
+              m = re.search(r"(?:Chrome|Chromium|HeadlessChrome|Firefox|Edg|Version|wv)/([0-9.]+)", ua)
+              version = m.group(1) if m else "latest"
+
+              # Map registry browser to selenium image/browser override.
+              if base.startswith("chrome_"):
+                  image_browser = "chrome"
+                  selenium_browser = "chrome"
+                  registry_browser = "chrome"
+              elif base.startswith("chromium_"):
+                  image_browser = "chrome"
+                  selenium_browser = "chrome"
+                  registry_browser = "chromium"
+              elif base.startswith("msedge_"):
+                  image_browser = "edge"
+                  selenium_browser = "MicrosoftEdge"
+                  registry_browser = "msedge"
+              elif base.startswith("firefox_"):
+                  image_browser = "firefox"
+                  selenium_browser = "firefox"
+                  registry_browser = "firefox"
+              else:
+                  # Safari, Android Chrome, etc. require different runners.
+                  continue
+
+              # selenium/standalone-* tags use the first two version components,
+              # e.g. 149.0.0.0 -> 149.0
+              tag_version = ".".join(version.split(".")[:2])
+              image = f"selenium/standalone-{image_browser}:{tag_version}-20260808"
+
+              safe = re.sub(r"[^0-9A-Za-z]+", "-", base).strip("-")
+              include.append({
+                  "base": base,
+                  "image": image,
+                  "selenium_browser": selenium_browser,
+                  "registry_browser": registry_browser,
+                  "version": version,
+                  "artifact": f"capture-{safe}",
+              })
+
+          output = {
+              "include": include,
+          }
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"matrix={json.dumps(output)}\n")
+              fh.write(f"has_work={'true' if include else 'false'}\n")
+
+          print(f"Generated {len(include)} capture job(s)")
+          for item in include:
+              print(f"  - {item['base']}: {item['image']} -> {item['registry_browser']} {item['version']}")
+          EOF
+
+  capture-docker:
+    name: Capture ${{ matrix.base }} headers
+    needs: discover
+    runs-on: ubuntu-latest
+    if: needs.discover.outputs.has_work == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Start Selenium container
+        run: |
+          docker run -d --name selenium-${{ matrix.base }} -p 4444:4444 --shm-size=2g ${{ matrix.image }}
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:4444/wd/hub/status | grep -q '"ready": true'; then
+              echo "Selenium ready after $((i*2))s"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Capture fingerprint
+        env:
+          SERVER_URL: ${{ github.event.inputs.server_url }}
+        run: |
+          uv pip install selenium
+          uv run python scripts/capture_browser_fingerprints.py \
+            --selenium-url http://localhost:4444/wd/hub \
+            --selenium-browser ${{ matrix.selenium_browser }} \
+            --browser-override ${{ matrix.registry_browser }} \
+            --version-override ${{ matrix.version }} \
+            --url "$SERVER_URL" \
+            --output /tmp/capture.json
+
+      - name: Upload capture artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: /tmp/capture.json
+          if-no-files-found: warn
+
+      - name: Stop Selenium container
+        if: always()
+        run: docker stop selenium-${{ matrix.base }} || true; docker rm -f selenium-${{ matrix.base }} || true
+
+  merge-and-backfill:
+    name: Merge captures and backfill registry
+    needs: capture-docker
+    runs-on: ubuntu-latest
+    if: needs.discover.outputs.has_work == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Download capture artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: /tmp/captures
+          pattern: capture-*
+
+      - name: Backfill registry
+        run: |
+          for dir in /tmp/captures/capture-*; do
+            if [ -f "$dir/capture.json" ]; then
+              echo "Backfilling from $dir/capture.json"
+              uv run python scripts/backfill_headers.py \
+                --registry cycletls/data/fingerprints.json \
+                --capture "$dir/capture.json"
+            fi
+          done
+
+      - name: Show changes
+        run: |
+          git diff --stat cycletls/data/fingerprints.json || true
+
+      - name: Create backfill PR
+        if: github.event.inputs.dry_run != 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          add-paths: |
+            cycletls/data/fingerprints.json
+          branch: ci/backfill-missing-headers
+          commit-message: "chore: backfill missing fingerprint headers"
+          title: "chore: backfill missing fingerprint headers"
+          body: |
+            This automated PR backfills `headers` (and `header_order` where missing)
+            for browser profiles that were missing them, using versioned
+            `selenium/standalone-*` Docker images.
+          delete-branch: true

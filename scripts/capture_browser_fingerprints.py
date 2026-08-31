@@ -222,6 +222,16 @@ def _profile_name(browser_name: str, version: str, platform: str | None = None) 
     return f"{browser_name}_{safe_version}{platform}".lower()
 
 
+def _apply_profile_overrides(fp: dict, browser_override: str, version_override: str) -> dict:
+    if not browser_override and not version_override:
+        return fp
+    fp["browser"] = browser_override or fp["browser"]
+    fp["version"] = version_override or fp["version"]
+    ua_platform = _detect_platform_from_ua(fp.get("ua", ""))
+    fp["name"] = _profile_name(fp["browser"], fp["version"], ua_platform)
+    return fp
+
+
 def _candidate_targets(headless_chrome: bool) -> list[dict]:
     """Potential launch targets; availability is detected at runtime."""
     targets = [
@@ -973,6 +983,7 @@ def _main_selenium(args, output_path: Path) -> int:
 
     try:
         fp = _capture_selenium(args.selenium_url, args.selenium_browser, args.url)
+        _apply_profile_overrides(fp, args.browser_override, args.version_override)
         fingerprints.append(fp)
     except Exception as exc:  # noqa: BLE001
         print(f"ERROR capturing {args.selenium_url}: {exc}", file=sys.stderr, flush=True)
@@ -1012,6 +1023,7 @@ def _main_cdp(args, output_path: Path) -> int:
     with sync_playwright() as pw:
         try:
             fp = _capture_over_cdp(pw, args.cdp_url, args.url, args.ignore_https_errors)
+            _apply_profile_overrides(fp, args.browser_override, args.version_override)
             fingerprints.append(fp)
         except Exception as exc:  # noqa: BLE001
             print(f"ERROR capturing {args.cdp_url}: {exc}", file=sys.stderr, flush=True)
@@ -1094,6 +1106,16 @@ def main() -> int:
         default="",
         help="Browser type for Selenium: firefox, chrome, edge, MicrosoftEdge, safari.",
     )
+    parser.add_argument(
+        "--browser-override",
+        default="",
+        help="Override the detected browser name (e.g. 'chromium' for a Chrome-derived image).",
+    )
+    parser.add_argument(
+        "--version-override",
+        default="",
+        help="Override the detected browser version (e.g. '149.0.0.0' for matching registry).",
+    )
     args = parser.parse_args()
 
     if args.adb_serial:
@@ -1168,6 +1190,7 @@ def main() -> int:
                 fp = capture_fingerprint(
                     pw, target, args.url, args.ignore_https_errors, args.headless_chrome
                 )
+                _apply_profile_overrides(fp, args.browser_override, args.version_override)
                 fingerprints.append(fp)
             except Exception as exc:  # noqa: BLE001
                 print(f"ERROR capturing {label}: {exc}", file=sys.stderr, flush=True)
