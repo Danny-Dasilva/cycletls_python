@@ -19,7 +19,8 @@ Output schema:
       "ja4_r": "...",
       "http2": "...",
       "ua": "...",
-      "header_order": ["host", "user-agent", ...]
+      "header_order": ["host", "user-agent", ...],
+      "headers": {"host": "...", "user-agent": "...", ...}
     }
   ]
 }
@@ -92,19 +93,20 @@ def _configure_adb_reverse(serial: str) -> None:
         )
 
 
-def _extract_header_order(data: dict) -> list[str]:
-    """Extract header order from TrackMe response, excluding pseudo-headers."""
+def _parse_sent_headers(data: dict) -> tuple[list[str], dict[str, str]]:
+    """Extract header order and header values from HTTP/2 HEADERS frames."""
     http2 = data.get("http2", {})
     sent_frames = http2.get("sent_frames", [])
 
     for frame in sent_frames:
-        if frame.get("frame_type") != "HEADERS":
+        if not isinstance(frame, dict) or frame.get("frame_type") != "HEADERS":
             continue
         headers = frame.get("headers")
         if not isinstance(headers, list):
             continue
 
         ordered: list[str] = []
+        headers_dict: dict[str, str] = {}
         for raw_header in headers:
             if not isinstance(raw_header, str):
                 continue
@@ -112,13 +114,28 @@ def _extract_header_order(data: dict) -> list[str]:
                 continue
             if ":" not in raw_header:
                 continue
-            name = raw_header.split(":", 1)[0].strip().lower()
-            if name:
-                ordered.append(name)
+            name, value = raw_header.split(":", 1)
+            name = name.strip().lower()
+            value = value.strip()
+            if not name:
+                continue
+            ordered.append(name)
+            # Keep the last value if a header appears more than once.
+            headers_dict[name] = value
         if ordered:
-            return ordered
+            return ordered, headers_dict
 
-    return []
+    return [], {}
+
+
+def _extract_header_order(data: dict) -> list[str]:
+    """Extract header order from TrackMe response, excluding pseudo-headers."""
+    return _parse_sent_headers(data)[0]
+
+
+def _extract_headers(data: dict) -> dict[str, str]:
+    """Extract request headers from TrackMe response, excluding pseudo-headers."""
+    return _parse_sent_headers(data)[1]
 
 
 def _extract_browser_version(browser_name: str, user_agent: str) -> str:
@@ -162,14 +179,24 @@ def _candidate_targets(headless_chrome: bool) -> list[dict]:
     """Potential launch targets; availability is detected at runtime."""
     targets = [
         {"type": "chromium", "channel": None, "profile_browser": "chromium", "label": "chromium"},
-        {"type": "chromium", "channel": "chrome", "profile_browser": "chrome", "label": "chromium:chrome"},
+        {
+            "type": "chromium",
+            "channel": "chrome",
+            "profile_browser": "chrome",
+            "label": "chromium:chrome",
+        },
         {
             "type": "chromium",
             "channel": "chrome-beta",
             "profile_browser": "chrome-beta",
             "label": "chromium:chrome-beta",
         },
-        {"type": "chromium", "channel": "msedge", "profile_browser": "msedge", "label": "chromium:msedge"},
+        {
+            "type": "chromium",
+            "channel": "msedge",
+            "profile_browser": "msedge",
+            "label": "chromium:msedge",
+        },
         {
             "type": "chromium",
             "channel": "msedge-beta",
@@ -204,7 +231,9 @@ def _is_headless_target(target: dict, headless_chrome: bool) -> bool:
     return True
 
 
-def _discover_available_targets(playwright_instance, headless_chrome: bool) -> tuple[list[dict], dict[str, str]]:
+def _discover_available_targets(
+    playwright_instance, headless_chrome: bool
+) -> tuple[list[dict], dict[str, str]]:
     available: list[dict] = []
     unavailable: dict[str, str] = {}
 
@@ -256,15 +285,11 @@ def capture_fingerprint(
     last_exc: Exception | None = None
     for attempt in range(1, 4):
         try:
-            response = page.goto(
-                api_url, wait_until="domcontentloaded", timeout=30_000
-            )
+            response = page.goto(api_url, wait_until="domcontentloaded", timeout=30_000)
             if response is not None and response.status == 200:
                 break
             status = response.status if response else "no response"
-            raise RuntimeError(
-                f"[{target['label']}] GET {api_url} returned status {status}"
-            )
+            raise RuntimeError(f"[{target['label']}] GET {api_url} returned status {status}")
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             print(
@@ -272,7 +297,7 @@ def capture_fingerprint(
                 flush=True,
             )
             if attempt < 3:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
     else:
         raise last_exc  # type: ignore[misc]
 
@@ -288,6 +313,7 @@ def capture_fingerprint(
     profile_browser = target["profile_browser"]
     version = _extract_browser_version(profile_browser, user_agent)
 
+    ordered, headers = _parse_sent_headers(data)
     result = {
         "name": _profile_name(profile_browser, version),
         "browser": profile_browser,
@@ -296,7 +322,8 @@ def capture_fingerprint(
         "ja4_r": tls.get("ja4_r"),
         "http2": http2.get("akamai_fingerprint"),
         "ua": user_agent,
-        "header_order": _extract_header_order(data),
+        "header_order": ordered,
+        "headers": headers,
     }
 
     print(
@@ -336,7 +363,9 @@ def _wait_for_cdp_with_fre_handling(
             _dismiss_chrome_fre_ui(serial, label)
             _log_chrome_sockets(serial, label)
             time.sleep(2)
-    raise RuntimeError(f"Chrome CDP endpoint http://localhost:{local_port}/json did not respond within {timeout:.0f}s")
+    raise RuntimeError(
+        f"Chrome CDP endpoint http://localhost:{local_port}/json did not respond within {timeout:.0f}s"
+    )
 
 
 def _adb_devices() -> list[str]:
@@ -363,15 +392,24 @@ def _write_chrome_cmdline_flags(serial: str, label: str) -> None:
     """
     flags = "chrome --disable-fre --no-first-run --no-default-browser-check"
     result = subprocess.run(
-        _adb_command("-s", serial, "shell",
-         f"echo '{flags}' > /data/local/tmp/chrome-command-line"
-         " && chmod 664 /data/local/tmp/chrome-command-line"),
-        capture_output=True, text=True, timeout=10,
+        _adb_command(
+            "-s",
+            serial,
+            "shell",
+            f"echo '{flags}' > /data/local/tmp/chrome-command-line"
+            " && chmod 664 /data/local/tmp/chrome-command-line",
+        ),
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     if result.returncode == 0:
         print(f"[{label}] Wrote Chrome command-line flags file", flush=True)
     else:
-        print(f"[{label}] Could not write Chrome flags file (non-fatal): {result.stderr.strip()}", flush=True)
+        print(
+            f"[{label}] Could not write Chrome flags file (non-fatal): {result.stderr.strip()}",
+            flush=True,
+        )
 
 
 def _dismiss_chrome_fre_ui(serial: str, label: str) -> bool:
@@ -384,7 +422,9 @@ def _dismiss_chrome_fre_ui(serial: str, label: str) -> bool:
     # Dump the live UI hierarchy to a file on device.
     dump = subprocess.run(
         _adb_command("-s", serial, "shell", "uiautomator", "dump", _UI_DUMP),
-        capture_output=True, text=True, timeout=20,
+        capture_output=True,
+        text=True,
+        timeout=20,
     )
     if dump.returncode != 0:
         print(f"[{label}] uiautomator dump failed: {dump.stderr.strip()!r}", flush=True)
@@ -392,7 +432,9 @@ def _dismiss_chrome_fre_ui(serial: str, label: str) -> bool:
 
     xml_result = subprocess.run(
         _adb_command("-s", serial, "shell", "cat", _UI_DUMP),
-        capture_output=True, text=True, timeout=15,
+        capture_output=True,
+        text=True,
+        timeout=15,
     )
     xml_text = xml_result.stdout.strip()
     if not xml_text:
@@ -458,7 +500,8 @@ def _dismiss_chrome_fre_ui(serial: str, label: str) -> bool:
         print(f"[{label}] Tapping FRE button '{button_text}' at ({x}, {y})", flush=True)
         subprocess.run(
             _adb_command("-s", serial, "shell", "input", "tap", str(x), str(y)),
-            capture_output=True, timeout=5,
+            capture_output=True,
+            timeout=5,
         )
         return True
 
@@ -467,7 +510,8 @@ def _dismiss_chrome_fre_ui(serial: str, label: str) -> bool:
         print(f"[{label}] Chrome opened the Terms page; sending Back to return to FRE", flush=True)
         subprocess.run(
             _adb_command("-s", serial, "shell", "input", "keyevent", "4"),
-            capture_output=True, timeout=5,
+            capture_output=True,
+            timeout=5,
         )
         return True
 
@@ -480,25 +524,29 @@ def _log_chrome_sockets(serial: str, label: str) -> None:
     # Read /proc/net/unix directly (no pipe to avoid shell timeout issues).
     result = subprocess.run(
         _adb_command("-s", serial, "shell", "cat", "/proc/net/unix"),
-        capture_output=True, text=True, timeout=20,
+        capture_output=True,
+        text=True,
+        timeout=20,
     )
-    chrome_lines = [
-        ln for ln in result.stdout.splitlines() if "chrome" in ln.lower()
-    ]
+    chrome_lines = [ln for ln in result.stdout.splitlines() if "chrome" in ln.lower()]
     if chrome_lines:
         print(f"[{label}] Chrome abstract sockets:\n" + "\n".join(chrome_lines), flush=True)
     else:
         print(f"[{label}] No Chrome abstract sockets found yet", flush=True)
 
 
-def _capture_android_cdp(serial: str, url: str, ignore_https_errors: bool, local_port: int = 9222) -> dict:
+def _capture_android_cdp(
+    serial: str, url: str, ignore_https_errors: bool, local_port: int = 9222
+) -> dict:
     """Capture TLS fingerprint from an Android device via ADB port-forward + Playwright CDP."""
     label = f"android:{serial}"
 
     # Verify Chrome is installed before attempting to start it.
     pkg_check = subprocess.run(
         _adb_command("-s", serial, "shell", "pm", "list", "packages", _CHROME_PACKAGE),
-        capture_output=True, text=True, timeout=15,
+        capture_output=True,
+        text=True,
+        timeout=15,
     )
     if _CHROME_PACKAGE not in pkg_check.stdout:
         raise RuntimeError(
@@ -513,21 +561,30 @@ def _capture_android_cdp(serial: str, url: str, ignore_https_errors: bool, local
     # Force-stop any previous Chrome session so we start fresh.
     subprocess.run(
         _adb_command("-s", serial, "shell", "am", "force-stop", _CHROME_PACKAGE),
-        capture_output=True, timeout=10,
+        capture_output=True,
+        timeout=10,
     )
     time.sleep(1)
 
     print(f"[{label}] Starting Chrome (about:blank) ...", flush=True)
     start_result = subprocess.run(
         _adb_command(
-            "-s", serial, "shell",
-            "am", "start",
-            "-n", f"{_CHROME_PACKAGE}/{_CHROME_ACTIVITY}",
-            "-a", "android.intent.action.VIEW",
-            "-d", "about:blank",
+            "-s",
+            serial,
+            "shell",
+            "am",
+            "start",
+            "-n",
+            f"{_CHROME_PACKAGE}/{_CHROME_ACTIVITY}",
+            "-a",
+            "android.intent.action.VIEW",
+            "-d",
+            "about:blank",
             "--activity-clear-task",
         ),
-        capture_output=True, text=True, timeout=20,
+        capture_output=True,
+        text=True,
+        timeout=20,
     )
     if start_result.stdout.strip():
         print(f"[{label}] am start: {start_result.stdout.strip()}", flush=True)
@@ -541,10 +598,17 @@ def _capture_android_cdp(serial: str, url: str, ignore_https_errors: bool, local
     # Try the testing broadcast first (works on Chromium test builds).
     fre_bcast = subprocess.run(
         _adb_command(
-            "-s", serial, "shell", "am", "broadcast",
-            "-a", "com.google.chrome.testing.ACCEPT_TERMS_OF_SERVICE",
+            "-s",
+            serial,
+            "shell",
+            "am",
+            "broadcast",
+            "-a",
+            "com.google.chrome.testing.ACCEPT_TERMS_OF_SERVICE",
         ),
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     print(f"[{label}] FRE broadcast: {fre_bcast.stdout.strip()}", flush=True)
     time.sleep(1)
@@ -566,8 +630,12 @@ def _capture_android_cdp(serial: str, url: str, ignore_https_errors: bool, local
 
     print(f"[{label}] Forwarding CDP port {forwarded_port} ...", flush=True)
     subprocess.run(
-        _adb_command("-s", serial, "forward", f"tcp:{forwarded_port}", "localabstract:chrome_devtools_remote"),
-        check=True, timeout=10, capture_output=True,
+        _adb_command(
+            "-s", serial, "forward", f"tcp:{forwarded_port}", "localabstract:chrome_devtools_remote"
+        ),
+        check=True,
+        timeout=10,
+        capture_output=True,
     )
     _maybe_expose_cdp_port(forwarded_port)
 
@@ -599,9 +667,7 @@ def _capture_android_cdp(serial: str, url: str, ignore_https_errors: bool, local
             last_exc: Exception | None = None
             for attempt in range(1, 4):
                 try:
-                    response = page.goto(
-                        api_url, wait_until="domcontentloaded", timeout=60_000
-                    )
+                    response = page.goto(api_url, wait_until="domcontentloaded", timeout=60_000)
                     if response is not None and response.status == 200:
                         break
                     status = response.status if response else "no response"
@@ -613,7 +679,7 @@ def _capture_android_cdp(serial: str, url: str, ignore_https_errors: bool, local
                         flush=True,
                     )
                     if attempt < 3:
-                        time.sleep(2 ** attempt)
+                        time.sleep(2**attempt)
             else:
                 raise last_exc  # type: ignore[misc]
 
@@ -623,7 +689,8 @@ def _capture_android_cdp(serial: str, url: str, ignore_https_errors: bool, local
     finally:
         subprocess.run(
             _adb_command("-s", serial, "forward", "--remove", f"tcp:{forwarded_port}"),
-            capture_output=True, timeout=10,
+            capture_output=True,
+            timeout=10,
         )
 
     tls = data.get("tls", {})
@@ -633,6 +700,7 @@ def _capture_android_cdp(serial: str, url: str, ignore_https_errors: bool, local
     version = _extract_browser_version("chrome", user_agent)
     safe_version = re.sub(r"[^0-9A-Za-z]+", "_", version).strip("_") or "unknown"
 
+    ordered, headers = _parse_sent_headers(data)
     result = {
         "name": f"chrome_android_{safe_version}_android",
         "browser": "chrome_android",
@@ -641,7 +709,8 @@ def _capture_android_cdp(serial: str, url: str, ignore_https_errors: bool, local
         "ja4_r": tls.get("ja4_r"),
         "http2": http2.get("akamai_fingerprint"),
         "ua": user_agent,
-        "header_order": _extract_header_order(data),
+        "header_order": ordered,
+        "headers": headers,
     }
     print(
         f"[{label}] name={result['name']} ja3={bool(result['ja3'])} "
@@ -769,9 +838,7 @@ def main() -> int:
 
         available_browsers = sorted({t["profile_browser"] for t in available_targets})
         required = [
-            item.strip().lower()
-            for item in args.require_browsers.split(",")
-            if item.strip()
+            item.strip().lower() for item in args.require_browsers.split(",") if item.strip()
         ]
         missing_required = sorted(set(required) - set(available_browsers))
         if missing_required:

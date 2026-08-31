@@ -428,6 +428,7 @@ def _normalize_trackme_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     "http2_fingerprint": entry.get("http2") or entry.get("http2_fingerprint"),
                     "user_agent": entry.get("ua") or entry.get("user_agent"),
                     "header_order": entry.get("header_order"),
+                    "headers": entry.get("headers"),
                 }
             )
         return normalized
