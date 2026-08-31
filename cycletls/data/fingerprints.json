@@ -755,7 +755,18 @@
         "accept-encoding",
         "accept-language",
         "priority"
-      ]
+      ],
+      "headers": {
+        "upgrade-insecure-requests": "1",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-user": "?1",
+        "sec-fetch-dest": "document",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "priority": "u=0, i"
+      }
     },
     {
       "name": "chrome_152_0_0_0_mac",
@@ -777,7 +788,18 @@
         "accept-encoding",
         "accept-language",
         "priority"
-      ]
+      ],
+      "headers": {
+        "upgrade-insecure-requests": "1",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-user": "?1",
+        "sec-fetch-dest": "document",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "priority": "u=0, i"
+      }
     },
     {
       "name": "chrome_152_0_0_0_win",
@@ -799,7 +821,18 @@
         "accept-encoding",
         "accept-language",
         "priority"
-      ]
+      ],
+      "headers": {
+        "upgrade-insecure-requests": "1",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-user": "?1",
+        "sec-fetch-dest": "document",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "priority": "u=0, i"
+      }
     },
     {
       "name": "chrome_android",

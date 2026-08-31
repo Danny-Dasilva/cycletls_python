@@ -138,6 +138,19 @@ def _extract_headers(data: dict) -> dict[str, str]:
     return _parse_sent_headers(data)[1]
 
 
+def _sanitize_header_values(headers: dict[str, str]) -> dict[str, str]:
+    """Remove headers whose values are dynamic or are stored elsewhere.
+
+    sec-ch-ua*, user-agent and cookie are generated at request time
+    (sec-ch-ua from the user_agent field, user-agent from the Go client).
+    """
+    return {
+        k: v
+        for k, v in headers.items()
+        if k not in {"sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "user-agent"}
+    }
+
+
 def _extract_browser_version(browser_name: str, user_agent: str) -> str:
     """Infer browser version from user-agent for deterministic profile naming."""
     token_map = {
@@ -170,9 +183,43 @@ def _platform_suffix() -> str:
     return "_linux"
 
 
-def _profile_name(browser_name: str, version: str) -> str:
+def _detect_platform_from_ua(user_agent: str) -> str:
+    """Infer a short platform tag from a user-agent string."""
+    ua = user_agent.lower()
+    if "windows nt" in ua:
+        return "_win"
+    if "macintosh" in ua or "mac os x" in ua:
+        return "_mac"
+    if "android" in ua:
+        return "_android"
+    if "linux" in ua or "x11" in ua:
+        return "_linux"
+    return _platform_suffix()
+
+
+def _detect_browser_from_ua(user_agent: str) -> str:
+    """Map a user-agent string to a profile browser name."""
+    ua = user_agent.lower()
+    if "edg/" in ua or "edge/" in ua:
+        return "msedge"
+    if "opr/" in ua or "opera/" in ua:
+        return "opera"
+    if "firefox/" in ua:
+        return "firefox"
+    # Chrome, Chromium and Brave all report Chrome/ in the UA.
+    if "chrome/" in ua or "chromium/" in ua or "headlesschrome/" in ua:
+        # Brave adds a brand token, but for profiling we use the generic Chrome path.
+        return "chrome"
+    if "version/" in ua and "safari/" in ua:
+        return "safari"
+    return "chromium"
+
+
+def _profile_name(browser_name: str, version: str, platform: str | None = None) -> str:
     safe_version = re.sub(r"[^0-9A-Za-z]+", "_", version).strip("_") or "unknown"
-    return f"{browser_name}_{safe_version}{_platform_suffix()}".lower()
+    if platform is None:
+        platform = _platform_suffix()
+    return f"{browser_name}_{safe_version}{platform}".lower()
 
 
 def _candidate_targets(headless_chrome: bool) -> list[dict]:
@@ -261,6 +308,74 @@ def _discover_available_targets(
     return available, unavailable
 
 
+def _capture_over_cdp(
+    playwright_instance,
+    cdp_url: str,
+    url: str,
+    ignore_https_errors: bool,
+) -> dict:
+    """Capture a fingerprint from a Chromium instance exposed via Chrome DevTools Protocol."""
+    label = f"cdp:{cdp_url}"
+    browser = playwright_instance.chromium.connect_over_cdp(cdp_url)
+
+    # Create a fresh context so we can honour the certificate-error policy.
+    # Force en-US locale so Accept-Language is deterministic for the registry.
+    context = browser.new_context(ignore_https_errors=ignore_https_errors, locale="en-US")
+    page = context.new_page()
+
+    api_url = f"{url}/api/all"
+    print(f"[{label}] Fetching {api_url} ...", flush=True)
+
+    last_exc: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            response = page.goto(api_url, wait_until="domcontentloaded", timeout=60_000)
+            if response is not None and response.status == 200:
+                break
+            status = response.status if response else "no response"
+            raise RuntimeError(f"[{label}] GET {api_url} returned status {status}")
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            print(f"[{label}] Attempt {attempt}/3 failed: {exc}", flush=True)
+            if attempt < 3:
+                time.sleep(2**attempt)
+    else:
+        raise last_exc  # type: ignore[misc]
+
+    body = page.inner_text("body")
+    data = json.loads(body)
+
+    browser.close()
+
+    tls = data.get("tls", {})
+    http2 = data.get("http2", {})
+    user_agent = data.get("user_agent") or ""
+
+    profile_browser = _detect_browser_from_ua(user_agent)
+    version = _extract_browser_version(profile_browser, user_agent)
+    platform = _detect_platform_from_ua(user_agent)
+
+    ordered, headers = _parse_sent_headers(data)
+    result = {
+        "name": _profile_name(profile_browser, version, platform),
+        "browser": profile_browser,
+        "version": version,
+        "ja3": tls.get("ja3"),
+        "ja4_r": tls.get("ja4_r"),
+        "http2": http2.get("akamai_fingerprint"),
+        "ua": user_agent,
+        "header_order": ordered,
+        "headers": _sanitize_header_values(headers),
+    }
+
+    print(
+        f"[{label}] name={result['name']} ja3={bool(result['ja3'])} "
+        f"http2={bool(result['http2'])} headers={len(result['header_order'])}",
+        flush=True,
+    )
+    return result
+
+
 def capture_fingerprint(
     playwright_instance,
     target: dict,
@@ -323,7 +438,7 @@ def capture_fingerprint(
         "http2": http2.get("akamai_fingerprint"),
         "ua": user_agent,
         "header_order": ordered,
-        "headers": headers,
+        "headers": _sanitize_header_values(headers),
     }
 
     print(
@@ -710,7 +825,7 @@ def _capture_android_cdp(
         "http2": http2.get("akamai_fingerprint"),
         "ua": user_agent,
         "header_order": ordered,
-        "headers": headers,
+        "headers": _sanitize_header_values(headers),
     }
     print(
         f"[{label}] name={result['name']} ja3={bool(result['ja3'])} "
@@ -768,6 +883,41 @@ def _main_android(args, output_path: Path) -> int:
     return 0
 
 
+def _main_cdp(args, output_path: Path) -> int:
+    """Capture a single fingerprint from a remote Chromium browser over CDP."""
+    fingerprints: list[dict] = []
+    errors: dict[str, str] = {}
+
+    with sync_playwright() as pw:
+        try:
+            fp = _capture_over_cdp(pw, args.cdp_url, args.url, args.ignore_https_errors)
+            fingerprints.append(fp)
+        except Exception as exc:  # noqa: BLE001
+            print(f"ERROR capturing {args.cdp_url}: {exc}", file=sys.stderr, flush=True)
+            errors[args.cdp_url] = str(exc)
+
+    payload = {
+        "schema": "trackme_browser_fingerprints/v1",
+        "captured_at": datetime.now(UTC).isoformat(),
+        "source": {
+            "type": "trackme",
+            "url": args.url,
+            "discovery": {"type": "cdp", "cdp_url": args.cdp_url},
+        },
+        "fingerprints": fingerprints,
+    }
+    if errors:
+        payload["errors"] = errors
+
+    output_path.write_text(json.dumps(payload, indent=2))
+    print(f"\nWrote CDP fingerprints to {output_path}", flush=True)
+
+    if errors:
+        print(f"Failed captures: {sorted(errors)}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Capture browser fingerprints via Playwright")
     parser.add_argument("--url", default="https://localhost", help="tlsfingerprint.com base URL")
@@ -806,6 +956,12 @@ def main() -> int:
         default="",
         help="Optional Android device serial to use instead of adb discovery.",
     )
+    parser.add_argument(
+        "--cdp-url",
+        default="",
+        help="Connect to an already-running Chromium browser over the Chrome DevTools Protocol "
+        "(e.g. http://localhost:9222). Useful with Dockerized browser images.",
+    )
     args = parser.parse_args()
 
     if args.adb_serial:
@@ -816,6 +972,9 @@ def main() -> int:
 
     if args.android_only:
         return _main_android(args, output_path)
+
+    if args.cdp_url:
+        return _main_cdp(args, output_path)
 
     fingerprints: list[dict] = []
     errors: dict[str, str] = {}
