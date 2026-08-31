@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-08-31
+
+### Fixed
+- `Request.to_dict()` no longer suppresses `ja3` when `http2_fingerprint` or `quic_fingerprint` is set, so built-in `fingerprint="..."` profiles now send their stored JA3.
+
+### Changed
+- Bumped `golang.org/x/net` to 0.58.0 in the Go backend.
+- Bumped `github/codeql-action` to 4.37.8.
+- Bumped `astral-sh/setup-uv` to 10.0.1.
+
 ## [0.0.8] - 2026-07-08
 
 ### Fixed
