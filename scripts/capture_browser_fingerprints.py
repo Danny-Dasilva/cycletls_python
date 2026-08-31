@@ -866,6 +866,7 @@ def _main_android(args, output_path: Path) -> int:
             label = f"android:{serial}"
             try:
                 fp = _capture_android_cdp(serial, args.url, args.ignore_https_errors)
+                _apply_profile_overrides(fp, args.browser_override, args.version_override)
                 fingerprints.append(fp)
             except Exception as exc:  # noqa: BLE001
                 print(f"ERROR capturing {label}: {exc}", file=sys.stderr, flush=True)
