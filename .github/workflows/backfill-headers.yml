@@ -359,10 +359,7 @@ jobs:
             adb devices
             echo "==> Chrome package version:"
             adb shell dumpsys package com.android.chrome | grep versionName || true
-            uv run --no-project python scripts/capture_browser_fingerprints.py \
-              --android-only \
-              --url "${{ github.event.inputs.server_url }}" \
-              --output /tmp/capture.json
+            . .venv/bin/activate && python3 scripts/capture_browser_fingerprints.py --android-only --url "${{ github.event.inputs.server_url }}" --output /tmp/capture.json
 
       - name: Upload capture artifact
         if: always()
