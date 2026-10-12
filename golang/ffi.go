@@ -13,7 +13,9 @@ import (
     "fmt"
     "log"
     nhttp "net/http"
+	"os"
     "runtime/cgo"
+	"runtime/debug"
     "strings"
     "sync"
     "time"
@@ -40,7 +42,7 @@ var (
     ffiClient     *CycleTLS
 
     // Async result store for non-blocking requests
-    asyncResults sync.Map // map[uintptr]chan *asyncResult
+	asyncResults sync.Map // map[uintptr]*asyncResultWithNotify
 
     // WebSocket connection store
     wsConnections sync.Map // map[uintptr]*websocket.Conn
@@ -206,6 +208,113 @@ func marshalPayload(payload map[string]interface{}) *C.char {
 
 // Removed worker pool - using direct goroutine spawn for simplicity
 
+// safeDo recovers only panics raised in the goroutine executing Do.
+type requestDoer interface {
+	Do(string, Options, string) (Response, error)
+}
+
+func safeDo(client requestDoer, request cycleTLSRequest) (resp Response, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("cycletls: internal panic: %v\n%s", p, debug.Stack())
+		}
+	}()
+	return client.Do(request.Options.URL, request.Options, request.Options.Method)
+}
+
+func notifyCompletion(file *os.File) {
+	if file == nil {
+		return
+	}
+	defer file.Close()
+	_, _ = file.Write([]byte{1})
+}
+func registerAsyncResult(state *asyncResultWithNotify, legacy bool) uintptr {
+	id := uintptr(cgo.NewHandle(state))
+	if legacy {
+		asyncResults.Store(id, state)
+	} else {
+		asyncNotifyResults.Store(id, state)
+	}
+	return id
+}
+func findAsyncResult(id uintptr) (*asyncResultWithNotify, *sync.Map) {
+	for _, store := range []*sync.Map{&asyncResults, &asyncNotifyResults} {
+		if value, ok := store.Load(id); ok {
+			return value.(*asyncResultWithNotify), store
+		}
+	}
+	return nil, nil
+}
+func completeAsyncResult(state *asyncResultWithNotify, data []byte) {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.finished {
+		return
+	}
+	state.result, state.ready = data, true
+}
+func takeAsyncResult(id uintptr) ([]byte, bool) {
+	state, store := findAsyncResult(id)
+	if state == nil {
+		return nil, false
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.finished || !state.ready {
+		return nil, false
+	}
+	state.finished = true
+	store.Delete(id)
+	cgo.Handle(id).Delete()
+	data := state.result
+	state.result = nil
+	return data, true
+}
+func cancelAsync(id uintptr) {
+	state, store := findAsyncResult(id)
+	if state == nil {
+		return
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.finished {
+		return
+	}
+	state.finished = true
+	state.result = nil
+	store.Delete(id)
+	cgo.Handle(id).Delete()
+	// CycleTLS.Do has no context parameter. The network operation finishes
+	// naturally under its existing timeout; its result is discarded above.
+}
+
+//export cancelAsyncRequest
+func cancelAsyncRequest(handlePtr C.uintptr_t) { cancelAsync(uintptr(handlePtr)) }
+
+func executeAsync(request cycleTLSRequest, legacy bool, notify *os.File) uintptr {
+	state := &asyncResultWithNotify{requestID: request.RequestID}
+	id := registerAsyncResult(state, legacy)
+	go func() {
+		if notify != nil {
+			defer notifyCompletion(notify)
+		}
+		resp, err := safeDo(getFFIClient(), request)
+		var payload map[string]interface{}
+		if err != nil {
+			payload = buildErrorPayload(request.RequestID, err.Error())
+		} else {
+			payload = buildResponsePayload(request.RequestID, resp)
+		}
+		result, marshalErr := msgpack.Marshal(payload)
+		if marshalErr != nil {
+			result, _ = msgpack.Marshal(buildErrorPayload(request.RequestID, "failed to marshal response"))
+		}
+		completeAsyncResult(state, result)
+	}()
+	return id
+}
+
 //export getRequest
 func getRequest(data *C.char) *C.char {
     if data == nil {
@@ -237,7 +346,7 @@ func getRequest(data *C.char) *C.char {
 
     go func() {
         client := getFFIClient()
-        resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
+		resp, err := safeDo(client, request)
         if err != nil {
             log.Printf("cycletls: request failed: %v", err)
             resultCh <- marshalPayload(buildErrorPayload(request.RequestID, err.Error()))
@@ -255,81 +364,28 @@ func submitRequestAsync(data *C.char) C.uintptr_t {
     if data == nil {
         return 0
     }
-
-    // Decode base64 to get msgpack data
-    b64str := C.GoString(data)
-    msgpackData, err := base64.StdEncoding.DecodeString(b64str)
+	request := cycleTLSRequest{}
+	msgpackData, err := base64.StdEncoding.DecodeString(C.GoString(data))
     if err != nil {
         return 0
     }
-
-    request := cycleTLSRequest{}
     if err := msgpack.Unmarshal(msgpackData, &request); err != nil {
         return 0
     }
-
     if request.RequestID == "" {
         request.RequestID = "cycleTLSRequest"
     }
-
     request.Options.Method = normalizeMethod(request.Options.Method)
-
-    // Create result channel (buffered to prevent goroutine leak)
-    resultCh := make(chan *C.char, 1)
-
-    // Create handle using cgo.Handle (safe pointer passing)
-    handle := cgo.NewHandle(resultCh)
-
-    // Store handle for later retrieval
-    handleID := uintptr(handle)
-    asyncResults.Store(handleID, resultCh)
-
-    // Spawn goroutine directly (no worker pool)
-    go func() {
-        client := getFFIClient()
-
-        // Execute HTTP request
-        resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
-        if err != nil {
-            resultCh <- marshalPayload(buildErrorPayload(request.RequestID, err.Error()))
-        } else {
-            resultCh <- marshalPayload(buildResponsePayload(request.RequestID, resp))
-        }
-    }()
-
-    return C.uintptr_t(handleID)
+	return C.uintptr_t(executeAsync(request, true, nil))
 }
 
 //export checkRequestAsync
 func checkRequestAsync(handlePtr C.uintptr_t) *C.char {
-    if handlePtr == 0 {
-        return nil
-    }
-
-    handleID := uintptr(handlePtr)
-
-    // Retrieve channel from store
-    val, ok := asyncResults.Load(handleID)
+	result, ok := takeAsyncResult(uintptr(handlePtr))
     if !ok {
         return nil
     }
-
-    resultCh := val.(chan *C.char)
-
-    // Non-blocking check
-    select {
-    case result := <-resultCh:
-        // Result ready - cleanup and return
-        asyncResults.Delete(handleID)
-        handle := cgo.Handle(handlePtr)
-        handle.Delete()
-
-        return result
-
-    default:
-        // Not ready yet
-        return nil
-    }
+	return C.CString(base64.StdEncoding.EncodeToString(result))
 }
 
 // ============================================================================
@@ -343,6 +399,7 @@ type asyncResultWithNotify struct {
     result    []byte // Raw msgpack bytes
     requestID string
     ready     bool
+	finished  bool
     mu        sync.Mutex
 }
 
@@ -351,104 +408,40 @@ var asyncNotifyResults sync.Map // map[uintptr]*asyncResultWithNotify
 
 //export submitRequestAsyncWithNotify
 func submitRequestAsyncWithNotify(data *C.char, dataLen C.int, notifyFD C.int) C.uintptr_t {
-    if data == nil || dataLen <= 0 {
+	if data == nil {
         return 0
     }
-
-    // Convert C bytes to Go slice (zero-copy style)
+	request := cycleTLSRequest{}
+	if dataLen <= 0 {
+		return 0
+	}
     msgpackData := C.GoBytes(unsafe.Pointer(data), dataLen)
-
-    request := cycleTLSRequest{}
     if err := msgpack.Unmarshal(msgpackData, &request); err != nil {
         return 0
     }
-
     if request.RequestID == "" {
         request.RequestID = "cycleTLSRequest"
     }
-
     request.Options.Method = normalizeMethod(request.Options.Method)
-
-    // Create result storage
-    resultStore := &asyncResultWithNotify{
-        requestID: request.RequestID,
-        ready:     false,
+	owned, err := duplicateNotifyFD(int(notifyFD))
+	if err != nil {
+		return 0
     }
-
-    // Create handle using cgo.Handle
-    handle := cgo.NewHandle(resultStore)
-    handleID := uintptr(handle)
-    asyncNotifyResults.Store(handleID, resultStore)
-
-    // Spawn goroutine to execute request
-    go func() {
-        client := getFFIClient()
-
-        var payload map[string]interface{}
-        resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
-        if err != nil {
-            payload = buildErrorPayload(request.RequestID, err.Error())
-        } else {
-            payload = buildResponsePayload(request.RequestID, resp)
-        }
-
-        // Marshal result to msgpack
-        resultBytes, marshalErr := msgpack.Marshal(payload)
-        if marshalErr != nil {
-            // Fallback error response
-            fallback := buildErrorPayload(request.RequestID, "failed to marshal response")
-            resultBytes, _ = msgpack.Marshal(fallback)
-        }
-
-        // Store result
-        resultStore.mu.Lock()
-        resultStore.result = resultBytes
-        resultStore.ready = true
-        resultStore.mu.Unlock()
-
-        // Notify Python by writing to pipe
-        // Write a single byte to signal completion
-        var notifyByte [1]byte
-        notifyByte[0] = 1
-        C.write(notifyFD, unsafe.Pointer(&notifyByte[0]), 1)
-    }()
-
-    return C.uintptr_t(handleID)
+	return C.uintptr_t(executeAsync(request, false, owned))
 }
 
 //export getAsyncResult
 func getAsyncResult(handlePtr C.uintptr_t, outLen *C.int) *C.char {
-    if handlePtr == 0 {
+	if outLen == nil {
         return nil
     }
-
-    handleID := uintptr(handlePtr)
-
-    // Retrieve result from store
-    val, ok := asyncNotifyResults.Load(handleID)
+	*outLen = 0
+	result, ok := takeAsyncResult(uintptr(handlePtr))
     if !ok {
         return nil
     }
-
-    resultStore := val.(*asyncResultWithNotify)
-
-    // Check if ready (should always be true if pipe was written)
-    resultStore.mu.Lock()
-    if !resultStore.ready {
-        resultStore.mu.Unlock()
-        return nil
-    }
-    resultBytes := resultStore.result
-    resultStore.mu.Unlock()
-
-    // Cleanup
-    asyncNotifyResults.Delete(handleID)
-    handle := cgo.Handle(handlePtr)
-    handle.Delete()
-
-    // Return result (caller must free with freeString)
-    *outLen = C.int(len(resultBytes))
-    return C.CString(string(resultBytes))
+	*outLen = C.int(len(result))
+	return C.CString(string(result))
 }
 
 //export freeString
@@ -499,7 +492,7 @@ func sendBatchRequest(data *C.char) *C.char {
             r.Options.Method = normalizeMethod(r.Options.Method)
 
             client := getFFIClient()
-            resp, err := client.Do(r.Options.URL, r.Options, r.Options.Method)
+			resp, err := safeDo(client, r)
             if err != nil {
                 responses[idx] = buildErrorPayload(r.RequestID, err.Error())
             } else {
@@ -870,7 +863,7 @@ func getRequestZeroCopy(data *C.char, dataLen C.int, outLen *C.int) *C.char {
     request.Options.Method = normalizeMethod(request.Options.Method)
 
     client := getFFIClient()
-    resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
+	resp, err := safeDo(client, request)
     if err != nil {
         log.Printf("cycletls: request failed: %v", err)
         return marshalPayloadZeroCopy(buildErrorPayload(request.RequestID, err.Error()), outLen)
@@ -880,99 +873,36 @@ func getRequestZeroCopy(data *C.char, dataLen C.int, outLen *C.int) *C.char {
 
 //export submitRequestAsyncZeroCopy
 func submitRequestAsyncZeroCopy(data *C.char, dataLen C.int) C.uintptr_t {
-    if data == nil || dataLen <= 0 {
+	if data == nil {
         return 0
     }
-
-    // Convert C bytes to Go slice (zero-copy style)
-    msgpackData := C.GoBytes(unsafe.Pointer(data), dataLen)
-
     request := cycleTLSRequest{}
-    if err := msgpack.Unmarshal(msgpackData, &request); err != nil {
-        log.Printf("cycletls: failed to unmarshal async zerocopy request: %v", err)
+	if dataLen <= 0 {
         return 0
     }
-
+	msgpackData := C.GoBytes(unsafe.Pointer(data), dataLen)
+	if err := msgpack.Unmarshal(msgpackData, &request); err != nil {
+		return 0
+	}
     if request.RequestID == "" {
         request.RequestID = "cycleTLSRequest"
     }
-
     request.Options.Method = normalizeMethod(request.Options.Method)
-
-    // Create result storage
-    resultStore := &asyncResultWithNotify{
-        requestID: request.RequestID,
-        ready:     false,
-    }
-
-    // Create handle using cgo.Handle
-    handle := cgo.NewHandle(resultStore)
-    handleID := uintptr(handle)
-    asyncNotifyResults.Store(handleID, resultStore)
-
-    // Spawn goroutine to execute request
-    go func() {
-        client := getFFIClient()
-
-        var payload map[string]interface{}
-        resp, err := client.Do(request.Options.URL, request.Options, request.Options.Method)
-        if err != nil {
-            payload = buildErrorPayload(request.RequestID, err.Error())
-        } else {
-            payload = buildResponsePayload(request.RequestID, resp)
-        }
-
-        // Marshal result to msgpack
-        resultBytes, marshalErr := msgpack.Marshal(payload)
-        if marshalErr != nil {
-            // Fallback error response
-            fallback := buildErrorPayload(request.RequestID, "failed to marshal response")
-            resultBytes, _ = msgpack.Marshal(fallback)
-        }
-
-        // Store result
-        resultStore.mu.Lock()
-        resultStore.result = resultBytes
-        resultStore.ready = true
-        resultStore.mu.Unlock()
-    }()
-
-    return C.uintptr_t(handleID)
+	return C.uintptr_t(executeAsync(request, false, nil))
 }
 
 //export getAsyncResultZeroCopy
 func getAsyncResultZeroCopy(handlePtr C.uintptr_t, outLen *C.int) *C.char {
-    if handlePtr == 0 {
+	if outLen == nil {
         return nil
     }
-
-    handleID := uintptr(handlePtr)
-
-    // Retrieve result from store
-    val, ok := asyncNotifyResults.Load(handleID)
+	*outLen = 0
+	result, ok := takeAsyncResult(uintptr(handlePtr))
     if !ok {
         return nil
     }
-
-    resultStore := val.(*asyncResultWithNotify)
-
-    // Check if ready
-    resultStore.mu.Lock()
-    if !resultStore.ready {
-        resultStore.mu.Unlock()
-        return nil
-    }
-    resultBytes := resultStore.result
-    resultStore.mu.Unlock()
-
-    // Cleanup
-    asyncNotifyResults.Delete(handleID)
-    handle := cgo.Handle(handlePtr)
-    handle.Delete()
-
-    // Return result (caller must free with freeString)
-    *outLen = C.int(len(resultBytes))
-    return C.CString(string(resultBytes))
+	*outLen = C.int(len(result))
+	return C.CString(string(result))
 }
 
 //export freeMemory
@@ -1019,7 +949,7 @@ func sendBatchRequestZeroCopy(data *C.char, dataLen C.int, outLen *C.int) *C.cha
             r.Options.Method = normalizeMethod(r.Options.Method)
 
             client := getFFIClient()
-            resp, err := client.Do(r.Options.URL, r.Options, r.Options.Method)
+			resp, err := safeDo(client, r)
             if err != nil {
                 responses[idx] = buildErrorPayload(r.RequestID, err.Error())
             } else {
@@ -1038,4 +968,3 @@ func sendBatchRequestZeroCopy(data *C.char, dataLen C.int, outLen *C.int) *C.cha
     *outLen = C.int(len(bytes))
     return C.CString(string(bytes))
 }
-

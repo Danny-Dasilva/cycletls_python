@@ -78,6 +78,30 @@ uv add cycletls
 pip install cycletls
 ```
 
+### Isolate the Go runtime in long-running servers
+
+Set `CYCLETLS_BACKEND=subprocess` **before the first CycleTLS request** to run
+HTTP requests in a separate, long-lived Python worker that loads the Go library:
+
+```bash
+CYCLETLS_BACKEND=subprocess uv run python main.py
+```
+
+The same synchronous, async and batch HTTP APIs work in this mode. A fatal Go
+runtime error kills the worker and raises `cycletls.CycleTLSWorkerDied` in the
+application. The next request starts a new worker. Failed requests are not
+automatically retried, since a POST may already have reached the server.
+Each application process owns its worker; set the variable before loading Go
+to keep its runtime and signal handlers out of the application process.
+
+The default remains `CYCLETLS_BACKEND=inprocess`. WebSocket and SSE connections
+require this mode and are rejected in subprocess mode. In-process request
+panics are returned as normal errors, but Go runtime aborts cannot be recovered
+and still terminate the host. In-process async cancellation releases result
+handles; the underlying network request may continue until its own timeout.
+Use the newly built shared library to get the descriptor ownership and async
+cleanup fixes; older libraries lack the cancellation export.
+
 ## Quick Start
 
 ### Simple API (Zero Boilerplate) - NEW! 🎉

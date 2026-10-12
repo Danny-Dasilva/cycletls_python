@@ -559,6 +559,8 @@ class CycleTLS:
 
         try:
             response_data = ffi_send_request(payload)
+        except CycleTLSError:
+            raise
         except Exception as exc:  # pragma: no cover - unexpected backend failure
             logger.error(f"Request to {url} failed: {exc}")
             raise CycleTLSError(f"Failed to execute CycleTLS request: {exc}") from exc
@@ -736,6 +738,8 @@ class CycleTLS:
 
         try:
             response_data_list = ffi_send_batch_request(payloads)
+        except CycleTLSError:
+            raise
         except Exception as exc:  # pragma: no cover - unexpected backend failure
             logger.error(f"Batch request failed: {exc}")
             raise CycleTLSError(f"Failed to execute batch request: {exc}") from exc
@@ -887,6 +891,8 @@ class CycleTLS:
                     response_data = await ffi_send_request_async(payload, poll_interval, timeout)
             else:
                 response_data = await ffi_send_request_async(payload, poll_interval, timeout)
+        except CycleTLSError:
+            raise
         except Exception as exc:  # pragma: no cover - unexpected backend failure
             logger.error(f"Async request to {url} failed: {exc}")
             raise CycleTLSError(f"Failed to execute async CycleTLS request: {exc}") from exc
@@ -1047,6 +1053,8 @@ class CycleTLS:
 
         try:
             response_data_list = await ffi_send_requests_batch(payloads)
+        except CycleTLSError:
+            raise
         except Exception as exc:  # pragma: no cover - unexpected backend failure
             logger.error(f"Async batch request failed: {exc}")
             raise CycleTLSError(f"Failed to execute async batch request: {exc}") from exc

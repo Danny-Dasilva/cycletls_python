@@ -33,6 +33,13 @@ class RequestException(CycleTLSError):
     pass
 
 
+class CycleTLSWorkerDied(RequestException):
+    """The isolated CycleTLS worker exited before returning a response.
+
+    The failed request is not retried. The next request starts a fresh worker.
+    """
+
+
 class HTTPError(RequestException):
     """
     An HTTP error occurred (4xx or 5xx status code).
