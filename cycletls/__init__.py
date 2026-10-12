@@ -52,6 +52,7 @@ from .exceptions import (
     ConnectionError,
     ConnectTimeout,
     CycleTLSError,
+    CycleTLSWorkerDied,
     HTTPError,
     InvalidHeader,
     InvalidURL,
@@ -446,6 +447,7 @@ __all__ = [
     "CookieJar",
     # Exceptions
     "CycleTLSError",
+    "CycleTLSWorkerDied",
     "RequestException",
     "HTTPError",
     "ConnectionError",

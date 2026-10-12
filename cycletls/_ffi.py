@@ -58,6 +58,7 @@ _ffi.cdef(
     uintptr_t submitRequestAsyncWithNotify(char* data, int dataLen, int notifyFD);
     // Retrieves result after notification (guaranteed ready)
     char* getAsyncResult(uintptr_t handle, int* outLen);
+    void cancelAsyncRequest(uintptr_t handle);
 
     // Zero-copy async API (raw msgpack, no base64)
     uintptr_t submitRequestAsyncZeroCopy(char* data, int dataLen);
@@ -73,6 +74,22 @@ _lib_lock = threading.Lock()
 _use_zerocopy = None  # None = auto-detect, True/False = forced
 _use_callback = None  # None = auto-detect, True/False = forced
 _use_async_zerocopy: Optional[bool] = None
+
+
+def _use_subprocess_backend() -> bool:
+    """Validate the selected HTTP backend before loading the Go runtime."""
+    backend = os.environ.get("CYCLETLS_BACKEND", "inprocess")
+    if backend not in ("inprocess", "subprocess"):
+        raise ValueError("CYCLETLS_BACKEND must be 'inprocess' or 'subprocess'")
+    return backend == "subprocess"
+
+
+def _cancel_async_request(handle: int) -> None:
+    """Release a pending handle when supported by the installed library."""
+    lib = _load_library()
+    cancel = getattr(lib, "cancelAsyncRequest", None)
+    if cancel is not None:
+        cancel(handle)
 
 
 def _get_library_filenames() -> list[str]:
@@ -130,6 +147,11 @@ def _iter_library_candidates() -> Iterator[str]:
 
 
 def _load_library():
+    if _use_subprocess_backend():
+        raise CycleTLSError(
+            "Direct Go library access (including WebSocket and SSE) requires "
+            "CYCLETLS_BACKEND=inprocess; HTTP subprocess requests run in the worker."
+        )
     global _lib
 
     with _lib_lock:
@@ -178,11 +200,19 @@ def _has_zerocopy_support() -> bool:
 
 def _has_callback_support() -> bool:
     """Check if the loaded library supports callback-based async API."""
+    if _use_subprocess_backend():
+        return True
+    if os.name == "nt":
+        return False
     global _use_callback
     if _use_callback is not None:
         return _use_callback
 
-    _use_callback = _has_symbol("submitRequestAsyncWithNotify") and _has_symbol("getAsyncResult")
+    _use_callback = (
+        _has_symbol("submitRequestAsyncWithNotify")
+        and _has_symbol("getAsyncResult")
+        and _has_symbol("cancelAsyncRequest")
+    )
     logger.debug(
         "Callback-based async API enabled"
         if _use_callback
@@ -285,6 +315,10 @@ def send_request(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     Automatically uses zero-copy mode if available, falls back to base64.
     """
+    if _use_subprocess_backend():
+        from . import _subprocess
+
+        return _subprocess.send_request(payload)
     if _has_zerocopy_support():
         return _send_request_zerocopy(payload)
     return _send_request_base64(payload)
@@ -401,6 +435,11 @@ async def send_request_async(
         CycleTLSError: If request fails
         asyncio.TimeoutError: If timeout is exceeded
     """
+    if _use_subprocess_backend():
+        from . import _subprocess
+
+        return await _subprocess.send_request_async(payload, timeout)
+
     # Auto-select zero-copy submit/check when available
     if _has_async_zerocopy_support():
         _submit_fn = submit_request_async_zerocopy
@@ -411,6 +450,15 @@ async def send_request_async(
 
     # Submit request
     handle = _submit_fn(payload)
+
+    try:
+        return await _poll_async_result(handle, _check_fn, poll_interval, timeout)
+    finally:
+        _cancel_async_request(handle)
+
+
+async def _poll_async_result(handle, _check_fn, poll_interval, timeout):
+    """Poll without owning the handle; the caller releases it on every exit."""
 
     # Poll for completion with adaptive backoff
     loop = asyncio.get_running_loop()
@@ -496,12 +544,31 @@ async def send_request_async_callback(
         CycleTLSError: If request submission or retrieval fails
         asyncio.TimeoutError: If timeout is exceeded
     """
+    if _use_subprocess_backend():
+        from . import _subprocess
+
+        return await _subprocess.send_request_async(payload, timeout)
     lib = _load_library()
 
     # Create pipe for notification
     read_fd, write_fd = os.pipe()
+    loop = asyncio.get_running_loop()
+    done = loop.create_future()
+    handle = 0
+    reader_added = False
+
+    def notified():
+        if not done.done():
+            done.set_result(None)
 
     try:
+        try:
+            loop.add_reader(read_fd, notified)
+            reader_added = True
+        except (AttributeError, NotImplementedError):
+            # Proactor loops cannot watch anonymous pipes. Poll without a
+            # blocking executor read or submitting a notification request.
+            return await send_request_async(payload, timeout=timeout)
         # Serialize payload to msgpack (zero-copy style)
         msgpack_data = ormsgpack.packb(payload)
 
@@ -521,9 +588,8 @@ async def send_request_async_callback(
         logger.debug(f"Async request submitted with handle: {handle}")
 
         # Wait for notification (Go will write 1 byte when complete)
-        loop = asyncio.get_running_loop()
         try:
-            await asyncio.wait_for(loop.run_in_executor(None, os.read, read_fd, 1), timeout=timeout)
+            await asyncio.wait_for(done, timeout=timeout)
         except asyncio.TimeoutError:
             logger.error(f"Async request {handle} timed out after {timeout}s")
             raise asyncio.TimeoutError(f"Request timed out after {timeout} seconds")
@@ -554,7 +620,10 @@ async def send_request_async_callback(
             raise CycleTLSError(f"Failed to decode response data: {exc}") from exc
 
     finally:
-        # Clean up pipe file descriptors
+        if handle:
+            _cancel_async_request(int(handle))
+        if reader_added:
+            loop.remove_reader(read_fd)
         os.close(read_fd)
         os.close(write_fd)
 
@@ -653,6 +722,10 @@ def send_batch_request(payloads: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
     Raises:
         CycleTLSError: If the batch request fails
     """
+    if _use_subprocess_backend():
+        from . import _subprocess
+
+        return _subprocess.send_batch_request(payloads)
     # Handle empty batch case on Python side (avoid FFI call)
     if not payloads:
         return []

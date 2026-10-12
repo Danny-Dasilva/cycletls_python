@@ -53,7 +53,7 @@ jobs:
         run: |
           cd golang
           mkdir -p ../cycletls/dist
-          go build -buildmode=c-shared -ldflags="-s -w" -o ../cycletls/dist/libcycletls.so .
+          go build -buildmode=c-shared -o ../cycletls/dist/libcycletls.so .
           ls -lh ../cycletls/dist/
 
       - name: Build Go shared library (macOS)
@@ -61,7 +61,7 @@ jobs:
         run: |
           cd golang
           mkdir -p ../cycletls/dist
-          go build -buildmode=c-shared -ldflags="-s -w" -o ../cycletls/dist/libcycletls.dylib .
+          go build -buildmode=c-shared -o ../cycletls/dist/libcycletls.dylib .
           ls -lh ../cycletls/dist/
 
       - name: Build Go shared library (Windows)
@@ -69,7 +69,7 @@ jobs:
         run: |
           cd golang
           New-Item -ItemType Directory -Force -Path ../cycletls/dist
-          go build -buildmode=c-shared -ldflags="-s -w" -o ../cycletls/dist/cycletls.dll .
+          go build -buildmode=c-shared -o ../cycletls/dist/cycletls.dll .
           Get-ChildItem ../cycletls/dist/
         shell: pwsh
 
