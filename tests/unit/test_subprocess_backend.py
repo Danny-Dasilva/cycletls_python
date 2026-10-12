@@ -59,7 +59,7 @@ def test_bytes_batch_and_restart(backend):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX fatal signal")
 def test_abort_is_an_exception_and_next_call_restarts(backend):
-    with pytest.raises(CycleTLSWorkerDied, match=str(signal.SIGABRT)):
+    with pytest.raises(CycleTLSWorkerDied, match=str(int(signal.SIGABRT))):
         backend.send_request({"abort": True})
     assert backend.send_request({"after_abort": True}) == {"after_abort": True}
 

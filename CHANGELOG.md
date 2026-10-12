@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-10-12
+
 ### Added
 - Opt-in `CYCLETLS_BACKEND=subprocess` for isolated sync, async and batch HTTP requests, with `CycleTLSWorkerDied` and worker restart after a crash.
 - `local_address` parameter to bind outgoing TCP connections to a specific local IP for outbound interface/IP selection (#65)
