@@ -42,9 +42,9 @@ def _get_platform_tag() -> str:
 
 
 def _get_platform_binary() -> str | None:
-    """Return the filename of the Go shared library for the current platform.
+    """Return the qualified Go shared-library filename for the current platform.
 
-    Returns None if the binary is not found in cycletls/dist/.
+    Returns None for unsupported operating systems; does not check the filesystem.
     """
     system = platform.system()
     machine = platform.machine().lower()
@@ -79,16 +79,30 @@ class CycleTLSBuildHook(BuildHookInterface):
         if plat_tag != "any":
             build_data["tag"] = f"py3-none-{plat_tag}"
 
-        # --- Include only the platform-specific binary ---
-        binary_name = _get_platform_binary()
-        if binary_name is None:
-            return
+        # Release builds use generic names; local builds can use qualified names.
+        qualified_name = _get_platform_binary()
+        generic_name = {
+            "Darwin": "libcycletls.dylib",
+            "Linux": "libcycletls.so",
+            "Windows": "cycletls.dll",
+        }.get(platform.system())
+        if qualified_name is None or generic_name is None:
+            raise RuntimeError(
+                f"Unsupported platform for a CycleTLS native wheel: {platform.system()}"
+            )
 
+        candidates = (qualified_name, generic_name)
         dist_dir = Path(self.root) / "cycletls" / "dist"
-        binary_path = dist_dir / binary_name
-
-        if not binary_path.exists():
-            return
+        binary_path = next(
+            (dist_dir / name for name in candidates if (dist_dir / name).is_file()),
+            None,
+        )
+        if binary_path is None:
+            raise RuntimeError(
+                f"Cannot build a CycleTLS wheel without a native library in {dist_dir}. "
+                f"Expected one of: {', '.join(candidates)}. Build the Go shared library first."
+            )
+        binary_name = binary_path.name
 
         # Force-include just this platform binary (and its header, if present)
         build_data["force_include"] = {
@@ -98,19 +112,5 @@ class CycleTLSBuildHook(BuildHookInterface):
         # Also include the header file if it exists
         header_name = binary_name.rsplit(".", 1)[0] + ".h"
         header_path = dist_dir / header_name
-        if header_path.exists():
+        if header_path.is_file():
             build_data["force_include"][str(header_path)] = f"cycletls/dist/{header_name}"
-
-        # Include generic-named binaries too (backward compat with _ffi.py search order)
-        system = platform.system()
-        if system == "Darwin":
-            generic = dist_dir / "libcycletls.dylib"
-        elif system == "Linux":
-            generic = dist_dir / "libcycletls.so"
-        elif system == "Windows":
-            generic = dist_dir / "cycletls.dll"
-        else:
-            generic = None
-
-        if generic and generic.exists():
-            build_data["force_include"][str(generic)] = f"cycletls/dist/{generic.name}"

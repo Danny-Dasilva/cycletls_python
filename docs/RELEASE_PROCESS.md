@@ -12,8 +12,8 @@
    ```bash
    git switch main
    git pull --ff-only
-   git tag -a v0.0.4 -m "Release v0.0.4"
-   git push origin refs/tags/v0.0.4
+   git tag -a v0.0.5 -m "Release v0.0.5"
+   git push origin refs/tags/v0.0.5
    ```
 
    Substitute the actual version. Use the repository owner's GitHub credentials
@@ -24,6 +24,10 @@ Linux, macOS and Windows wheels plus a source distribution, publishes them to
 PyPI using the `pypi` environment's trusted publisher, then creates a GitHub
 release with those assets and generated notes. The tag does not set the Python
 package version; the version files must already match it.
+
+The workflow validates that each wheel includes a loadable native library with
+the required FFI exports and that the source archive stays below PyPI's file
+limit. A successful build alone does not establish that a wheel contains Go.
 
 ## Fixing a failed release
 
