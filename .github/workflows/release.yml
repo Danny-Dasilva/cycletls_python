@@ -84,6 +84,9 @@ jobs:
         run: ls -R dist/
         shell: bash
 
+      - name: Validate release archives and native library
+        run: python scripts/validate_distribution.py dist
+
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v7
         with:
